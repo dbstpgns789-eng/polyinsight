@@ -14,7 +14,7 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 - Orchestrator가 파이프라인의 유일한 제어자. 에이전트는 서로 직접 호출하지 않는다.
 - 각 스테이지는 검증된 입력을 받고 타입이 정의된 출력을 반환한다.
 - S8은 업스트림 실패 여부와 무관하게 항상 실행된다.
-- S6는 원문 텍스트만을 사실 근거로 삼는다. LLM 요약(S3/S4)은 힌트 전용.
+- S6는 원문 텍스트만을 사실 근거로 삼으며, 내부적으로 기여 추출 + 한국어 컨텍스트 이해 후 FieldValue를 생성한다.
 
 **배포 형태 (MVP)**:
 - 단일 프로세스 (FastAPI + asyncio)
@@ -30,9 +30,9 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 
 | 항목 | v1.0 (이전) | v2.0 (현재) |
 |---|---|---|
-| S3/S4 실행 방식 | 순차 (S3 완료 후 S4) | **병렬** (`asyncio.gather`) |
+| S3/S4 존재 여부 | 존재 (순차/병렬 변형) | **제거** (S6 내부 chain-of-thought로 흡수) |
 | S5 (홍보 문장) | 존재 | **제거** (KITECH 버전 불필요) |
-| S6 사실 근거 | S3/S4 출력 기반 | **원문 section_map 우선** — S3/S4는 힌트 |
+| S6 사실 근거 | S3/S4 출력 기반 | **원문 section_map 우선** — 내부 chain-of-thought로 기여/요약 흡수 |
 | S7 렌더링 엔진 | Pillow (Python 이미지 합성) | **Playwright** (headless Chromium) |
 | 저장소 | 인메모리 dict (TTL 30분) | **SQLite** 영구 저장 |
 | 파일 보존 | 프로세스 재시작 시 소멸 | PNG/ZIP 24시간 TTL, 메타데이터 영구 |
@@ -56,21 +56,12 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
   │        │
   │        │  raw_text, page_map
   │        ▼
-  ├─ S2: Section Parsing      regex + LLM fallback
-  │        │
-  │        │  section_map {title, abstract, methods, results, ...}
-  │        ▼
-  │     asyncio.gather()
-  ├─────┬──────────────────────────┐
-  │     │                          │
-  │  S3: Korean Summary        S4: Key Contributions
-  │  (section_map → KO 요약)   (section_map → 핵심 기여)
-  │     │                          │
-  │     └──────────┬───────────────┘
-  │                │  s3_result, s4_result (힌트)
-  │                ▼
-  ├─ S6: Card News JSON        원문 direct read + S3/S4 as hints
-  │        │                   (S5 없음 — KITECH 버전)
+    ├─ S2: Section Parsing      regex + LLM fallback
+    │        │
+    │        │  section_map {title, abstract, methods, results, ...}
+    │        ▼
+    ├─ S6: Card News JSON        원문 direct read + 내부 기여 추출
+    │        │                   + 한국어 컨텍스트 이해 후 FieldValue 생성
   │        │  card_data (FieldValue 스키마)
   │        ▼
   ├─ S7: PNG Rendering         Playwright headless Chromium
@@ -96,10 +87,8 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 |---|---|---|---|
 | **S1** Text Extraction | PDF bytes | `raw_text: str`, `page_map: dict` | 파이프라인 중단. ERROR 상태 저장. |
 | **S2** Section Parsing | `raw_text` | `section_map: dict[str, SectionText]` | 빈 section_map → degraded_mode 플래그. |
-| **S3** Korean Summary | `section_map` | `summary_ko: str`, `confidence: float` | 빈 문자열 반환. S6에서 힌트 미사용. |
-| **S4** Key Contributions | `section_map` | `contributions: list[str]` | 빈 리스트 반환. S6에서 힌트 미사용. |
 | ~~S5~~ | ~~제거됨~~ | ~~제거됨~~ | — |
-| **S6** Card News JSON | `section_map` + `s3_result` + `s4_result` | `CardData` (FieldValue 스키마) | 필드별 `confidence=low`, `risk_level=CRITICAL`. |
+| **S6** Card News JSON | `section_map` + `page_map` + `paper_metadata` | `CardData` (FieldValue 스키마) | 필드별 `confidence=low`, `risk_level=CRITICAL`. |
 | **S7** PNG Rendering | `CardData` + `images` + `profile` | `png_bytes[5]` | 해당 카드 skip. 부분 성공 허용. |
 | **S8** Output Packaging | `png_bytes[]` + `CardData` | SQLite row 업데이트, ZIP bytes | 항상 실행. 실패해도 상태만 ERROR로 표기. |
 
@@ -131,8 +120,6 @@ backend/
 ├── agents/
 │   ├── s1_extractor.py      pdfplumber / PyMuPDF 텍스트 추출
 │   ├── s2_parser.py         섹션 파싱 (regex + LLM fallback)
-│   ├── s3_summary.py        한국어 요약 생성
-│   ├── s4_contributions.py  핵심 기여 추출
 │   ├── s6_card_json.py      카드뉴스 JSON 생성 (원문 우선)
 │   ├── s7_renderer.py       Playwright PNG 렌더링
 │   └── s8_packaging.py      SQLite 저장 + ZIP 생성
@@ -213,16 +200,7 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes):
     # S2
     state = await s2_parser.run(state)
 
-    # S3 + S4 병렬
-    s3_result, s4_result = await asyncio.gather(
-        s3_summary.run(state),
-        s4_contributions.run(state),
-        return_exceptions=True,
-    )
-    state.s3_result = s3_result if not isinstance(s3_result, Exception) else None
-    state.s4_result = s4_result if not isinstance(s4_result, Exception) else None
-
-    # S6 — 원문 우선, S3/S4는 힌트
+    # S6 — 원문 우선, 내부 chain-of-thought로 기여/요약 흡수
     state = await s6_card_json.run(state)
 
     # S7 — 부분 성공 허용
@@ -288,8 +266,6 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes):
 |---|---|---|
 | S1 Text Extraction | **블로킹** | 즉시 중단. S8만 실행 (상태 기록). |
 | S2 Section Parsing | **논블로킹** | degraded_mode=True 플래그. 빈 section_map으로 계속. |
-| S3 Korean Summary | **논블로킹** | 예외 포착. None 반환. S6에서 힌트 미사용. |
-| S4 Key Contributions | **논블로킹** | 예외 포착. None 반환. S6에서 힌트 미사용. |
 | S6 Card News JSON | **논블로킹** | 필드별 CRITICAL 마킹. 빈 카드로 에디터 진입 허용. |
 | S7 PNG Rendering | **논블로킹** | 카드별 독립. 일부 실패 시 나머지 계속. 부분 ZIP 허용. |
 | S8 Output Packaging | **항상 실행** | 실패해도 상태만 ERROR 기록. 파이프라인 종료. |
@@ -299,7 +275,6 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes):
 | 대상 | 재시도 범위 | 트리거 |
 |---|---|---|
 | 파이프라인 전체 | S1부터 재실행 | 대시보드 "재시도" 버튼 |
-| S3/S4 개별 | 해당 스테이지만 재실행 | 자동 (최대 2회) |
 | PNG 렌더링 (S7) | 실패 카드만 재렌더링 | 내보내기 모달 "실패 카드 재시도" |
 | LLM API 호출 | 지수 백오프 (0.5s, 1s, 2s) | 자동 (최대 3회) |
 
@@ -377,5 +352,5 @@ CREATE TABLE researchers (
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
-| 2025-05-05 | v2.0 | S3/S4 병렬화, S5 제거, Playwright 교체, SQLite 도입, FieldValue 스키마 정의 |
+| 2025-05-05 | v2.0 | S3/S4 제거 (S6 흡수), S5 제거, Playwright 교체, SQLite 도입, FieldValue 스키마 정의 |
 | (이전) | v1.0 | 순차 파이프라인 S1~S8, S5 포함, Pillow 렌더링, 인메모리 dict (TTL 30분) |

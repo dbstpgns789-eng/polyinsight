@@ -23,19 +23,16 @@ Core principle — **fidelity over style**:
 ```
 S1  Text Extraction     pdfplumber / PyMuPDF
 S2  Section Parsing     regex + LLM fallback
-    ↓
-S3  Korean Summary  ──┐  asyncio.gather (parallel)
-S4  Key Contributions─┘
-    ↓
-S6  Card News JSON      원문 direct read + S3/S4 as hints only
+  ↓
+S6  Card News JSON      원문 direct read + 내부 chain-of-thought으로 기여/요약 추출
 S7  PNG Rendering       Playwright (NOT Pillow)
 S8  Output Packaging    SQLite persistence
 ```
 
 **Breaking changes from v1.0:**
-- S3 and S4 run in **parallel** (asyncio.gather), not sequentially
+- S3/S4 are **removed** — absorbed into S6 chain-of-thought
 - S5 (Promotional Sentences) is **removed** from KITECH pipeline
-- S6 treats the source text as primary — S3/S4 are hints only
+- S6 treats the source text as primary — internal reasoning only
 - S7 uses **Playwright** screenshot, not Pillow template renderer
 - Storage is **SQLite** (permanent), not in-memory dict (TTL 30min)
 
@@ -78,8 +75,8 @@ These structural rules do not change without explicit decision:
 - Agents do not call each other directly
 - Each stage receives **validated input** and returns **typed output**
 - S8 always runs, even when upstream stages fail
-- S3 and S4 run in parallel via `asyncio.gather`
 - S5 does not exist in this pipeline
+- S3 and S4 do not exist in this pipeline
 
 ---
 
@@ -116,7 +113,7 @@ NEVER  invent fields not in the defined schema
 NEVER  change stage contracts without updating docs/ first
 NEVER  merge multiple stages to take a shortcut
 NEVER  add cross-stage dependencies outside the Orchestrator
-NEVER  treat S3/S4 output as more authoritative than source text
+NEVER  treat derived summaries as more authoritative than source text
 NEVER  emit numeric statements in S6 without source reference
 NEVER  label output as verified unless the code actually proves it
 NEVER  skip docs/ update before code change
@@ -177,5 +174,5 @@ When writing docs:
 
 | Date       | Version | Change Summary                                              |
 |------------|---------|-------------------------------------------------------------|
-| 2025-05-05 | v2.0    | S3/S4 parallel, S5 removed, Playwright, SQLite, S6 rewrite |
+| 2025-05-05 | v2.0    | S3/S4 removed (absorbed into S6), S5 removed, Playwright, SQLite, S6 rewrite |
 | (previous) | v1.0    | Sequential S1-S8, Pillow, in-memory dict, S5 included       |

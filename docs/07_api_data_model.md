@@ -37,7 +37,7 @@ file: File   (PDF, 최대 50MB)
 {
   "jobId": "uuid-v4",
   "status": "RUNNING",
-  "stage": "S4",
+  "stage": "S6",
   "progress": 60,
   "degraded": false,
   "warnings": ["S2: abstract section not found, using full text"],
@@ -304,7 +304,7 @@ character: File (PNG)
 |---|---|---|
 | `job_id` | TEXT PK | UUID v4 |
 | `status` | TEXT | `PENDING\|RUNNING\|DONE\|ERROR` |
-| `stage` | TEXT | 현재 실행 중인 스테이지 (`S1`~`S8`) |
+| `stage` | TEXT | 현재 실행 중인 스테이지 (`S1`, `S2`, `S6`, `S7`, `S8`) |
 | `progress` | INTEGER | 0~100 |
 | `degraded` | INTEGER | 0=정상, 1=degraded_mode |
 | `warnings` | TEXT | JSON array (경고 메시지 목록) |

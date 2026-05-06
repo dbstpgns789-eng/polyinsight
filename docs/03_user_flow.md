@@ -78,10 +78,8 @@ IDLE → FILE_SELECTED → PROCESSING → DONE
 ```
 ✓  S1 텍스트 추출
 ✓  S2 섹션 파싱
-⟳  S3 한국어 요약   ─┐ 병렬
-⟳  S4 핵심 기여 추출─┘
 ○  S6 카드뉴스 JSON 생성
-   (S5 없음 — KITECH 버전)
+     (원문 direct read + 내부 기여/요약 추출)
 ```
 
 > 모달을 닫아도 파이프라인은 백그라운드에서 계속 실행.

@@ -84,25 +84,7 @@ Pillow로는 디자이너 수준의 출력물을 얻을 수 없었다.
 
 ---
 
-### 2-3. S3/S4 병렬 실행
-
-**문제**: v1.0에서 S3(한국어 요약) → S4(핵심 기여)를 순차 실행했으나,
-두 스테이지는 동일한 `section_map`을 입력으로 받고 서로의 출력에 의존하지 않는다.
-순차 실행 이유가 없었음.
-
-**결정**: `asyncio.gather(s3_summary.run(state), s4_contributions.run(state))` 병렬 전환.
-
-**예상 효과**:
-- S3 평균 소요: ~8초, S4 평균 소요: ~6초
-- 순차: 14초 → 병렬: 8초 (느린 쪽 기준) → **약 43% 단축**
-
-**주의사항**:
-- `return_exceptions=True` 설정 필수 — 한쪽 실패가 다른 쪽을 취소하지 않도록.
-- 예외가 반환되면 None으로 처리. S6에서 해당 힌트 미사용.
-
----
-
-### 2-4. TanStack Query (React Query) 도입
+### 2-3. TanStack Query (React Query) 도입
 
 **문제**: 파이프라인 상태 폴링, 내보내기 상태 폴링을 `useEffect + setInterval`로 구현하면
 cleanup 누락, 중복 요청, 탭 이동 시 재폴링 등 엣지 케이스 처리가 복잡해진다.
@@ -131,12 +113,10 @@ cleanup 누락, 중복 요청, 탭 이동 시 재폴링 등 엣지 케이스 처
 polyinsight/
 ├── backend/
 │   ├── main.py                FastAPI 앱 진입점. 라우터 등록, 앱 상태 초기화, 미들웨어.
-│   ├── orchestrator.py        파이프라인 유일 제어자. S1→S2→S3/S4→S6→S7→S8.
+│   ├── orchestrator.py        파이프라인 유일 제어자. S1→S2→S6→S7→S8.
 │   ├── agents/
 │   │   ├── s1_extractor.py    PDF 텍스트 추출. pdfplumber 우선, PyMuPDF 폴백.
 │   │   ├── s2_parser.py       섹션 분류. regex 우선, LLM 폴백.
-│   │   ├── s3_summary.py      한국어 요약. Claude API 호출.
-│   │   ├── s4_contributions.py 핵심 기여 추출. Claude API 호출.
 │   │   ├── s6_card_json.py    카드뉴스 JSON 생성. 원문 우선. FieldValue 스키마 출력.
 │   │   ├── s7_renderer.py     Playwright PNG 렌더링. 카드당 최대 15초.
 │   │   └── s8_packaging.py    SQLite 저장, ZIP 생성, 최종 상태 업데이트.
@@ -279,5 +259,5 @@ pytest tests/test_s6.py -v
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
-| 2025-05-05 | v2.0 | Playwright 도입, SQLite 전환, TanStack Query 도입, S3/S4 병렬화, 스택 최신화 |
+| 2025-05-05 | v2.0 | Playwright 도입, SQLite 전환, TanStack Query 도입, S3/S4 제거, 스택 최신화 |
 | (이전) | v1.0 | Pillow 렌더링, 인메모리 dict, useEffect 폴링, 순차 S3→S4 |
