@@ -163,9 +163,15 @@ class S6Output(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class CardTheme(BaseModel):
+    primary: str = "#2563EB"
+    dark: str = "#1A4C96"
+
+
 class S7Input(BaseModel):
     job_id: str
     card_data: CardEditorData
+    theme: CardTheme = Field(default_factory=CardTheme)
 
 
 class S7Output(BaseModel):

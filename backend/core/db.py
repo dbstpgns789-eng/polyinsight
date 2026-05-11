@@ -110,6 +110,39 @@ async def get_job(job_id: str) -> dict | None:
             return data
 
 
+async def update_job(
+    job_id: str,
+    status: str,
+    stage: str | None = None,
+    progress: int | None = None,
+    degraded: bool | None = None,
+    warnings: list[str] | None = None,
+) -> None:
+    fields = ["status = ?"]
+    params: list[object] = [status]
+    if stage is not None:
+        fields.append("stage = ?")
+        params.append(stage)
+    if progress is not None:
+        fields.append("progress = ?")
+        params.append(progress)
+    if degraded is not None:
+        fields.append("degraded = ?")
+        params.append(1 if degraded else 0)
+    if warnings is not None:
+        fields.append("warnings = ?")
+        params.append(json.dumps(warnings))
+    fields.append("updated_at = ?")
+    params.append(_utc_now_iso())
+    params.append(job_id)
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute(
+            f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = ?", params
+        )
+        await conn.commit()
+
+
+# 하위 호환 alias
 async def update_job_status(
     job_id: str,
     status: str,
