@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+{% include '_shared.css' %}
+
+:root {
+  --theme-primary: {{ theme_primary }};
+  --theme-dark:    {{ theme_dark }};
+}
+
+/* ── Type A: 커버 레이아웃 ── */
+.card-canvas {
+  background: var(--surface-base);
+}
+
+/* 상단 배지 — top-center */
+.cover-badge {
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+/* 메인 타이틀 블록 */
+.cover-title-wrap {
+  position: absolute;
+  left: 60px;
+  top: 200px;
+  width: 700px;
+  z-index: 10;
+}
+
+.cover-pretitle {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--theme-primary);
+  margin-bottom: 20px;
+  letter-spacing: 0.02em;
+}
+
+.cover-title {
+  font-size: 96px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  word-break: keep-all;
+}
+
+.cover-bubble {
+  margin-top: 32px;
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  max-width: 600px;
+}
+
+/* 우하단 삼각형 */
+.triangle-corner {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 500px;
+  height: 500px;
+  background: var(--theme-primary);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  z-index: 5;
+}
+
+/* 삼각형 내 텍스트 장식 */
+.triangle-label {
+  position: absolute;
+  bottom: 80px;
+  right: 72px;
+  font-size: 22px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.75);
+  text-align: right;
+  z-index: 8;
+  line-height: 1.5;
+}
+
+/* 하단 기관명 */
+.org-name-bar {
+  position: absolute;
+  bottom: 40px;
+  left: 60px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  z-index: 10;
+  letter-spacing: 0.01em;
+}
+</style>
+</head>
+<body>
+<div class="card-canvas">
+
+  <!-- 상단 배지 -->
+  <div class="cover-badge">
+    <span class="badge-light">{{ edition_badge }}</span>
+  </div>
+
+  <!-- 메인 타이틀 -->
+  <div class="cover-title-wrap">
+    <div class="cover-pretitle">{{ pretitle }}</div>
+    <div class="cover-title">{{ title }}</div>
+    {% if mascot_bubble %}
+    <div class="cover-bubble">{{ mascot_bubble }}</div>
+    {% endif %}
+  </div>
+
+  <!-- 우하단 삼각형 -->
+  <div class="triangle-corner"></div>
+  <div class="triangle-label">
+    {{ org_name }}<br>
+    {{ dept }}
+  </div>
+
+  <!-- 하단 기관명 -->
+  <div class="org-name-bar">{{ org_name }}</div>
+
+</div>
+</body>
+</html>

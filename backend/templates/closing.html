@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+{% include '_shared.css' %}
+
+:root {
+  --theme-primary: {{ theme_primary }};
+  --theme-dark:    {{ theme_dark }};
+}
+
+/* ── Type K: 기관 브랜드 클로징 레이아웃 (Card 5) ── */
+.card-canvas {
+  background: linear-gradient(135deg, #0A1628 0%, #1A3A6E 50%, #0A1628 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+/* 격자 배경 장식 */
+.card-canvas::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255,255,255,0.03) 0px,
+      rgba(255,255,255,0.03) 1px,
+      transparent 1px,
+      transparent 80px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255,255,255,0.03) 0px,
+      rgba(255,255,255,0.03) 1px,
+      transparent 1px,
+      transparent 80px
+    );
+  pointer-events: none;
+}
+
+/* 테마 컬러 상단 바 */
+.closing-top-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 8px;
+  background: linear-gradient(90deg, var(--theme-primary), var(--theme-dark));
+}
+
+/* 콘텐츠 */
+.closing-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 80px;
+  gap: 0;
+}
+
+/* 기관명 배지 */
+.closing-org-badge {
+  margin-bottom: 48px;
+  padding: 12px 36px;
+  border: 1.5px solid rgba(255,255,255,0.22);
+  border-radius: var(--radius-pill);
+  font-size: 22px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.75);
+  letter-spacing: 0.04em;
+}
+
+/* 메인 슬로건 */
+.closing-main-title {
+  font-size: 72px;
+  font-weight: 900;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text-on-dark);
+  word-break: keep-all;
+  margin-bottom: 32px;
+}
+
+.closing-main-title .accent {
+  color: var(--theme-primary);
+}
+
+/* 구분선 */
+.closing-divider {
+  width: 80px;
+  height: 4px;
+  background: var(--theme-primary);
+  border-radius: 2px;
+  margin-bottom: 40px;
+  opacity: 0.8;
+}
+
+/* 연구팀 */
+.closing-team {
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--text-on-dark-muted);
+  margin-bottom: 16px;
+}
+
+/* pre-title */
+.closing-pre-title {
+  font-size: 20px;
+  font-weight: 400;
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 0.02em;
+  margin-bottom: 48px;
+}
+
+/* CTA */
+.closing-cta {
+  padding: 18px 48px;
+  background: var(--theme-primary);
+  border-radius: var(--radius-pill);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-on-dark);
+  letter-spacing: 0.01em;
+}
+
+/* 하단 카피라이트 */
+.closing-footer {
+  position: absolute;
+  bottom: 40px;
+  font-size: 18px;
+  font-weight: 400;
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 0.03em;
+  z-index: 10;
+}
+</style>
+</head>
+<body>
+<div class="card-canvas">
+
+  <!-- 상단 컬러 바 -->
+  <div class="closing-top-bar"></div>
+
+  <!-- 클로징 콘텐츠 -->
+  <div class="closing-content">
+
+    <div class="closing-org-badge">{{ org_name }}</div>
+
+    <div class="closing-main-title">
+      {{ main_title }}
+    </div>
+
+    <div class="closing-divider"></div>
+
+    {% if team_name %}
+    <div class="closing-team">{{ team_name }}</div>
+    {% endif %}
+
+    {% if pre_title %}
+    <div class="closing-pre-title">{{ pre_title }}</div>
+    {% endif %}
+
+    {% if cta %}
+    <div class="closing-cta">{{ cta }}</div>
+    {% endif %}
+
+  </div>
+
+  <!-- 하단 푸터 -->
+  <div class="closing-footer">PolyInsight · AI Card News Generator</div>
+
+</div>
+</body>
+</html>

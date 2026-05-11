@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+{% include '_shared.css' %}
+
+:root {
+  --theme-primary: {{ theme_primary }};
+  --theme-dark:    {{ theme_dark }};
+}
+
+/* ── Type B/C: 문제→성과 그리드 레이아웃 (Card 3) ── */
+.card-canvas {
+  background: var(--surface-base);
+  display: flex;
+  flex-direction: column;
+  padding: 72px 60px 60px;
+}
+
+/* 상단 헤더 */
+.grid-header {
+  margin-bottom: 40px;
+  flex-shrink: 0;
+}
+
+.grid-eyebrow {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--theme-primary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.grid-title {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.grid-title .accent { color: var(--theme-primary); }
+
+/* 2-up 카드 그리드 */
+.two-up {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  flex: 1;
+}
+
+/* 단일 카드 */
+.info-card {
+  background: var(--surface-card);
+  border-radius: var(--radius-card);
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+
+.info-card.highlight {
+  background: var(--theme-primary);
+}
+
+/* 상단 레이블 */
+.info-card-label {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-caption);
+  margin-bottom: 20px;
+}
+.info-card.highlight .info-card-label {
+  color: rgba(255,255,255,0.65);
+}
+
+/* 카드 본문 */
+.info-card-body {
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.65;
+  color: var(--text-primary);
+  word-break: keep-all;
+  flex: 1;
+}
+.info-card.highlight .info-card-body {
+  color: var(--text-on-dark);
+}
+
+/* 카드 하단 포인트 수치 */
+.info-card-stat {
+  margin-top: 24px;
+  font-size: 48px;
+  font-weight: 900;
+  line-height: 1.0;
+  color: var(--theme-primary);
+}
+.info-card.highlight .info-card-stat {
+  color: rgba(255,255,255,0.9);
+}
+
+/* 카드 배경 장식 */
+.info-card::after {
+  content: '';
+  position: absolute;
+  bottom: -40px;
+  right: -40px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--theme-primary);
+  opacity: 0.06;
+}
+.info-card.highlight::after {
+  background: rgba(255,255,255,0.15);
+  opacity: 1;
+}
+
+/* 마스코트 버블 */
+.mascot-bubble {
+  margin-top: 28px;
+  padding: 20px 28px;
+  background: var(--surface-card);
+  border-radius: 16px;
+  border-left: 6px solid var(--theme-primary);
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+<div class="card-canvas">
+
+  <!-- 헤더 -->
+  <div class="grid-header">
+    <div class="grid-eyebrow">Research Highlights</div>
+    <div class="grid-title">
+      연구 <span class="accent">배경</span>과 <span class="accent">성과</span>
+    </div>
+  </div>
+
+  <!-- 2-up 그리드 -->
+  <div class="two-up">
+
+    <!-- 문제 카드 -->
+    <div class="info-card">
+      <div>
+        <div class="info-card-label">Problem</div>
+        <div class="info-card-body">{{ problem }}</div>
+      </div>
+    </div>
+
+    <!-- 성과 카드 -->
+    <div class="info-card highlight">
+      <div>
+        <div class="info-card-label">Achievement</div>
+        <div class="info-card-body">{{ achievement }}</div>
+      </div>
+      {% if photo_caption %}
+      <div class="info-card-stat" style="font-size:20px; opacity:0.8;">{{ photo_caption }}</div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- 마스코트 버블 -->
+  {% if mascot_bubble %}
+  <div class="mascot-bubble">💬 {{ mascot_bubble }}</div>
+  {% endif %}
+
+</div>
+</body>
+</html>

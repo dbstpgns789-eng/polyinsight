@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+{% include '_shared.css' %}
+
+:root {
+  --theme-primary: {{ theme_primary }};
+  --theme-dark:    {{ theme_dark }};
+}
+
+/* ── Type D: 비교 레이아웃 (Card 4) ── */
+.card-canvas {
+  background: var(--surface-base);
+  display: flex;
+  flex-direction: column;
+  padding: 72px 60px 60px;
+}
+
+/* 헤더 */
+.text-header {
+  margin-bottom: 36px;
+  flex-shrink: 0;
+}
+
+.text-eyebrow {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--theme-primary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.text-title {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+/* 비교 그리드 */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 56px 1fr;
+  gap: 0;
+  align-items: stretch;
+  flex: 1;
+}
+
+.compare-col {
+  border-radius: var(--radius-card);
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+}
+
+.compare-col.before {
+  background: var(--surface-card);
+}
+
+.compare-col.after {
+  background: var(--theme-primary);
+}
+
+.compare-col-label {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.compare-col.before .compare-col-label { color: var(--text-caption); }
+.compare-col.after  .compare-col-label { color: rgba(255,255,255,0.65); }
+
+.compare-col-body {
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.65;
+  word-break: keep-all;
+  flex: 1;
+}
+
+.compare-col.before .compare-col-body { color: var(--text-primary); }
+.compare-col.after  .compare-col-body { color: var(--text-on-dark); }
+
+/* VS 구분선 */
+.vs-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vs-line {
+  flex: 1;
+  width: 2px;
+  background: var(--surface-card);
+}
+
+.vs-text {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--text-caption);
+}
+
+/* 결과 배너 */
+.result-banner {
+  margin-top: 24px;
+  padding: 24px 32px;
+  background: linear-gradient(90deg, var(--theme-dark), var(--theme-primary));
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.result-label {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.70);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.result-value {
+  font-size: 36px;
+  font-weight: 900;
+  color: var(--text-on-dark);
+  line-height: 1.1;
+  word-break: keep-all;
+}
+
+/* 마스코트 버블 */
+.mascot-bubble {
+  margin-top: 20px;
+  padding: 16px 24px;
+  background: var(--surface-card);
+  border-radius: 12px;
+  border-left: 5px solid var(--theme-primary);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+<div class="card-canvas">
+
+  <!-- 헤더 -->
+  <div class="text-header">
+    <div class="text-eyebrow">Before vs After</div>
+    <div class="text-title">기존 방식과의 비교</div>
+  </div>
+
+  <!-- 비교 그리드 -->
+  <div class="compare-grid">
+
+    <div class="compare-col before">
+      <div class="compare-col-label">{{ before_label }}</div>
+      <div class="compare-col-body">{{ description }}</div>
+    </div>
+
+    <div class="vs-divider">
+      <div class="vs-line"></div>
+      <div class="vs-text">VS</div>
+      <div class="vs-line"></div>
+    </div>
+
+    <div class="compare-col after">
+      <div class="compare-col-label">{{ after_label }}</div>
+      <div class="compare-col-body">{{ description }}</div>
+    </div>
+
+  </div>
+
+  <!-- 결과 배너 -->
+  {% if result %}
+  <div class="result-banner">
+    <div class="result-label">Result</div>
+    <div class="result-value">{{ result }}</div>
+  </div>
+  {% endif %}
+
+  <!-- 마스코트 버블 -->
+  {% if mascot_bubble %}
+  <div class="mascot-bubble">💬 {{ mascot_bubble }}</div>
+  {% endif %}
+
+</div>
+</body>
+</html>
