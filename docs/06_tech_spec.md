@@ -1,5 +1,5 @@
 # Tech Spec
-> PolyInsight v2.0 | 2025-05-05
+> PolyInsight v2.0 | 2026-05-13 (LLM 교체 반영)
 
 ---
 
@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 웹 프레임워크 | FastAPI | 0.111+ | async/await 네이티브, Pydantic 통합, 자동 OpenAPI |
 | ASGI 서버 | Uvicorn | 0.29+ | FastAPI 표준 런타임 |
-| LLM | Anthropic Claude API | claude-sonnet-4-x | 한국어 품질, 128k 컨텍스트, 긴 논문 처리 |
+| LLM | Google Gemini API (`google-genai`) | gemini-2.0-flash | **Anthropic에서 교체 (2026-05-11)** — 무료 티어(20 RPD / 5 RPM) 활용, MVP 비용 절감 |
 | PDF 추출 | pdfplumber | 0.10+ | 텍스트 레이어 + 좌표 추출. 표/칼럼 처리 우수. |
 | PDF 폴백 | PyMuPDF (fitz) | 1.24+ | pdfplumber 실패 시 폴백. 바이너리 속도 우수. |
 | PNG 렌더링 | Playwright (Python) | 1.44+ | headless Chromium. HTML/CSS → 픽셀 정확 PNG. |
@@ -36,6 +36,42 @@
 ---
 
 ## 2. 주요 기술 결정 및 근거
+
+### 2-0. Anthropic → Gemini 교체 (2026-05-11)
+
+**문제**: Anthropic API는 유료이며 MVP 단계에서 비용 부담이 존재했다.
+
+**결정**: Google Gemini API (`google-genai` SDK) 무료 티어로 교체.
+
+**실제 확인된 무료 티어 한도 (gemini-2.5-flash 기준)**:
+
+| 항목 | 한도 |
+|------|------|
+| RPM (분당 요청) | 5 |
+| RPD (일당 요청) | 20 |
+| TPM (분당 토큰) | 250,000 |
+
+**Rate Limiter 설정** (`backend/core/llm_client.py`):
+- `asyncio.Semaphore(1)` — 동시 호출 1개 직렬화
+- `_MIN_INTERVAL_S = 12.0` — 5 RPM 기준 (60s ÷ 5 = 12s)
+- `MAX_DAILY_CALLS = 15` — 20 RPD의 75% 안전 마진
+
+**테스트 전략 (API quota 소진 방지)**:
+- S6 단위 테스트: `unittest.mock.AsyncMock`으로 LLM 격리
+- 실제 API 호출 테스트: `@pytest.mark.integration` 마킹
+- `pytest.ini`의 `addopts = -m "not integration"` — 기본 실행에서 제외
+- 실행: `pytest -m integration` (수동, 하루 1회 권장)
+
+**트레이드오프**:
+
+| 항목 | Anthropic | Gemini 무료 |
+|------|-----------|------------|
+| 비용 | 유료 | 무료 (한도 내) |
+| 일일 한도 | 없음 (과금) | 20 RPD |
+| 한국어 품질 | 우수 | 충분 (MVP 수준) |
+| 추후 전환 | — | 유료 전환 시 `LLM_MODEL` 변경만으로 가능 |
+
+---
 
 ### 2-1. Pillow → Playwright 교체
 
@@ -113,12 +149,12 @@ cleanup 누락, 중복 요청, 탭 이동 시 재폴링 등 엣지 케이스 처
 polyinsight/
 ├── backend/
 │   ├── main.py                FastAPI 앱 진입점. 라우터 등록, 앱 상태 초기화, 미들웨어.
-│   ├── orchestrator.py        파이프라인 유일 제어자. S1→S2→S6→S7→S8.
 │   ├── agents/
+│   │   ├── orchestrator.py    파이프라인 유일 제어자. S1→S2→S6→S7→S8. ← backend/에서 이동
 │   │   ├── s1_extractor.py    PDF 텍스트 추출. pdfplumber 우선, PyMuPDF 폴백.
 │   │   ├── s2_parser.py       섹션 분류. regex 우선, LLM 폴백.
 │   │   ├── s6_card_json.py    카드뉴스 JSON 생성. 원문 우선. FieldValue 스키마 출력.
-│   │   ├── s7_renderer.py     Playwright PNG 렌더링. 카드당 최대 15초.
+│   │   ├── s7_renderer.py     Playwright PNG 렌더링. Jinja2 주입. 카드당 최대 15초.
 │   │   └── s8_packaging.py    SQLite 저장, ZIP 생성, 최종 상태 업데이트.
 │   ├── api/
 │   │   └── routes/

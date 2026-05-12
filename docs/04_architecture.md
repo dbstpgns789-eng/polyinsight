@@ -116,12 +116,12 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 ```
 backend/
 ├── main.py                  FastAPI 앱 진입점, 라우터 등록, 앱 상태 초기화
-├── orchestrator.py          파이프라인 실행 제어 (유일한 컨트롤러)
 ├── agents/
+│   ├── orchestrator.py      파이프라인 실행 제어 (유일한 컨트롤러) ← agents/ 내부
 │   ├── s1_extractor.py      pdfplumber / PyMuPDF 텍스트 추출
 │   ├── s2_parser.py         섹션 파싱 (regex + LLM fallback)
-│   ├── s6_card_json.py      카드뉴스 JSON 생성 (원문 우선)
-│   ├── s7_renderer.py       Playwright PNG 렌더링
+│   ├── s6_card_json.py      카드뉴스 JSON 생성 (원문 우선, Gemini)
+│   ├── s7_renderer.py       Playwright PNG 렌더링 (Jinja2 데이터 주입)
 │   └── s8_packaging.py      SQLite 저장 + ZIP 생성
 ├── api/
 │   └── routes/

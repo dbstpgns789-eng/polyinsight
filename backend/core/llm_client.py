@@ -31,13 +31,13 @@ class LLMAPIError(Exception):
 # Semaphore(1): 동시 호출 1개만 허용
 # MIN_INTERVAL_S: 호출 간 최소 4초 대기 → 실질 최대 15 RPM 이하 유지
 _llm_semaphore = asyncio.Semaphore(1)
-_MIN_INTERVAL_S: float = 4.0          # 초당 호출 간격 하한
+_MIN_INTERVAL_S: float = 12.0         # 5 RPM 기준 → 60s/5 = 12s
 _last_call_time: float = 0.0          # 마지막 호출 완료 시각
 
 # 일일 호출 카운터 (프로세스 재시작 시 리셋 — 간단한 보호용)
 _daily_call_count: int = 0
 _daily_reset_date: str = ""
-MAX_DAILY_CALLS: int = 200            # 1,500 RPD의 안전 마진 (13%)
+MAX_DAILY_CALLS: int = 15             # gemini-2.5-flash 무료 티어: 20 RPD, 안전마진 75%
 
 
 async def _throttle() -> None:

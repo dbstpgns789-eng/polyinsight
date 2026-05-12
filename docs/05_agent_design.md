@@ -50,7 +50,7 @@ Orchestrator는 `await agent.execute(input_data)` 형태로만 호출한다.
 ## 2. Orchestrator 호출 순서
 
 ```python
-# backend/orchestrator.py
+# backend/agents/orchestrator.py  ← agents/ 내부 (backend/ 루트 아님)
 async def run_pipeline(job_id: str, pdf_bytes: bytes) -> None:
     state = await db.create_job(job_id)
 
@@ -84,10 +84,11 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes) -> None:
     await db.save_card_data(job_id, s6_out.card_data)
     await db.update_job(job_id, stage="S7", progress=65)
 
-    # S7
+    # S7 — theme은 기본값 사용 (추후 사용자 DesignPanel에서 오버라이드)
     s7_out: S7Output = await s7_agent.execute(S7Input(
         job_id=job_id,
         card_data=s6_out.card_data,
+        theme=CardTheme(),  # primary="#2563EB", dark="#1A4C96"
     ))
     await db.update_job(job_id, stage="S8", progress=90)
 
@@ -601,36 +602,118 @@ async def cleanup_expired_blobs(db_conn):
 
 ---
 
-## 9. LLM 클라이언트 공통 설정
+## 9. LLM 클라이언트 공통 설정 (Gemini — 2026-05-11 교체)
 
 ```python
 # backend/core/llm_client.py
-import anthropic
+from google import genai
+from google.genai import types
 
-client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+# Rate Limiter (무료 티어: 5 RPM / 20 RPD 기준)
+_llm_semaphore = asyncio.Semaphore(1)   # 동시 호출 직렬화
+_MIN_INTERVAL_S = 12.0                  # 60s ÷ 5 RPM
+MAX_DAILY_CALLS = 15                    # 20 RPD × 75% 안전 마진
 
-# S6 전용 — 프롬프트 캐싱 적용 (section_map은 per-call, system prompt는 캐시)
-# Anthropic prompt caching: system prompt에 cache_control 지정
-CACHED_SYSTEM = [
-    {
-        "type": "text",
-        "text": SYSTEM_PROMPT,
-        "cache_control": {"type": "ephemeral"}
-    }
-]
+class LLMClient:
+    def __init__(self):
+        self.model = settings.LLM_MODEL  # "gemini-2.0-flash"
 
-# 재시도 설정 (지수 백오프)
-RETRY_DELAYS = [0.5, 1.0, 2.0]   # 초 단위
-MAX_RETRIES = 3
+    async def call(self, system_prompt, user_prompt, max_tokens, temperature, timeout_s=60):
+        _check_daily_limit()
+        async with _llm_semaphore:
+            await _throttle()
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)  # 매 호출마다 생성 (이벤트 루프 충돌 방지)
+            response = await asyncio.wait_for(
+                client.aio.models.generate_content(...), timeout=timeout_s
+            )
+        return response.text.strip()
 ```
 
-- S2 LLM 폴백은 캐싱 없이 단순 호출
-- S6는 system prompt 캐싱 적용 (section_map이 길어 입력 토큰 절감 효과 큼)
+**이전 Anthropic 설정 제거 이유**: API 유료 → MVP 비용 절감 위해 Gemini 무료 티어로 교체.  
+**주의**: `genai.Client`를 module-level 싱글턴으로 쓰면 pytest의 per-test 이벤트 루프와 충돌 → 매 호출마다 인스턴스 생성으로 해결.
 
 ---
 
-## 10. 변경 이력
+## 10. S7 데이터 주입 방식 (Jinja2)
+
+계획 단계에서는 `html.replace("__CARD_DATA__", ...)` 문자열 치환 방식이었으나,
+**Jinja2 템플릿**으로 구현됐다.
+
+```python
+# backend/agents/s7_renderer.py
+from jinja2 import Environment, FileSystemLoader
+
+_jinja = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=False)
+
+# 카드별 렌더링
+html = _jinja.get_template(tmpl_name).render(**ctx)
+await page.set_content(html, wait_until="networkidle")
+```
+
+템플릿 파일명 (계획 대비 변경):
+
+| 슬롯 | 계획 | 실제 파일명 |
+|------|------|------------|
+| Card 1 | `card_cover.html` | `cover.html` |
+| Card 2 | `card_hook.html` | `hook.html` |
+| Card 3 | `card_grid.html` | `grid.html` |
+| Card 4 | `card_text.html` | `text.html` |
+| Card 5 | `card_closing.html` | `closing.html` |
+
+---
+
+## 11. 테스트 전략
+
+### 원칙: LLM 테스트는 mock으로 격리
+
+API quota 소진 사고(2026-05-13) 이후 확립된 규칙:
+
+```
+기본 pytest 실행 → LLM 호출 없음 (mock 기반)
+pytest -m integration → 실제 API 호출 (수동, 하루 1회 권장)
+```
+
+```ini
+# backend/pytest.ini
+[pytest]
+asyncio_mode = auto
+testpaths = tests
+addopts = -m "not integration"
+
+markers =
+    integration: 실제 외부 API 호출 (기본 실행 제외)
+```
+
+```python
+# 단위 테스트 — mock 사용
+from unittest.mock import AsyncMock, patch
+
+with patch("backend.agents.s6_card_json.llm_client.call",
+           new=AsyncMock(return_value=mock_json_str)):
+    out = await agent.execute(inp)
+
+# 통합 테스트 — 실제 호출
+@pytest.mark.integration
+async def test_s6_real_api(agent, paper_section_map):
+    ...
+```
+
+### 현재 테스트 현황 (2026-05-13)
+
+| 파일 | 테스트 수 | LLM 호출 | 통과 |
+|------|----------|---------|------|
+| test_s1.py | 8 | 없음 | ✅ |
+| test_s2.py | 8 | 없음 (regex) | ✅ |
+| test_s6.py | 9 | mock | ✅ |
+| test_s7.py | 5 | 없음 | ✅ |
+| test_s8.py | 6 | 없음 | ✅ |
+| **합계** | **36** | **0** | **✅** |
+
+---
+
+## 12. 변경 이력
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
 | 2026-05-11 | v1.0 | 최초 작성. S1~S8 에이전트 계약 전체, S6 프롬프트 초안 포함. |
+| 2026-05-13 | v1.1 | LLM Anthropic→Gemini 교체, orchestrator 경로 수정, S7 Jinja2 주입 방식, 테스트 전략 추가. |
