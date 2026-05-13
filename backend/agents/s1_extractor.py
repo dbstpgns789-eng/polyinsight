@@ -5,50 +5,118 @@ import re
 from io import BytesIO
 
 import pdfplumber
-import fitz  # PyMuPDF
 
-from .base import BaseAgent
-from ..core.models import PaperMetadata, S1Input, S1Output
+from ..core.models import PaperMetadata, S1Output
 
 logger = logging.getLogger(__name__)
 
+# 섹션 헤더로 인식할 키워드 (소문자 비교)
+_SECTION_PATTERNS = [
+    "abstract",
+    "introduction",
+    "background",
+    "related work",
+    "methods",
+    "methodology",
+    "materials and methods",
+    "experimental",
+    "results",
+    "discussion",
+    "conclusion",
+    "conclusions",
+    "references",
+    "acknowledgements",
+    "acknowledgments",
+]
 
-class S1ExtractorAgent(BaseAgent[S1Input, S1Output]):
-    """S1: PDF → raw_text + page_map + metadata."""
 
-    MIN_TEXT_RATIO = 0.10   # 페이지당 글자 수 / 페이지 면적 비율 하한 (스캔본 판별)
-    MIN_WORD_COUNT = 100    # 유효 논문 최소 단어 수
+class S1Extractor:
+    """S1: PDF bytes → raw_text + page_map + section_map + metadata."""
 
-    async def execute(self, input_data: S1Input) -> S1Output:
-        pdf_bytes = input_data.pdf_bytes
+    MIN_WORD_COUNT = 50
+
+    async def execute(self, pdf_bytes: bytes) -> S1Output:
+        if not pdf_bytes:
+            return S1Output(
+                raw_text="",
+                page_map={},
+                section_map={"full_text": ""},
+                metadata=PaperMetadata(title=None, authors=[], year=None, doi=None),
+                word_count=0,
+                degraded=True,
+                warnings=["empty input bytes"],
+            )
+
         warnings: list[str] = []
+        page_map: dict[int, str] = {}
+        metadata = PaperMetadata(title=None, authors=[], year=None, doi=None)
 
-        # ── 1차: pdfplumber ───────────────────────────────────────────────────
-        page_map, metadata = self._try_pdfplumber(pdf_bytes, warnings)
+        # ── 1차: pymupdf4llm.to_markdown ─────────────────────────────────────
+        try:
+            import pymupdf4llm
+            import fitz  # PyMuPDF — bundled with pymupdf4llm
 
-        # pdfplumber 실패 또는 텍스트 희박 → PyMuPDF 폴백
-        if not page_map or self._is_sparse(page_map):
-            logger.warning("S1: pdfplumber sparse/failed, trying PyMuPDF")
-            warnings.append("S1: fallback to PyMuPDF")
-            page_map = self._try_pymupdf(pdf_bytes)
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            for i, page in enumerate(doc, start=1):
+                md = pymupdf4llm.to_markdown(doc, pages=[i - 1])
+                page_map[i] = md.strip()
+
+            # 메타데이터
+            meta = doc.metadata or {}
+            metadata = self._build_metadata(meta)
+            doc.close()
+
+        except Exception as exc:
+            logger.warning("S1: pymupdf4llm failed (%s), falling back to pdfplumber", exc)
+            warnings.append(f"S1: pdfplumber fallback — pymupdf4llm error: {exc}")
+
+            # ── 2차: pdfplumber 폴백 ─────────────────────────────────────────
+            page_map, metadata = self._try_pdfplumber(pdf_bytes, warnings)
+
             if not page_map:
-                raise RuntimeError("ERR-S1-001: both pdfplumber and PyMuPDF failed")
+                return S1Output(
+                    raw_text="",
+                    page_map={},
+                    section_map={"full_text": ""},
+                    metadata=metadata,
+                    word_count=0,
+                    degraded=True,
+                    warnings=warnings + ["both pymupdf4llm and pdfplumber failed"],
+                )
 
-        raw_text = "\n\n".join(page_map[p] for p in sorted(page_map))
+        # ── raw_text 조합 (PAGE 마커 삽입) ───────────────────────────────────
+        parts: list[str] = []
+        for page_num in sorted(page_map):
+            parts.append(f"<!-- PAGE {page_num} -->")
+            parts.append(page_map[page_num])
+        raw_text = "\n".join(parts)
+
         word_count = len(raw_text.split())
 
         if word_count < self.MIN_WORD_COUNT:
             warnings.append(f"S1: low word count ({word_count}) — possible scan or empty PDF")
 
+        # ── 섹션 파싱 ────────────────────────────────────────────────────────
+        section_map, degraded = self._parse_sections(raw_text)
+
+        if degraded:
+            warnings.append("S1: no section headers detected — degraded mode")
+
+        # 메타데이터 title 경고
+        if not (metadata.title and metadata.title.strip()):
+            warnings.append("S1: metadata title not found")
+
         return S1Output(
             raw_text=raw_text,
             page_map=page_map,
+            section_map=section_map,
             metadata=metadata,
             word_count=word_count,
+            degraded=degraded,
             warnings=warnings,
         )
 
-    # ── pdfplumber ────────────────────────────────────────────────────────────
+    # ── pdfplumber 폴백 ───────────────────────────────────────────────────────
 
     def _try_pdfplumber(
         self, pdf_bytes: bytes, warnings: list[str]
@@ -57,15 +125,8 @@ class S1ExtractorAgent(BaseAgent[S1Input, S1Output]):
         metadata = PaperMetadata(title=None, authors=[], year=None, doi=None)
         try:
             with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
-                # 메타데이터
                 meta = pdf.metadata or {}
-                metadata = PaperMetadata(
-                    title=meta.get("Title") or None,
-                    authors=self._parse_authors(meta.get("Author", "")),
-                    year=self._parse_year(meta.get("CreationDate", "")),
-                    doi=self._extract_doi(meta.get("Subject", "") + meta.get("Keywords", "")),
-                )
-                # 페이지 텍스트
+                metadata = self._build_metadata(meta)
                 for i, page in enumerate(pdf.pages, start=1):
                     text = page.extract_text() or ""
                     page_map[i] = text.strip()
@@ -73,41 +134,89 @@ class S1ExtractorAgent(BaseAgent[S1Input, S1Output]):
             warnings.append(f"S1: pdfplumber error — {exc}")
         return page_map, metadata
 
-    def _is_sparse(self, page_map: dict[int, str]) -> bool:
-        """추출된 텍스트가 너무 적으면 스캔본으로 간주."""
-        total_chars = sum(len(t) for t in page_map.values())
-        return total_chars < 200 * len(page_map)  # 페이지당 평균 200자 미만
-
-    # ── PyMuPDF ───────────────────────────────────────────────────────────────
-
-    def _try_pymupdf(self, pdf_bytes: bytes) -> dict[int, str]:
-        page_map: dict[int, str] = {}
-        try:
-            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-            for i, page in enumerate(doc, start=1):
-                page_map[i] = page.get_text("text").strip()
-            doc.close()
-        except Exception as exc:
-            logger.error("S1: PyMuPDF error — %s", exc)
-        return page_map
-
-    # ── 메타데이터 파싱 헬퍼 ─────────────────────────────────────────────────
+    # ── 섹션 파싱 ────────────────────────────────────────────────────────────
 
     @staticmethod
-    def _parse_authors(raw: str) -> list[str]:
-        if not raw:
-            return []
-        return [a.strip() for a in re.split(r"[;,]", raw) if a.strip()]
+    def _parse_sections(raw_text: str) -> tuple[dict[str, str], bool]:
+        """
+        섹션 헤더를 찾아 section_map을 만든다.
+        헤더 미감지 시 {"full_text": raw_text}를 반환하고 degraded=True.
+        """
+        lines = raw_text.splitlines()
+        sections: dict[str, str] = {}
+        current_key: str | None = None
+        current_lines: list[str] = []
+
+        for line in lines:
+            stripped = line.strip()
+            lower = stripped.lower()
+
+            # PAGE 마커는 섹션 텍스트에 포함시키지 않음
+            if lower.startswith("<!-- page"):
+                continue
+
+            # pymupdf4llm은 "## **Abstract**" 형식으로 출력 — **...** 제거 후 비교
+            normalized = re.sub(r"\*+", "", lower).strip()
+            # Markdown 헤더 기호(#) 제거
+            normalized_no_hash = re.sub(r"^#{1,3}\s*", "", normalized).strip()
+
+            matched_section = None
+            for pat in _SECTION_PATTERNS:
+                # 평문 헤더: "Abstract", "1. Introduction", "Methods."
+                if re.fullmatch(
+                    rf"(?:\d+[\.\s]+)?{re.escape(pat)}[\.\s]*",
+                    normalized_no_hash,
+                    re.IGNORECASE,
+                ):
+                    matched_section = pat
+                    break
+                # Markdown 헤더: "# Abstract", "## **Results**"
+                if re.fullmatch(
+                    rf"#{1,3}\s*(?:\d+[\.\s]+)?{re.escape(pat)}[\.\s]*",
+                    normalized,
+                    re.IGNORECASE,
+                ):
+                    matched_section = pat
+                    break
+
+            if matched_section:
+                if current_key is not None:
+                    sections[current_key] = "\n".join(current_lines).strip()
+                # 소문자 정규화 (예: "Materials and Methods" → "methods")
+                current_key = matched_section.replace(" and ", " ").split()[0]
+                if matched_section == "materials and methods":
+                    current_key = "methods"
+                elif matched_section == "related work":
+                    current_key = "introduction"
+                current_lines = []
+            else:
+                if current_key is not None:
+                    current_lines.append(line)
+
+        if current_key is not None:
+            sections[current_key] = "\n".join(current_lines).strip()
+
+        if not sections:
+            return {"full_text": raw_text}, True
+
+        return sections, False
+
+    # ── 메타데이터 빌더 ──────────────────────────────────────────────────────
 
     @staticmethod
-    def _parse_year(creation_date: str) -> int | None:
-        m = re.search(r"(\d{4})", creation_date)
-        return int(m.group(1)) if m else None
+    def _build_metadata(meta: dict) -> PaperMetadata:
+        title = meta.get("title") or meta.get("Title") or None
+        author_raw = meta.get("author") or meta.get("Author") or ""
+        authors = [a.strip() for a in re.split(r"[;,]", author_raw) if a.strip()]
 
-    @staticmethod
-    def _extract_doi(text: str) -> str | None:
-        m = re.search(r"10\.\d{4,}/\S+", text)
-        return m.group(0).rstrip(".,)") if m else None
+        date_raw = meta.get("creationDate") or meta.get("CreationDate") or ""
+        year_match = re.search(r"(\d{4})", date_raw)
+        year = int(year_match.group(1)) if year_match else None
 
+        subj = (meta.get("subject") or meta.get("Subject") or "") + (
+            meta.get("keywords") or meta.get("Keywords") or ""
+        )
+        doi_match = re.search(r"10\.\d{4,}/\S+", subj)
+        doi = doi_match.group(0).rstrip(".,)") if doi_match else None
 
-s1_agent = S1ExtractorAgent()
+        return PaperMetadata(title=title, authors=authors, year=year, doi=doi)

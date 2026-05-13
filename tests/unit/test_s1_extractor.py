@@ -147,7 +147,7 @@ async def test_s3_no_sections_detected():
     pdf.set_font("Helvetica", size=11)
     # 헤더 없이 평문 단락만
     for _ in range(10):
-        pdf.multi_cell(0, 6, "This is a generic sentence with no section headers. " * 3)
+        pdf.multi_cell(0, 6, "This is a generic sentence with no section headers. " * 3, new_x="LMARGIN", new_y="NEXT")
 
     flat_pdf = pdf.output()
     out: S1Output = await S1Extractor().execute(flat_pdf)

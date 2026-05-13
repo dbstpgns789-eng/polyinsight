@@ -46,7 +46,7 @@ def sample_pdf_bytes() -> bytes:
 
     content_page1 = [
         ("B", 16, "Highly Sensitive Carbon Nanotube Gas Sensor"),
-        ("",  11, "Kim Minjun, Lee Sooyeon — KITECH, 2024"),
+        ("",  11, "Kim Minjun, Lee Sooyeon - KITECH, 2024"),
         ("",  11, ""),
         ("B", 13, "Abstract"),
         ("",  11,
@@ -60,7 +60,7 @@ def sample_pdf_bytes() -> bytes:
     ]
     for style, size, text in content_page1:
         pdf.set_font("Helvetica", style=style, size=size)
-        pdf.multi_cell(0, 6, text)
+        pdf.multi_cell(0, 6, text, new_x="LMARGIN", new_y="NEXT")
 
     pdf.add_page()
     content_page2 = [
@@ -80,7 +80,7 @@ def sample_pdf_bytes() -> bytes:
     ]
     for style, size, text in content_page2:
         pdf.set_font("Helvetica", style=style, size=size)
-        pdf.multi_cell(0, 6, text)
+        pdf.multi_cell(0, 6, text, new_x="LMARGIN", new_y="NEXT")
 
     return pdf.output()
 

@@ -132,8 +132,10 @@ class PaperMetadata(BaseModel):
 class S1Output(BaseModel):
     raw_text: str
     page_map: dict[int, str]
+    section_map: dict[str, str] = Field(default_factory=dict)
     metadata: PaperMetadata
     word_count: int
+    degraded: bool = False
     warnings: list[str] = Field(default_factory=list)
 
 
