@@ -26,3 +26,7 @@ dist/
 .DS_Store
 Thumbs.db
 *.log
+
+# Test reports
+test_report.html
+.pytest_cache/
