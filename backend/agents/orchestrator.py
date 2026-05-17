@@ -8,13 +8,11 @@ from ..core.models import (
     CardTheme,
     JobStatus,
     S1Input,
-    S2Input,
     S6Input,
     S7Input,
     S8Input,
 )
 from .s1_extractor import s1_agent
-from .s2_parser import s2_agent
 from .s6_card_json import s6_agent
 from .s7_renderer import s7_agent
 from .s8_packaging import s8_agent
@@ -29,7 +27,7 @@ async def run_pipeline(
     pdf_bytes: bytes,
     theme: CardTheme | None = None,
 ) -> None:
-    """Full S1→S2→S6→S7→S8 pipeline. S8 always runs."""
+    """Full S1→S6→S7→S8 pipeline. S8 always runs."""
     if theme is None:
         theme = CardTheme()
 
@@ -45,7 +43,9 @@ async def _execute(job_id: str, pdf_bytes: bytes, theme: CardTheme) -> None:
         await db.update_job(job_id, status=JobStatus.RUNNING, stage="S1", progress=10)
         s1_out = await s1_agent.execute(S1Input(job_id=job_id, pdf_bytes=pdf_bytes))
         warnings.extend(s1_out.warnings)
-        logger.info("S1 done: %d words", s1_out.word_count)
+        if s1_out.degraded:
+            await db.update_job(job_id, status=JobStatus.RUNNING, degraded=True)
+        logger.info("S1 done: %d words, %d sections", s1_out.word_count, len(s1_out.section_map))
     except Exception as exc:
         logger.error("S1 fatal: %s", exc)
         await db.update_job(
@@ -57,38 +57,13 @@ async def _execute(job_id: str, pdf_bytes: bytes, theme: CardTheme) -> None:
         )
         return
 
-    # ── S2: Section parsing ───────────────────────────────────────────────────
-    try:
-        await db.update_job(job_id, status=JobStatus.RUNNING, stage="S2", progress=25)
-        s2_out = await s2_agent.execute(
-            S2Input(
-                job_id=job_id,
-                raw_text=s1_out.raw_text,
-                page_map=s1_out.page_map,
-            )
-        )
-        warnings.extend(s2_out.warnings)
-        if s2_out.degraded_mode:
-            await db.update_job(job_id, status=JobStatus.RUNNING, degraded=True)
-        logger.info("S2 done: %d sections, degraded=%s", len(s2_out.section_map), s2_out.degraded_mode)
-    except Exception as exc:
-        logger.error("S2 fatal: %s", exc)
-        await db.update_job(
-            job_id,
-            status=JobStatus.ERROR,
-            stage="S2",
-            progress=25,
-            warnings=warnings + [f"ERR-S2: {exc}"],
-        )
-        return
-
     # ── S6: Card JSON generation ──────────────────────────────────────────────
     try:
         await db.update_job(job_id, status=JobStatus.RUNNING, stage="S6", progress=50)
         s6_out = await s6_agent.execute(
             S6Input(
                 job_id=job_id,
-                section_map=s2_out.section_map,
+                section_map=s1_out.section_map,
                 page_map=s1_out.page_map,
                 paper_metadata=s1_out.metadata,
             )

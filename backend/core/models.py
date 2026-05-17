@@ -139,18 +139,6 @@ class S1Output(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-class S2Input(BaseModel):
-    job_id: str
-    raw_text: str
-    page_map: dict[int, str]
-
-
-class S2Output(BaseModel):
-    section_map: dict[str, str]
-    degraded_mode: bool = False
-    warnings: list[str] = Field(default_factory=list)
-
-
 class S6Input(BaseModel):
     job_id: str
     section_map: dict[str, str]
