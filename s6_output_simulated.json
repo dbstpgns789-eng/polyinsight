@@ -1,0 +1,276 @@
+{
+  "meta": {
+    "org": {
+      "value": "한국생산기술연구원(KITECH)",
+      "confidence": "high",
+      "match_quality": "normalized",
+      "claim_type": "qualitative",
+      "source": { "section": "introduction", "page": 1 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    },
+    "dept": {
+      "value": "",
+      "confidence": "low",
+      "match_quality": "failed",
+      "claim_type": "qualitative",
+      "source": { "section": "introduction", "page": 1 },
+      "risk_level": "LOW",
+      "verified": false
+    },
+    "researcher": {
+      "value": "이호익",
+      "confidence": "medium",
+      "match_quality": "normalized",
+      "claim_type": "qualitative",
+      "source": { "section": "introduction", "page": 1 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    },
+    "month": {
+      "value": "2024-07",
+      "confidence": "high",
+      "match_quality": "normalized",
+      "claim_type": "qualitative",
+      "source": { "section": "introduction", "page": 1 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    },
+    "edition_number": {
+      "value": "Vol.8 No.100545",
+      "confidence": "high",
+      "match_quality": "normalized",
+      "claim_type": "qualitative",
+      "source": { "section": "introduction", "page": 1 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    }
+  },
+
+  "card1": {
+    "_template": "cover.html (Type A)",
+    "_layout_reason": "Card1은 항상 표지 고정",
+    "pretitle": {
+      "value": "친환경 소재 연구 성과",
+      "confidence": "high",
+      "match_quality": "semantic",
+      "claim_type": "qualitative",
+      "source": { "section": "conclusion", "page": 7 },
+      "risk_level": "HIGH",
+      "verified": false
+    },
+    "title": {
+      "value": "셀룰로오스 마이크로비드 제조 최적화",
+      "confidence": "high",
+      "match_quality": "normalized",
+      "claim_type": "qualitative",
+      "source": { "section": "introduction", "page": 1 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    },
+    "mascot_bubble": {
+      "value": "6:1 O/W 비율로 균일한 구형 비드 완성!",
+      "confidence": "high",
+      "match_quality": "exact",
+      "claim_type": "quantitative",
+      "source": { "section": "results", "page": 4 },
+      "risk_level": "LOW",
+      "verified": false
+    }
+  },
+
+  "card2": {
+    "_template": "hook.html (Type E)",
+    "_layout_reason": "intro에 문제/환경오염 키워드 → Type E (전면 훅 텍스트)",
+    "intro": {
+      "value": "기존 합성 마이크로비드(폴리에틸렌 등)는 생태계에 잔류해 심각한 환경 오염을 일으킨다",
+      "confidence": "high",
+      "match_quality": "normalized",
+      "claim_type": "causal",
+      "source": { "section": "introduction", "page": 2 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    },
+    "keyword_line": {
+      "value": "셀룰로오스 · 프리믹스 막유화법 · 탈아세틸화 · 생분해성",
+      "confidence": "high",
+      "match_quality": "normalized",
+      "claim_type": "qualitative",
+      "source": { "section": "introduction", "page": 1 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    },
+    "footnote": {
+      "value": "Lee et al., Carbohydrate Polymer Technologies and Applications 8 (2024) 100545",
+      "confidence": "high",
+      "match_quality": "exact",
+      "claim_type": "qualitative",
+      "source": { "section": "introduction", "page": 1 },
+      "risk_level": "LOW",
+      "verified": false
+    }
+  },
+
+  "card3": {
+    "_template": "grid.html (Type C)",
+    "_layout_reason": "achievement에 수치 3개 이상 (D50 8.97μm, 345 LMH, 39,299 LMH) → Type C (수치 그리드)",
+    "problem": {
+      "value": "석유계 합성 마이크로비드의 생태계 잔류 및 환경 해악 — 친환경 대안 부재",
+      "confidence": "high",
+      "match_quality": "normalized",
+      "claim_type": "causal",
+      "source": { "section": "introduction", "page": 2 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    },
+    "achievement": {
+      "value": "프리믹스 막유화법으로 D50 8.97 μm 균일 셀룰로오스 비드 제조 및 탈아세틸화 완전 전환 확인",
+      "confidence": "high",
+      "match_quality": "exact",
+      "claim_type": "quantitative",
+      "source": { "section": "results", "page": 5 },
+      "risk_level": "LOW",
+      "verified": false
+    },
+    "mascot_bubble": {
+      "value": "FT-IR로 탈아세틸화 완전 확인!",
+      "confidence": "high",
+      "match_quality": "normalized",
+      "claim_type": "qualitative",
+      "source": { "section": "results", "page": 6 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    },
+    "photo_caption": {
+      "value": "SEM 이미지: 6:1 O/W 비율, 345 LMH 조건에서 형성된 구형 셀룰로오스 비드",
+      "confidence": "medium",
+      "match_quality": "semantic",
+      "claim_type": "qualitative",
+      "source": { "section": "results", "page": 4 },
+      "risk_level": "HIGH",
+      "verified": false
+    }
+  },
+
+  "card4": {
+    "_template": "text.html (Type D)",
+    "_layout_reason": "before_label(39,299 LMH)과 after_label(345 LMH) 모두 존재 → Type D (before/after 비교)",
+    "before_label": {
+      "value": "고유량 조건 (39,299 LMH)",
+      "confidence": "high",
+      "match_quality": "exact",
+      "claim_type": "quantitative",
+      "source": { "section": "results", "page": 5 },
+      "risk_level": "LOW",
+      "verified": false
+    },
+    "after_label": {
+      "value": "저유량 조건 (345 LMH)",
+      "confidence": "high",
+      "match_quality": "exact",
+      "claim_type": "quantitative",
+      "source": { "section": "results", "page": 5 },
+      "risk_level": "LOW",
+      "verified": false
+    },
+    "description": {
+      "value": "질소 압력으로 유량 조절 → 액적 분리 역학 및 비드 형태 결정",
+      "confidence": "high",
+      "match_quality": "normalized",
+      "claim_type": "causal",
+      "source": { "section": "results", "page": 5 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    },
+    "result": {
+      "value": "저유량(345 LMH)에서 구형 비드, 고유량(39,299 LMH)에서 Jetting으로 풍선형 불량 비드 발생",
+      "confidence": "high",
+      "match_quality": "exact",
+      "claim_type": "quantitative",
+      "source": { "section": "results", "page": 5 },
+      "risk_level": "LOW",
+      "verified": false
+    },
+    "mascot_bubble": {
+      "value": "유량이 비드 형태를 결정한다!",
+      "confidence": "high",
+      "match_quality": "semantic",
+      "claim_type": "causal",
+      "source": { "section": "results", "page": 5 },
+      "risk_level": "HIGH",
+      "verified": false
+    }
+  },
+
+  "card5": {
+    "_template": "closing.html (Type K)",
+    "_layout_reason": "Card5는 항상 기관 브랜드 마무리 고정",
+    "pre_title": {
+      "value": "지속가능한 소재 기술",
+      "confidence": "high",
+      "match_quality": "semantic",
+      "claim_type": "qualitative",
+      "source": { "section": "conclusion", "page": 7 },
+      "risk_level": "HIGH",
+      "verified": false
+    },
+    "main_title": {
+      "value": "셀룰로오스 마이크로비드, 환경과 산업의 친환경 해답",
+      "confidence": "high",
+      "match_quality": "semantic",
+      "claim_type": "qualitative",
+      "source": { "section": "conclusion", "page": 7 },
+      "risk_level": "HIGH",
+      "verified": false
+    },
+    "cta": {
+      "value": "논문 원문 보기",
+      "confidence": "high",
+      "match_quality": "semantic",
+      "claim_type": "qualitative",
+      "source": { "section": "introduction", "page": 1 },
+      "risk_level": "HIGH",
+      "verified": false
+    },
+    "team_name": {
+      "value": "KITECH 이호익 박사팀",
+      "confidence": "medium",
+      "match_quality": "normalized",
+      "claim_type": "qualitative",
+      "source": { "section": "introduction", "page": 1 },
+      "risk_level": "MEDIUM",
+      "verified": false
+    }
+  },
+
+  "_meta": {
+    "theme_recommended": {
+      "primary": "#0EA5BE",
+      "dark": "#0A7A8F",
+      "rationale": "환경/에너지 계열 (#0EA5BE) — 환경 오염 해결 목적이 강함. 소재/화학 (#7B5FFF)도 적용 가능"
+    },
+    "risk_summary": {
+      "CRITICAL": 0,
+      "HIGH": 7,
+      "MEDIUM": 9,
+      "LOW": 7
+    },
+    "high_risk_fields": [
+      "card1.pretitle (semantic)",
+      "card3.photo_caption (semantic)",
+      "card3.mascot_bubble (normalized, 판단 개입)",
+      "card4.mascot_bubble (semantic)",
+      "card5.pre_title (semantic)",
+      "card5.main_title (semantic)",
+      "card5.cta (semantic)"
+    ],
+    "layout_variants": {
+      "card1": "A",
+      "card2": "E",
+      "card3": "C",
+      "card4": "D",
+      "card5": "K"
+    },
+    "source_paper": "Optimizing cellulose acetate microbead formation through premixed membrane emulsification — Lee et al., Carbohydrate Polymer Technologies and Applications 8 (2024) 100545"
+  }
+}
