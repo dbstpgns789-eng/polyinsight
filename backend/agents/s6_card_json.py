@@ -115,7 +115,6 @@ risk_level 규칙:
     "cta":        <FieldValue>,
     "team_name":  <FieldValue>
   }},
-  "layout_variants": {{"1":"A","2":"B","3":"B","4":"D","5":"A"}}
 }}"""
 
 
@@ -148,8 +147,9 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
                 card_data = CardEditorData.model_validate(
                     json.loads(self._extract_json(raw))
                 )
-                # 후처리: verified 강제 초기화 + risk_level 재판정
+                # 후처리: verified 강제 초기화 + risk_level 재판정 + 레이아웃 결정
                 card_data = self._post_process(card_data)
+                card_data.layout_variants = self._infer_layout(card_data)
                 critical = self._count_risk(card_data, RiskLevel.CRITICAL)
                 high = self._count_risk(card_data, RiskLevel.HIGH)
                 logger.info("S6: done. CRITICAL=%d HIGH=%d", critical, high)
@@ -208,6 +208,47 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
         return card_data
 
     @staticmethod
+    def _infer_layout(card_data: CardEditorData) -> dict[str, str]:
+        """논문 내용 분석 후 카드별 레이아웃 타입 결정 (코드 기반, LLM 미사용).
+
+        선택 규칙 (docs/08_design_spec.md §5-0 기준):
+          Card1 → A  (커버, 항상 고정)
+          Card2 → E  (intro가 의문문/문제 제기) | B (기본)
+          Card3 → C  (수치 3개+) | G (단계 3개+) | B (기본)
+          Card4 → D  (before_label + after_label 모두 있음) | B (기본)
+          Card5 → K  (클로징, 항상 고정)
+        """
+        variants: dict[str, str] = {}
+
+        # Card 1, 5: 고정
+        variants["1"] = "A"
+        variants["5"] = "K"
+
+        # Card 2: intro에 의문문 또는 부정적 문제 제기 → E (전면텍스트 훅)
+        intro_text = card_data.card2.intro.value or ""
+        variants["2"] = "E" if _is_hook(intro_text) else "B"
+
+        # Card 3: 수치 3개+ → C (그리드형), 단계 3개+ → G (플로우형), 기본 → B
+        achievement_text = card_data.card3.achievement.value or ""
+        problem_text = card_data.card3.problem.value or ""
+        numeric_count = _count_numerics(achievement_text + " " + problem_text)
+        if numeric_count >= 3:
+            variants["3"] = "C"
+        else:
+            variants["3"] = "B"
+
+        # Card 4: before_label + after_label 모두 채워짐 → D (비교형)
+        has_before = bool((card_data.card4.before_label.value or "").strip())
+        has_after = bool((card_data.card4.after_label.value or "").strip())
+        variants["4"] = "D" if (has_before and has_after) else "B"
+
+        logger.info(
+            "S6: layout inferred — %s",
+            ", ".join(f"Card{k}={v}" for k, v in sorted(variants.items())),
+        )
+        return variants
+
+    @staticmethod
     def _count_risk(card_data: CardEditorData, level: RiskLevel) -> int:
         return sum(
             1 for fv in _iter_field_values(card_data) if fv.risk_level == level
@@ -221,6 +262,22 @@ def _iter_field_values(card_data: CardEditorData):
         for val in vars(group).values():
             if isinstance(val, FieldValue):
                 yield val
+
+
+# ── 레이아웃 추론 헬퍼 ─────────────────────────────────────────────────────────
+
+_NUMERIC_RE = re.compile(r"\d+(?:[.,]\d+)?(?:\s*[%배×x배율])?")
+_HOOK_RE = re.compile(r"[?？]|왜|어떻게|문제|한계|불가능|어렵|낭비|오염|위험|과제")
+
+
+def _count_numerics(text: str) -> int:
+    """텍스트 내 수치 표현(숫자, %, 배율) 개수를 반환."""
+    return len(_NUMERIC_RE.findall(text))
+
+
+def _is_hook(text: str) -> bool:
+    """의문문 또는 문제 제기 표현이 있으면 True (Type E 훅 카드 판정)."""
+    return bool(_HOOK_RE.search(text))
 
 
 s6_agent = S6CardJsonAgent()

@@ -85,7 +85,7 @@ class Card5(BaseModel):
     team_name: FieldValue
 
 
-LayoutVariant = Literal["A", "B", "C", "D"]
+LayoutVariant = Literal["A", "B", "C", "D", "E", "G", "K"]
 
 
 class CardEditorData(BaseModel):
@@ -95,7 +95,7 @@ class CardEditorData(BaseModel):
     card3: Card3
     card4: Card4
     card5: Card5
-    layout_variants: Dict[str, LayoutVariant]
+    layout_variants: Dict[str, LayoutVariant] = Field(default_factory=dict)
 
 
 class JobStatus(str, Enum):
