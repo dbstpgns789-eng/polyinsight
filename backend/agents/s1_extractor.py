@@ -4,142 +4,106 @@ from __future__ import annotations
 import logging
 import re
 from io import BytesIO
-from statistics import median
 
-import fitz  # PyMuPDF
 import pdfplumber
+import pymupdf4llm
+import fitz
 
 from ..core.models import PaperMetadata, S1Output
 
 logger = logging.getLogger(__name__)
 
-_SECTION_KEYWORDS = [
-    "abstract",
-    "introduction",
-    "background",
-    "related work",
-    "methods",
-    "methodology",
-    "materials and methods",
-    "experimental",
-    "results",
-    "discussion",
-    "conclusion",
-    "conclusions",
-    "references",
-    "acknowledgements",
-    "acknowledgments",
-]
-
-_SECTION_KEY_MAP: dict[str, str] = {
-    "abstract": "abstract",
-    "introduction": "introduction",
-    "background": "introduction",
-    "related work": "introduction",
-    "methods": "methods",
-    "methodology": "methods",
-    "materials and methods": "methods",
-    "experimental": "methods",
-    "results": "results",
-    "discussion": "discussion",
-    "conclusion": "conclusion",
-    "conclusions": "conclusion",
-    "references": "references",
-    "acknowledgements": "acknowledgements",
-    "acknowledgments": "acknowledgements",
-}
-
 
 def _clean_text(text: str) -> str:
-    # soft hyphen, 특수문자 정규화 (줄바꿈 보존)
-    text = text.replace("\xad", "")              # soft hyphen
-    text = text.replace("’", "'")           # right single quotation
-    text = text.replace("‘", "'")           # left single quotation
-    text = text.replace("“", '"')           # left double quotation
-    text = text.replace("”", '"')           # right double quotation
-    text = text.replace("—", "--")          # em dash
-    text = text.replace("–", "-")           # en dash
-    # 줄 내부 연속 공백만 정규화 (줄바꿈은 유지)
+    # soft hyphen 제거, 줄 내부 연속 공백 정규화 (줄바꿈 보존)
+    text = text.replace("\xad", "")
     lines = [re.sub(r"[ \t]+", " ", line) for line in text.splitlines()]
     return "\n".join(lines).strip()
 
 
-def _is_two_column(blocks: list) -> bool:
-    # 텍스트 블록 x0 좌표 분포로 2컬럼 여부 판단
-    text_blocks = [b for b in blocks if b[6] == 0 and b[4].strip()]
-    if len(text_blocks) < 4:
-        return False
-    x0_values = [b[0] for b in text_blocks]
-    mid = median(x0_values)
-    left = [x for x in x0_values if x < mid]
-    right = [x for x in x0_values if x >= mid]
-    if not left or not right:
-        return False
-    left_mean = sum(left) / len(left)
-    right_mean = sum(right) / len(right)
-    page_width = max(b[2] for b in text_blocks)
-    return (right_mean - left_mean) > page_width * 0.2
-
-
-def _extract_page_text(page: fitz.Page) -> str:
-    # 2컬럼 레이아웃은 좌->우 순서로 재정렬
-    blocks = page.get_text("blocks", sort=False)  # type: ignore[arg-type]
-    if _is_two_column(blocks):
-        page_width = page.rect.width
-        mid = page_width / 2
-        left_blocks = sorted(
-            [b for b in blocks if b[6] == 0 and b[0] < mid],
-            key=lambda b: b[1],
-        )
-        right_blocks = sorted(
-            [b for b in blocks if b[6] == 0 and b[0] >= mid],
-            key=lambda b: b[1],
-        )
-        ordered = left_blocks + right_blocks
-    else:
-        ordered = sorted(
-            [b for b in blocks if b[6] == 0],
-            key=lambda b: (b[1], b[0]),
-        )
-    return "\n".join(_clean_text(b[4]) for b in ordered if b[4].strip())
+# 번호 없는 종결 섹션 (numbered 아니어도 실제 섹션으로 인정)
+_TERMINAL_SECTIONS = {"conclusion", "conclusions", "references", "acknowledgments",
+                      "acknowledgements", "declaration of competing interest",
+                      "credit authorship contribution statement", "data availability"}
 
 
 def _parse_sections(raw_text: str) -> tuple[dict[str, str], bool]:
-    # 섹션 헤더 감지 → section_map 반환. 미감지 시 {"full_text": raw_text}, True
+    """
+    pymupdf4llm Markdown 출력 기반 섹션 파싱.
+
+    규칙:
+      - '## **N. Name**'  (굵게 + 번호) → 새 섹션
+      - '## **Name**'     (굵게, 번호 없음, 60자 미만, _TERMINAL_SECTIONS) → 새 섹션
+      - '## _N.M. Name_'  (이탤릭 소목차) → 부모 섹션에 병합
+      - '> ...'           (blockquote, 첫 번호 섹션 이전) → abstract 원문
+      - 그 외 ## 헤더     → 저널명/제목 → 스킵
+    """
     lines = raw_text.splitlines()
     sections: dict[str, str] = {}
     current_key: str | None = None
     current_lines: list[str] = []
+    pre_body: list[str] = []       # 첫 번호 섹션 이전 blockquote 내용
+    found_first_section = False
 
     for line in lines:
         stripped = line.strip()
-        lower = stripped.lower()
 
-        if lower.startswith("<!-- page"):
+        if stripped.lower().startswith("<!-- page"):
             continue
 
-        # "## **Abstract**" 등 마크다운/볼드 제거 후 비교
-        normalized = re.sub(r"\*+|#{1,3}", "", lower).strip()
+        # ── ## **굵게** 헤더 ────────────────────────────────────────────────
+        bold_m = re.match(r"^#{1,3}\s+\*\*(.+?)\*\*\s*$", stripped)
+        if bold_m:
+            raw_hdr = bold_m.group(1).strip()
+            is_numbered = bool(re.match(r"^\d+[\.\s]", raw_hdr))
+            key = re.sub(r"^\d+(\.\d+)*\.?\s*", "", raw_hdr).strip().lower()
 
-        matched_kw = None
-        for kw in _SECTION_KEYWORDS:
-            if re.fullmatch(
-                rf"(?:\d+[\.\s]+)?{re.escape(kw)}[\.\s:]*",
-                normalized,
-                re.IGNORECASE,
-            ):
-                matched_kw = kw
-                break
+            is_real = is_numbered or key in _TERMINAL_SECTIONS
+            if not is_real or not key:
+                # 저널명·제목 등 → 스킵
+                continue
 
-        if matched_kw:
+            # 이전 섹션 저장
             if current_key is not None:
                 body = "\n".join(current_lines).strip()
                 if body:
                     sections.setdefault(current_key, body)
-            current_key = _SECTION_KEY_MAP[matched_kw]
+
+            # 첫 번호 섹션 직전까지 쌓인 abstract 저장
+            if not found_first_section and is_numbered:
+                found_first_section = True
+                ab = "\n".join(pre_body).strip()
+                if len(ab) > 80:
+                    sections["abstract"] = ab
+
+            current_key = key
             current_lines = []
-        elif current_key is not None:
+            continue
+
+        # ── ## _이탤릭_ 소목차 ──────────────────────────────────────────────
+        italic_m = re.match(r"^#{1,3}\s+_(.+?)_\s*$", stripped)
+        if italic_m and current_key is not None:
+            sub_name = re.sub(r"^\d+(\.\d+)+\.?\s*", "", italic_m.group(1)).strip()
+            current_lines.append(f"\n### {sub_name}")
+            continue
+
+        # ── > blockquote (abstract 원문) ─────────────────────────────────────
+        if stripped.startswith(">"):
+            content = re.sub(r"^>\s*", "", stripped)
+            # Keywords 줄 제외
+            if re.match(r"_?Keywords[_:]", content, re.IGNORECASE):
+                continue
+            if not found_first_section:
+                pre_body.append(content)
+            elif current_key:
+                current_lines.append(content)
+            continue
+
+        # ── 일반 텍스트 ─────────────────────────────────────────────────────
+        if current_key is not None:
             current_lines.append(line)
+        elif not found_first_section and stripped and not stripped.startswith("**==>"):
+            pre_body.append(line)
 
     if current_key is not None:
         body = "\n".join(current_lines).strip()
@@ -158,8 +122,7 @@ def _try_pdfplumber(
     metadata = PaperMetadata(title=None, authors=[], year=None, doi=None)
     try:
         with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
-            meta = pdf.metadata or {}
-            metadata = _build_metadata(meta)
+            metadata = _build_metadata(pdf.metadata or {})
             for i, page in enumerate(pdf.pages, start=1):
                 text = page.extract_text() or ""
                 page_map[i] = _clean_text(text)
@@ -178,7 +141,7 @@ def _build_metadata(meta: dict) -> PaperMetadata:
     subj = (meta.get("subject") or meta.get("Subject") or "") + (
         meta.get("keywords") or meta.get("Keywords") or ""
     )
-    doi_m = re.search(r"10\.\d{4,}/\S+", subj)
+    doi_m = re.search(r"10\.\d{4,}/[^\s,;)]+", subj)
     doi = doi_m.group(0).rstrip(".,)") if doi_m else None
     return PaperMetadata(title=title, authors=authors, year=year, doi=doi)
 
@@ -202,16 +165,17 @@ class S1Extractor:
         page_map: dict[int, str] = {}
         metadata = PaperMetadata(title=None, authors=[], year=None, doi=None)
 
-        # 1차: fitz (PyMuPDF)
+        # 1차: pymupdf4llm (헤더/컬럼/하이픈 자동 처리)
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-            for i, page in enumerate(doc, start=1):
-                page_map[i] = _extract_page_text(page)
+            for i in range(len(doc)):
+                md = pymupdf4llm.to_markdown(doc, pages=[i])
+                page_map[i + 1] = _clean_text(md)
             metadata = _build_metadata(doc.metadata or {})
             doc.close()
         except Exception as exc:
-            logger.warning("S1: fitz failed (%s), falling back to pdfplumber", exc)
-            warnings.append(f"S1: pdfplumber fallback -- fitz error: {exc}")
+            logger.warning("S1: pymupdf4llm failed (%s), falling back to pdfplumber", exc)
+            warnings.append(f"S1: pdfplumber fallback -- pymupdf4llm error: {exc}")
             page_map, metadata = _try_pdfplumber(pdf_bytes, warnings)
             if not page_map:
                 return S1Output(
@@ -221,7 +185,7 @@ class S1Extractor:
                     metadata=metadata,
                     word_count=0,
                     degraded=True,
-                    warnings=warnings + ["both fitz and pdfplumber failed"],
+                    warnings=warnings + ["both pymupdf4llm and pdfplumber failed"],
                 )
 
         # PAGE 마커 삽입

@@ -164,7 +164,7 @@ async def test_s4_pymupdf_fails_falls_back_to_pdfplumber(sample_pdf_bytes):
     fitz.open 이 예외를 raise해도
     pdfplumber 폴백으로 raw_text는 여전히 채워져야 한다.
     """
-    with patch("backend.agents.s1_extractor.fitz.open", side_effect=RuntimeError("fitz 강제 실패")):
+    with patch("backend.agents.s1_extractor.pymupdf4llm.to_markdown", side_effect=RuntimeError("pymupdf4llm 강제 실패")):
         out: S1Output = await S1Extractor().execute(sample_pdf_bytes)
 
     assert out.raw_text.strip(), "pymupdf 실패 후 pdfplumber 폴백도 빈 텍스트"
