@@ -57,10 +57,25 @@ class Card1(BaseModel):
     mascot_bubble: FieldValue
 
 
+class Card2Signals(BaseModel):
+    is_hook: bool = False
+
+
+class Card3Signals(BaseModel):
+    stat_count: int = 0
+    has_process_steps: bool = False
+    step_count: int = 0
+
+
+class Card4Signals(BaseModel):
+    has_comparison: bool = False
+
+
 class Card2(BaseModel):
     intro: FieldValue
     keyword_line: FieldValue
     footnote: FieldValue
+    signals: Card2Signals = Field(default_factory=Card2Signals)
 
 
 class Card3(BaseModel):
@@ -68,6 +83,7 @@ class Card3(BaseModel):
     achievement: FieldValue
     mascot_bubble: FieldValue
     photo_caption: FieldValue
+    signals: Card3Signals = Field(default_factory=Card3Signals)
 
 
 class Card4(BaseModel):
@@ -76,6 +92,7 @@ class Card4(BaseModel):
     description: FieldValue
     result: FieldValue
     mascot_bubble: FieldValue
+    signals: Card4Signals = Field(default_factory=Card4Signals)
 
 
 class Card5(BaseModel):
