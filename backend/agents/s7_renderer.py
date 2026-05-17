@@ -15,47 +15,95 @@ logger = logging.getLogger(__name__)
 
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 
-# 카드 번호 → 템플릿 파일명
-CARD_TEMPLATES = {
-    1: "cover.html",
-    2: "hook.html",
-    3: "grid.html",
-    4: "text.html",
-    5: "closing.html",
+# layout variant → template file
+LAYOUT_TEMPLATES: dict[str, str] = {
+    "A": "type_a.html",
+    "B": "type_b.html",
+    "C": "type_c.html",
+    "D": "type_d.html",
+    "E": "type_e.html",
+    "G": "type_g.html",
+    "K": "type_k.html",
+}
+
+# layout_variants 비어있을 때 기본값
+_DEFAULT_VARIANTS: dict[str, str] = {
+    "1": "A", "2": "E", "3": "B", "4": "B", "5": "K",
 }
 
 
-def _flatten(card_data: CardEditorData) -> dict:
-    """CardEditorData의 FieldValue.value만 추출한 평탄 dict."""
-    flat: dict = {}
+def _build_card_context(
+    card_num: int,
+    card_data: CardEditorData,
+    theme: CardTheme,
+) -> dict:
+    """카드별 Jinja2 context 생성. FieldValue.value만 추출, 이름 충돌 없음."""
+    ctx: dict = {
+        "theme_primary": theme.primary,
+        "theme_dark": theme.dark,
+        "card_num": f"{card_num:02d}",
+        "org": card_data.meta.org.value,
+        "dept": card_data.meta.dept.value,
+        "researcher": card_data.meta.researcher.value,
+        "month": card_data.meta.month.value,
+        "edition_number": card_data.meta.edition_number.value,
+    }
 
-    def _extract(obj, prefix=""):
-        for k, v in vars(obj).items():
-            from ..core.models import FieldValue
-            if isinstance(v, FieldValue):
-                flat[f"{prefix}{k}" if not prefix else k] = v.value
-            elif hasattr(v, "__dict__"):
-                _extract(v, prefix)
+    if card_num == 1:
+        ctx |= {
+            "pretitle": card_data.card1.pretitle.value,
+            "title": card_data.card1.title.value,
+            "mascot_bubble": card_data.card1.mascot_bubble.value,
+        }
+    elif card_num == 2:
+        ctx |= {
+            "intro": card_data.card2.intro.value,
+            "keyword_line": card_data.card2.keyword_line.value,
+            "footnote": card_data.card2.footnote.value,
+            # Type B 폴백용 제네릭 필드
+            "card_label": "연구 배경",
+            "section_title": card_data.card2.keyword_line.value,
+            "body_text": card_data.card2.intro.value,
+            "sub_text": card_data.card2.footnote.value,
+        }
+    elif card_num == 3:
+        ctx |= {
+            "problem": card_data.card3.problem.value,
+            "achievement": card_data.card3.achievement.value,
+            "mascot_bubble": card_data.card3.mascot_bubble.value,
+            "photo_caption": card_data.card3.photo_caption.value,
+            # Type B 폴백용 제네릭 필드
+            "card_label": "Research Highlights",
+            "section_title": "핵심 문제와 성과",
+            "body_text": card_data.card3.achievement.value,
+            "sub_text": card_data.card3.mascot_bubble.value,
+        }
+    elif card_num == 4:
+        ctx |= {
+            "before_label": card_data.card4.before_label.value,
+            "after_label": card_data.card4.after_label.value,
+            "description": card_data.card4.description.value,
+            "result": card_data.card4.result.value,
+            "mascot_bubble": card_data.card4.mascot_bubble.value,
+            # Type B 폴백용 제네릭 필드
+            "card_label": "Analysis",
+            "section_title": "상세 분석",
+            "body_text": card_data.card4.description.value,
+            "sub_text": card_data.card4.result.value,
+        }
+    elif card_num == 5:
+        ctx |= {
+            "pre_title": card_data.card5.pre_title.value,
+            "main_title": card_data.card5.main_title.value,
+            "cta": card_data.card5.cta.value,
+            "team_name": card_data.card5.team_name.value,
+        }
 
-    for group_name in ["meta", "card1", "card2", "card3", "card4", "card5"]:
-        group = getattr(card_data, group_name)
-        _extract(group)
-
-    flat["layout_variants"] = card_data.layout_variants
-    return flat
-
-
-def _card_context(card_num: int, flat: dict, theme: CardTheme) -> dict:
-    """각 카드 템플릿에 필요한 context 구성."""
-    ctx = dict(flat)
-    ctx["theme_primary"] = theme.primary
-    ctx["theme_dark"] = theme.dark
-    ctx["card_num"] = card_num
     return ctx
 
 
 class S7RendererAgent(BaseAgent[S7Input, S7Output]):
-    """S7: CardEditorData → PNG bytes (Playwright headless Chromium)."""
+    """S7: CardEditorData → 5장 PNG bytes (Playwright headless Chromium)."""
 
     def __init__(self) -> None:
         self._jinja = Environment(
@@ -64,24 +112,27 @@ class S7RendererAgent(BaseAgent[S7Input, S7Output]):
         )
 
     async def execute(self, input_data: S7Input) -> S7Output:
-        flat = _flatten(input_data.card_data)
+        card_data = input_data.card_data
         theme = input_data.theme
+        variants = card_data.layout_variants or _DEFAULT_VARIANTS
         images: list[bytes] = []
         warnings: list[str] = []
 
         async with async_playwright() as pw:
             browser = await pw.chromium.launch(headless=True)
-            context = await browser.new_context(
+            browser_ctx = await browser.new_context(
                 viewport={"width": 1080, "height": 1080},
                 device_scale_factor=1,
             )
 
-            for card_num, tmpl_name in CARD_TEMPLATES.items():
+            for card_num in range(1, 6):
+                variant = variants.get(str(card_num), _DEFAULT_VARIANTS[str(card_num)])
+                tmpl_name = LAYOUT_TEMPLATES.get(variant, "type_b.html")
                 try:
-                    ctx = _card_context(card_num, flat, theme)
+                    ctx = _build_card_context(card_num, card_data, theme)
                     html = self._jinja.get_template(tmpl_name).render(**ctx)
 
-                    page = await context.new_page()
+                    page = await browser_ctx.new_page()
                     await page.set_content(html, wait_until="networkidle")
 
                     png = await asyncio.wait_for(
@@ -94,7 +145,10 @@ class S7RendererAgent(BaseAgent[S7Input, S7Output]):
                     )
                     images.append(png)
                     await page.close()
-                    logger.info("S7: card %d rendered (%d bytes)", card_num, len(png))
+                    logger.info(
+                        "S7: card %d rendered (variant=%s, %d bytes)",
+                        card_num, variant, len(png),
+                    )
 
                 except asyncio.TimeoutError:
                     msg = f"S7: card {card_num} timeout ({settings.PLAYWRIGHT_TIMEOUT_MS}ms)"
@@ -105,13 +159,11 @@ class S7RendererAgent(BaseAgent[S7Input, S7Output]):
                     logger.error(msg)
                     warnings.append(msg)
 
-            await context.close()
+            await browser_ctx.close()
             await browser.close()
 
-        if len(images) < len(CARD_TEMPLATES):
-            warnings.append(
-                f"S7: partial render — {len(images)}/{len(CARD_TEMPLATES)} cards"
-            )
+        if len(images) < 5:
+            warnings.append(f"S7: partial render — {len(images)}/5 cards")
 
         return S7Output(images=images, warnings=warnings)
 

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+{% include '_shared.css' %}
+
+:root {
+  --theme-primary: {{ theme_primary }};
+  --theme-dark:    {{ theme_dark }};
+}
+
+/* ── Type G: 플로우형 (단계 프로세스) ── */
+.card-canvas {
+  background: var(--surface-base);
+  display: flex; flex-direction: column;
+  padding: 72px 60px 60px;
+}
+
+.g-card-num {
+  position: absolute; top: 60px; right: 60px;
+  font-size: 20px; font-weight: 700;
+  color: rgba(0,0,0,0.12); letter-spacing: 0.05em;
+}
+
+.g-eyebrow {
+  font-size: 20px; font-weight: 600;
+  color: var(--theme-primary);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.g-title {
+  font-size: 52px; font-weight: 800; line-height: 1.2;
+  color: var(--text-primary); margin-bottom: 40px; word-break: keep-all;
+}
+
+.flow-list {
+  flex: 1;
+  display: flex; flex-direction: column; gap: 24px;
+}
+
+.flow-item {
+  display: flex; align-items: flex-start; gap: 24px;
+}
+
+.step-number {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--theme-primary);
+  color: var(--text-on-dark);
+  font-size: 26px; font-weight: 900;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.step-body {
+  flex: 1; padding-top: 10px;
+}
+
+.step-text {
+  font-size: 26px; font-weight: 400; line-height: 1.6;
+  color: var(--text-primary); word-break: keep-all;
+}
+
+/* 연결선 (step 사이) */
+.flow-connector {
+  width: 2px; height: 20px;
+  background: var(--theme-primary); opacity: 0.25;
+  margin-left: 31px; flex-shrink: 0;
+}
+
+.g-bubble {
+  margin-top: 24px;
+  padding: 16px 24px;
+  background: var(--surface-card);
+  border-radius: 12px;
+  border-left: 5px solid var(--theme-primary);
+  font-size: 20px; font-weight: 500;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+</style>
+</head>
+<body>
+<div class="card-canvas">
+
+  <div class="g-card-num">{{ card_num }}</div>
+  <div class="g-eyebrow">Process Flow</div>
+  <div class="g-title">연구 진행 단계</div>
+
+  <div class="flow-list">
+    {% set steps = achievement.split('·') if '·' in achievement else achievement.splitlines() %}
+    {% for step in steps %}
+      {% if step.strip() %}
+      {% if not loop.first %}
+      <div class="flow-connector"></div>
+      {% endif %}
+      <div class="flow-item">
+        <div class="step-number">{{ loop.index }}</div>
+        <div class="step-body">
+          <div class="step-text">{{ step.strip() }}</div>
+        </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if mascot_bubble %}
+  <div class="g-bubble">{{ mascot_bubble }}</div>
+  {% endif %}
+
+</div>
+</body>
+</html>
