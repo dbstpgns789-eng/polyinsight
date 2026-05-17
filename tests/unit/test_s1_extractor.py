@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from backend.core.models import S1Output
+from backend.core.models import S1Input, S1Output
 
 # S1Extractor는 아직 구현되지 않았다 — import 실패 시 테스트 스킵
 try:
@@ -45,7 +45,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.mark.asyncio
 async def test_h1_extracts_text(sample_pdf_bytes):
     """정상 PDF → raw_text 비어있지 않음, word_count > 0."""
-    out: S1Output = await S1Extractor().execute(sample_pdf_bytes)
+    out: S1Output = await S1Extractor().execute(S1Input(job_id="test", pdf_bytes=sample_pdf_bytes))
 
     assert out.raw_text.strip(), "raw_text가 비어 있음"
     assert out.word_count > 0
@@ -54,7 +54,7 @@ async def test_h1_extracts_text(sample_pdf_bytes):
 @pytest.mark.asyncio
 async def test_h2_page_markers_inserted(sample_pdf_bytes):
     """2페이지 PDF → raw_text에 PAGE 마커 두 개 이상 존재."""
-    out: S1Output = await S1Extractor().execute(sample_pdf_bytes)
+    out: S1Output = await S1Extractor().execute(S1Input(job_id="test", pdf_bytes=sample_pdf_bytes))
 
     assert "<!-- PAGE 1 -->" in out.raw_text
     assert "<!-- PAGE 2 -->" in out.raw_text
@@ -63,7 +63,7 @@ async def test_h2_page_markers_inserted(sample_pdf_bytes):
 @pytest.mark.asyncio
 async def test_h3_page_map_built(sample_pdf_bytes):
     """page_map[1]이 비어있지 않은 문자열."""
-    out: S1Output = await S1Extractor().execute(sample_pdf_bytes)
+    out: S1Output = await S1Extractor().execute(S1Input(job_id="test", pdf_bytes=sample_pdf_bytes))
 
     assert 1 in out.page_map
     assert isinstance(out.page_map[1], str)
@@ -76,7 +76,7 @@ async def test_h4_sections_detected(sample_pdf_bytes):
     sample_pdf_bytes 에는 명확한 섹션 헤더가 있다.
     section_map에 'abstract' 또는 'results' 키가 존재해야 한다.
     """
-    out: S1Output = await S1Extractor().execute(sample_pdf_bytes)
+    out: S1Output = await S1Extractor().execute(S1Input(job_id="test", pdf_bytes=sample_pdf_bytes))
 
     detected = set(out.section_map.keys())
     assert detected & {"abstract", "results"}, (
@@ -90,7 +90,7 @@ async def test_h5_metadata_title_or_warned(sample_pdf_bytes):
     메타데이터 title이 추출되거나, 추출 실패 시 warnings에 기록되어야 한다.
     둘 중 하나는 반드시 충족.
     """
-    out: S1Output = await S1Extractor().execute(sample_pdf_bytes)
+    out: S1Output = await S1Extractor().execute(S1Input(job_id="test", pdf_bytes=sample_pdf_bytes))
 
     has_title = out.metadata.title is not None and out.metadata.title.strip()
     has_warning = any("title" in w.lower() or "metadata" in w.lower() for w in out.warnings)
@@ -107,7 +107,7 @@ async def test_s1_empty_bytes():
     ValueError를 raise하거나, degraded=True + warnings 비어있지 않음.
     """
     try:
-        out: S1Output = await S1Extractor().execute(b"")
+        out: S1Output = await S1Extractor().execute(S1Input(job_id="test", pdf_bytes=b""))
         # 예외를 raise하지 않았으면 degraded 상태여야 함
         assert out.degraded is True
         assert out.warnings
@@ -124,7 +124,7 @@ async def test_s2_not_a_pdf():
     fake = b"This is not a PDF file. Just plain text.\n" * 5
 
     try:
-        out: S1Output = await S1Extractor().execute(fake)
+        out: S1Output = await S1Extractor().execute(S1Input(job_id="test", pdf_bytes=fake))
         assert out.degraded is True, "PDF 아닌 파일인데 degraded=False"
         assert out.warnings
     except (ValueError, RuntimeError):
@@ -150,7 +150,7 @@ async def test_s3_no_sections_detected():
         pdf.multi_cell(0, 6, "This is a generic sentence with no section headers. " * 3, new_x="LMARGIN", new_y="NEXT")
 
     flat_pdf = pdf.output()
-    out: S1Output = await S1Extractor().execute(flat_pdf)
+    out: S1Output = await S1Extractor().execute(S1Input(job_id="test", pdf_bytes=flat_pdf))
 
     assert "full_text" in out.section_map, (
         f"섹션 미감지 시 full_text 폴백 없음. 키: {list(out.section_map.keys())}"
@@ -165,7 +165,7 @@ async def test_s4_pymupdf_fails_falls_back_to_pdfplumber(sample_pdf_bytes):
     pdfplumber 폴백으로 raw_text는 여전히 채워져야 한다.
     """
     with patch("backend.agents.s1_extractor.pymupdf4llm.to_markdown", side_effect=RuntimeError("pymupdf4llm 강제 실패")):
-        out: S1Output = await S1Extractor().execute(sample_pdf_bytes)
+        out: S1Output = await S1Extractor().execute(S1Input(job_id="test", pdf_bytes=sample_pdf_bytes))
 
     assert out.raw_text.strip(), "pymupdf 실패 후 pdfplumber 폴백도 빈 텍스트"
     assert any("fallback" in w.lower() or "pdfplumber" in w.lower() for w in out.warnings), (

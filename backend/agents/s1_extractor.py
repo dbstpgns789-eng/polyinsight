@@ -9,7 +9,8 @@ import pdfplumber
 import pymupdf4llm
 import fitz
 
-from ..core.models import PaperMetadata, S1Output
+from .base import BaseAgent
+from ..core.models import PaperMetadata, S1Input, S1Output
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +23,15 @@ def _clean_text(text: str) -> str:
 
 
 # 번호 없는 종결 섹션 (numbered 아니어도 실제 섹션으로 인정)
-_TERMINAL_SECTIONS = {"conclusion", "conclusions", "references", "acknowledgments",
-                      "acknowledgements", "declaration of competing interest",
-                      "credit authorship contribution statement", "data availability"}
+_TERMINAL_SECTIONS = {
+    "abstract", "introduction", "background",
+    "methods", "method", "methodology", "materials and methods",
+    "results", "results and discussion", "discussion",
+    "conclusion", "conclusions",
+    "references", "acknowledgments", "acknowledgements",
+    "declaration of competing interest",
+    "credit authorship contribution statement", "data availability",
+}
 
 
 def _parse_sections(raw_text: str) -> tuple[dict[str, str], bool]:
@@ -146,10 +153,11 @@ def _build_metadata(meta: dict) -> PaperMetadata:
     return PaperMetadata(title=title, authors=authors, year=year, doi=doi)
 
 
-class S1Extractor:
+class S1Extractor(BaseAgent[S1Input, S1Output]):
     _MIN_WORD_COUNT = 100
 
-    async def execute(self, pdf_bytes: bytes) -> S1Output:
+    async def execute(self, input_data: S1Input) -> S1Output:
+        pdf_bytes = input_data.pdf_bytes
         if not pdf_bytes:
             return S1Output(
                 raw_text="",
@@ -217,3 +225,6 @@ class S1Extractor:
             degraded=degraded,
             warnings=warnings,
         )
+
+
+s1_agent = S1Extractor()
