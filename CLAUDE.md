@@ -16,6 +16,11 @@ Core principle — **fidelity over style**:
 - Do not introduce claims not supported by the source
 - Numbers and statistics must be quoted directly from the original text
 
+Design philosophy:
+- **창작은 AI가** — 스토리 기획, 템플릿 선택, 레이아웃 결정은 AI의 책임이다
+- **검증은 코드가** — 수치와 팩트의 원문 대조는 코드가 전담한다
+- **최종 판단은 사용자가** — 사용자는 검토·수정·승인 권한을 가진다
+
 ---
 
 ## 2. Pipeline Structure (v2.0 — Current)

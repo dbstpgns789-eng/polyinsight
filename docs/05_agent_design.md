@@ -1,5 +1,5 @@
 # 05 · Agent Design
-> PolyInsight v2.0 | 2026-05-11
+> PolyInsight v2.1 | 2026-05-18
 > 에이전트 계약(Agent Contracts) 및 S6 프롬프트 규칙
 > CLAUDE.md §3·§4·§5·§6을 코드 수준으로 구체화한 문서.
 
@@ -50,8 +50,13 @@ Orchestrator는 `await agent.execute(input_data)` 형태로만 호출한다.
 ## 2. Orchestrator 호출 순서
 
 ```python
-# backend/agents/orchestrator.py  ← agents/ 내부 (backend/ 루트 아님)
-async def run_pipeline(job_id: str, pdf_bytes: bytes) -> None:
+# backend/agents/orchestrator.py
+async def run_pipeline(
+    job_id: str,
+    pdf_bytes: bytes,
+    theme: CardTheme | None = None,
+    card_count: int = 5,          # 사용자가 업로드 시 입력 (3~15)
+) -> None:
     state = await db.create_job(job_id)
 
     # S1 — 블로킹 실패 허용
@@ -74,12 +79,13 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes) -> None:
         state.warnings += s2_out.warnings
     await db.update_job(job_id, stage="S6", progress=40, degraded=state.degraded)
 
-    # S6
+    # S6 — card_count 전달, LLM이 템플릿 배치 + 내용 추출
     s6_out: S6Output = await s6_agent.execute(S6Input(
         job_id=job_id,
-        section_map=s2_out.section_map,
+        section_map=s1_out.section_map,
         page_map=s1_out.page_map,
         paper_metadata=s1_out.metadata,
+        card_count=card_count,
     ))
     await db.save_card_data(job_id, s6_out.card_data)
     await db.update_job(job_id, stage="S7", progress=65)
@@ -196,10 +202,11 @@ S6는 파이프라인에서 **할루시네이션 위험이 가장 높은 단계*
 
 | 항목 | 내용 |
 |------|------|
-| 입력 | `S6Input(job_id, section_map, page_map, paper_metadata)` |
-| 출력 | `S6Output(card_data, critical_count, high_count, warnings)` |
-| 실패 유형 | **논블로킹** — LLM 파싱 실패 3회 시 ERR-S6-001 (에이전트가 예외 raise하고 Orchestrator가 처리) |
-| 의존성 | `llm_client` (Claude API), `FieldValue` 스키마 |
+| 입력 | `S6Input(job_id, section_map, page_map, paper_metadata, card_count=5)` |
+| 출력 | `S6Output(card_data: CardEditorData, critical_count, high_count, warnings)` |
+| card_data 구조 | `CardEditorData(meta: CardMeta, cards: List[CardSlot])` — card_count만큼의 CardSlot |
+| 실패 유형 | **논블로킹** — LLM 파싱 실패 3회 시 ERR-S6-001 (에이전트가 예외 raise, Orchestrator 처리) |
+| 의존성 | `llm_client` (Gemini), `FieldValue` 스키마 |
 
 ### 5-2. 그라운딩 규칙 (비협상)
 
@@ -240,33 +247,60 @@ RULE 6: 원문에 없는 내용을 value로 생성하지 않는다.
 RULE 7: verified는 항상 False로 초기화한다. 사용자가 에디터에서만 True로 변경한다.
 ```
 
-### 5-3. 처리 흐름 (Chain-of-Thought)
+### 5-3. 처리 흐름 (Storyboard-first)
 
-S6는 단일 LLM 호출이 아닌 **내부 3단계 chain-of-thought**를 거친다.
-단, 외부로는 최종 `CardEditorData` JSON만 노출한다.
+S6는 **단일 LLM 호출** 안에서 스토리보드 → 콘텐츠 순서로 출력을 강제한다.
+LLM이 모든 카드의 template_type과 narrative_role을 먼저 확정(storyboard)한 뒤,
+그 계획을 참고해 cards 배열을 채운다.
+
+설계 원칙: **AI가 기획과 디자인을 책임진다** (CLAUDE.md Design Philosophy).
+템플릿 선택은 스토리 맥락이 있어야 정확하므로 LLM이 전체 흐름을 본 상태에서 결정한다.
 
 ```
-Step 1 — 논문 이해
-  입력: section_map 전체 텍스트
-  내부 질문:
-    - 이 논문의 핵심 기술/기여는 무엇인가?
-    - 정량적 성과 수치는 어디에 있는가? (섹션, 페이지 기록)
-    - 기존 한계(problem)와 새 접근(achievement)은 무엇인가?
-    - 연구팀/기관 정보는 어디에 있는가?
-  출력: 내부 메모 (LLM context 내부에서만 사용)
+Step 1 — SEARCH: 원문에서 핵심 구절 위치 파악
+  - page_map 마커로 페이지 특정
+  - 정량 수치, 기여, 기존 한계, 기관 정보 위치 기록
 
-Step 2 — 필드 매핑
-  내부 질문:
-    - CardEditorData의 각 필드에 무엇을 넣어야 하는가?
-    - 각 값의 원문 근거 섹션과 페이지는?
-    - match_quality와 confidence는 어떻게 판정해야 하는가?
-  출력: 필드별 (value, source, match_quality, claim_type) 초안
+Step 2 — STORYBOARD: card_count장 전체 스토리 계획 확정
+  - 각 카드의 narrative_role, template_type, key_message를 모두 결정
+  - JSON의 "storyboard" 필드를 먼저 채운다 (cards 작성 전)
+  - 배치 규칙: cover 시작, closing/brand 마무리
+  - 내러티브 흐름: 문제 제기 → 기술 설명 → 성과 → 마무리
+  - 카드 간 템플릿 다양성 확보 (같은 템플릿 연속 지양)
 
-Step 3 — FieldValue 생성 및 risk_level 판정
-  RULE 5에 따라 risk_level 자동 판정
-  최종 JSON 직렬화 및 Pydantic 검증
-  출력: CardEditorData (JSON)
+Step 3 — WRITE: storyboard를 참고해 각 카드 fields 작성
+  - storyboard.beats[n].template_type과 cards[n].template_type을 일치시킨다
+  - 템플릿별 필드 명세에 따라 원문에서 내용 추출
+  - 특수 형식 필드: steps_text (·구분), bars (|구분), points_a/b (·구분)
+
+Step 4 — SCORE: confidence / match_quality / risk_level 판정
+  - RULE 5 적용
+
+출력 스키마:
+{
+  "storyboard": {
+    "story_arc": "전체 스토리 한 문장 요약",
+    "beats": [
+      {
+        "card_num": 1,
+        "template_type": "cover",
+        "narrative_role": "논문 주제 소개",
+        "key_message": "핵심 한 줄"
+      },
+      ...
+    ]
+  },
+  "meta": { ... },
+  "cards": [
+    { "card_num": 1, "template_type": "cover",   "fields": { "title": FV, ... } },
+    { "card_num": 2, "template_type": "hook",    "fields": { ... } },
+    ...
+  ]
+}
 ```
+
+storyboard는 `CardEditorData.storyboard`에 저장되어 SQLite에 유지된다.
+프론트엔드에서 "AI가 이렇게 기획했습니다" 형태로 표시하거나 디버깅에 활용한다.
 
 ### 5-4. 시스템 프롬프트
 
@@ -481,35 +515,47 @@ def _validate_grounding(self, card_data: CardEditorData) -> list[str]:
 
 | 항목 | 내용 |
 |------|------|
-| 입력 | `S7Input(job_id, card_data)` |
-| 출력 | `S7Output(images, warnings)` — `images: list[bytes]` (길이 1~5) |
-| 실패 유형 | **논블로킹** — 개별 카드 타임아웃 시 해당 카드 skip, 나머지 계속 |
-| 의존성 | `playwright.async_api`, `docs/08_design_spec.md` 기반 HTML 템플릿 |
+| 입력 | `S7Input(job_id, card_data: CardEditorData, theme: CardTheme)` |
+| 출력 | `S7Output(images: list[bytes], warnings)` — card_count만큼의 PNG |
+| 실패 유형 | **논블로킹** — 개별 카드 타임아웃/오류 시 해당 카드 skip, 나머지 계속 |
+| 의존성 | `playwright.async_api`, Jinja2, `backend/templates/*.html` |
 
 ### 6-2. 처리 흐름
 
 ```
-1. Playwright 브라우저 컨텍스트 시작 (재사용 가능한 browser 인스턴스)
+1. Playwright 브라우저 컨텍스트 시작
 
-2. card_data에서 layout_variants 읽기 → 각 카드의 레이아웃 타입 결정
-   (CoverCard → Type A, TextCard → Type B, ... 08_design_spec.md §5-0 참고)
+2. card_data.cards 순회 (가변 길이):
+   for slot in card_data.cards:
+     a. LAYOUT_TEMPLATES[slot.template_type] → HTML 파일명 결정
+     b. _build_card_context(slot, card_data, theme):
+        - meta 공통 필드 (org, dept, researcher, month, edition_number)
+        - slot.fields 에서 FieldValue.value 추출 → 동일 키로 주입
+        - slot.image_url → bg_image / image_url
+     c. Jinja2 템플릿 렌더링
+     d. page.set_content(html) + page.screenshot(1080×1080)
+     e. 타임아웃/오류 시 warnings에 추가, skip
 
-3. 카드별 순차 렌더링 (병렬 미적용 — 메모리 제한):
-   for card_num in range(1, 6):
-     a. CardEditorData에서 해당 카드 필드 추출
-     b. FieldValue.value만 평탄화 (plain string)
-     c. HTML 템플릿 렌더링 (Jinja2 또는 f-string)
-        - --theme-primary: card_data.theme.primary 주입
-        - 레이아웃 타입에 맞는 CSS 클래스 적용
-     d. Playwright page.set_content(html) + page.screenshot(...)
-        viewport: 1080×1080, device_scale_factor=1
-     e. 타임아웃(15초) 초과 시 warnings에 추가, images에 None 대신 skip
-
-4. 브라우저 컨텍스트 닫기
-
-5. S7Output(images=렌더링된 bytes 목록, warnings) 반환
-   images 길이 < 5이면 warnings에 "partial render" 추가
+3. S7Output(images, warnings) 반환
+   images 길이 < len(cards) → "partial render" 경고
 ```
+
+### 6-3. 템플릿 목록 (12개 기능 기반)
+
+| template_type | 파일 | 용도 |
+|---|---|---|
+| `cover` | cover.html | 표지 |
+| `hook` | hook.html | 문제 제기 |
+| `problem` | problem.html | 연구 과제 |
+| `circle3` | circle3.html | 3요소 원형 |
+| `compare2` | compare2.html | 비교 분석 |
+| `grid4` | grid4.html | 2×2 그리드 |
+| `definition` | definition.html | 용어 정의 |
+| `flow` | flow.html | 프로세스 순서 |
+| `data` | data.html | 바 차트 |
+| `showcase` | showcase.html | 성과 하이라이트 |
+| `closing` | closing.html | 마무리 |
+| `brand` | brand.html | 기관 브랜딩 |
 
 ### 6-3. 구현 제약
 
@@ -702,12 +748,14 @@ async def test_s6_real_api(agent, paper_section_map):
 
 | 파일 | 테스트 수 | LLM 호출 | 통과 |
 |------|----------|---------|------|
-| test_s1.py | 8 | 없음 | ✅ |
-| test_s2.py | 8 | 없음 (regex) | ✅ |
-| test_s6.py | 9 | mock | ✅ |
-| test_s7.py | 5 | 없음 | ✅ |
-| test_s8.py | 6 | 없음 | ✅ |
-| **합계** | **36** | **0** | **✅** |
+| test_s1.py | 9 | 없음 | ✅ |
+| test_s6.py | — | mock | (재작성 필요) |
+| test_s7.py | — | 없음 | (재작성 필요) |
+| test_s8.py | — | 없음 | (재작성 필요) |
+| test_api.py | 18 | mock | ✅ |
+| **합계** | **27+** | **0** | **일부 ✅** |
+
+> test_s6/s7/s8은 CardSlot 기반 모델로 재작성 필요 (현재 구모델 참조).
 
 ---
 
@@ -715,5 +763,6 @@ async def test_s6_real_api(agent, paper_section_map):
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
-| 2026-05-11 | v1.0 | 최초 작성. S1~S8 에이전트 계약 전체, S6 프롬프트 초안 포함. |
+| 2026-05-18 | v2.0 | CardSlot 가변 구조, 12개 기능 기반 템플릿, S6 프롬프트 전면 재설계, card_count 파라미터, API 테스트 추가. |
 | 2026-05-13 | v1.1 | LLM Anthropic→Gemini 교체, orchestrator 경로 수정, S7 Jinja2 주입 방식, 테스트 전략 추가. |
+| 2026-05-11 | v1.0 | 최초 작성. S1~S8 에이전트 계약 전체, S6 프롬프트 초안 포함. |

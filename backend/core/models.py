@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Literal
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
+
+# ---------------------------------------------------------------------------
+# S6 Grounding primitives — do NOT change without updating docs/05_agent_design.md
+# ---------------------------------------------------------------------------
 
 class MatchQuality(str, Enum):
     EXACT = "exact"
@@ -43,6 +47,25 @@ class FieldValue(BaseModel):
     verified: bool = False
 
 
+# ---------------------------------------------------------------------------
+# Card structure (v2 — variable card count)
+# ---------------------------------------------------------------------------
+
+VALID_TEMPLATE_TYPES = {
+    "cover", "hook", "problem", "circle3", "compare2",
+    "grid4", "definition", "flow", "data", "showcase",
+    "closing", "brand",
+}
+
+
+class CardSlot(BaseModel):
+    """단일 카드. template_type이 어떤 HTML 템플릿을 쓸지 결정."""
+    card_num: int
+    template_type: str                         # VALID_TEMPLATE_TYPES 중 하나
+    fields: Dict[str, FieldValue]              # 템플릿 변수명 → grounded 값
+    image_url: str | None = None               # 에디터 전용 이미지 슬롯
+
+
 class CardMeta(BaseModel):
     org: FieldValue
     dept: FieldValue
@@ -51,69 +74,32 @@ class CardMeta(BaseModel):
     edition_number: FieldValue
 
 
-class Card1(BaseModel):
-    pretitle: FieldValue
-    title: FieldValue
-    mascot_bubble: FieldValue
+# ---------------------------------------------------------------------------
+# Storyboard — S6가 콘텐츠 작성 전에 확정하는 전체 기획
+# ---------------------------------------------------------------------------
+
+class CardStorybeat(BaseModel):
+    """카드 한 장의 기획 단위. template_type은 여기서 확정되고 CardSlot과 일치해야 한다."""
+    card_num: int
+    template_type: str
+    narrative_role: str                        # 이 카드가 전체 스토리에서 하는 역할
+    key_message: str                           # 이 카드에서 전달할 핵심 메시지 한 줄
 
 
-class Card2Signals(BaseModel):
-    is_hook: bool = False
-
-
-class Card3Signals(BaseModel):
-    stat_count: int = 0
-    has_process_steps: bool = False
-    step_count: int = 0
-
-
-class Card4Signals(BaseModel):
-    has_comparison: bool = False
-
-
-class Card2(BaseModel):
-    intro: FieldValue
-    keyword_line: FieldValue
-    footnote: FieldValue
-    signals: Card2Signals = Field(default_factory=Card2Signals)
-
-
-class Card3(BaseModel):
-    problem: FieldValue
-    achievement: FieldValue
-    mascot_bubble: FieldValue
-    photo_caption: FieldValue
-    signals: Card3Signals = Field(default_factory=Card3Signals)
-
-
-class Card4(BaseModel):
-    before_label: FieldValue
-    after_label: FieldValue
-    description: FieldValue
-    result: FieldValue
-    mascot_bubble: FieldValue
-    signals: Card4Signals = Field(default_factory=Card4Signals)
-
-
-class Card5(BaseModel):
-    pre_title: FieldValue
-    main_title: FieldValue
-    cta: FieldValue
-    team_name: FieldValue
-
-
-LayoutVariant = Literal["A", "B", "C", "D", "E", "G", "K"]
+class Storyboard(BaseModel):
+    story_arc: str                             # 전체 스토리 한 문장 요약
+    beats: List[CardStorybeat]
 
 
 class CardEditorData(BaseModel):
+    storyboard: Storyboard | None = None       # S6 기획 결과, 디버깅·UI 표시용
     meta: CardMeta
-    card1: Card1
-    card2: Card2
-    card3: Card3
-    card4: Card4
-    card5: Card5
-    layout_variants: Dict[str, LayoutVariant] = Field(default_factory=dict)
+    cards: List[CardSlot]                      # 가변 길이 (S6가 결정)
 
+
+# ---------------------------------------------------------------------------
+# Job / pipeline state
+# ---------------------------------------------------------------------------
 
 class JobStatus(str, Enum):
     PENDING = "PENDING"
@@ -133,6 +119,10 @@ class RunState(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
+# ---------------------------------------------------------------------------
+# S1
+# ---------------------------------------------------------------------------
 
 class S1Input(BaseModel):
     job_id: str
@@ -156,11 +146,16 @@ class S1Output(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# S6
+# ---------------------------------------------------------------------------
+
 class S6Input(BaseModel):
     job_id: str
     section_map: dict[str, str]
     page_map: dict[int, str]
     paper_metadata: PaperMetadata
+    card_count: int = 5                        # 사용자가 요청한 카드 수
 
 
 class S6Output(BaseModel):
@@ -169,6 +164,10 @@ class S6Output(BaseModel):
     high_count: int
     warnings: list[str] = Field(default_factory=list)
 
+
+# ---------------------------------------------------------------------------
+# S7
+# ---------------------------------------------------------------------------
 
 class CardTheme(BaseModel):
     primary: str = "#2563EB"
@@ -186,6 +185,10 @@ class S7Output(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# S8
+# ---------------------------------------------------------------------------
+
 class S8Input(BaseModel):
     job_id: str
     card_data: CardEditorData
@@ -197,6 +200,10 @@ class S8Output(BaseModel):
     job_id: str
     status: JobStatus
 
+
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
 
 class CardRenderStatus(str, Enum):
     PENDING = "PENDING"
