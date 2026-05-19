@@ -1,0 +1,896 @@
+---
+// UploadModal — states: IDLE → FILE_SELECTED → PROCESSING → DONE | ERROR
+---
+
+<div class="modal-overlay" id="upload-modal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
+
+    <!-- ─── Upload view (IDLE + FILE_SELECTED) ─── -->
+    <div id="view-upload">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">카드뉴스 생성</h2>
+        <button class="modal-close" id="modal-close" aria-label="모달 닫기">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M3 3l12 12M15 3L3 15" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+
+        <!-- Drop zone -->
+        <div class="upload-zone" id="upload-zone" role="button" tabindex="0"
+          aria-label="PDF 파일 선택 — 클릭 또는 드래그&드롭" aria-describedby="zone-hint">
+          <input type="file" id="file-input" accept=".pdf" style="display:none" aria-hidden="true" tabindex="-1">
+          <svg class="upload-zone__icon" width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+            <rect x="8" y="3" width="20" height="27" rx="2" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M22 3v8h6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M20 23v-8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M16 19l4-4 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <p class="upload-zone__main">PDF 파일을 드래그하거나 클릭해서 선택</p>
+          <p class="upload-zone__hint" id="zone-hint">최대 50MB · PDF 형식만 허용</p>
+          <p class="upload-zone__drop-text" aria-hidden="true">여기에 놓으세요</p>
+        </div>
+
+        <!-- File chip (FILE_SELECTED) -->
+        <div class="file-chip" id="file-chip" hidden>
+          <svg width="20" height="22" viewBox="0 0 20 22" fill="none" aria-hidden="true">
+            <rect x="2" y="1" width="13" height="18" rx="1.5" stroke="currentColor" stroke-width="1.25"/>
+            <path d="M10 1v6h5" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round"/>
+            <line x1="5" y1="10" x2="10" y2="10" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+            <line x1="5" y1="13" x2="13" y2="13" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+          </svg>
+          <div class="file-chip__info">
+            <p class="file-chip__name" id="file-chip-name"></p>
+            <p class="file-chip__size" id="file-chip-size"></p>
+          </div>
+          <button class="file-chip__remove" id="file-chip-remove" aria-label="파일 제거">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- File error -->
+        <p class="file-error" id="file-error" role="alert" aria-live="assertive" hidden></p>
+
+        <!-- Card count slider -->
+        <div class="card-count">
+          <div class="card-count__header">
+            <label class="card-count__label" for="card-slider">카드 수</label>
+            <output class="card-count__output" id="card-count-output" for="card-slider">5장</output>
+          </div>
+          <input
+            type="range" id="card-slider" class="card-slider"
+            min="3" max="15" value="5" step="1"
+            style="--pct: 16.67%"
+          >
+          <div class="card-count__range-labels" aria-hidden="true">
+            <span>3장 (간결)</span>
+            <span>15장 (상세)</span>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-lg modal-submit" id="modal-submit" disabled aria-disabled="true">
+          카드뉴스 생성 시작
+        </button>
+
+      </div>
+    </div>
+
+    <!-- ─── Processing view (PROCESSING + DONE + ERROR) ─── -->
+    <div id="view-processing" hidden>
+      <div class="modal-header modal-header--locked">
+        <h2 class="modal-title" id="modal-title-proc">카드뉴스 생성</h2>
+      </div>
+
+      <div class="modal-body">
+        <div class="pipeline">
+          <div class="pipeline__meta">
+            <span class="pipeline__label">파이프라인 진행 중</span>
+            <span class="pipeline__pct" id="pipeline-pct" aria-live="polite">0%</span>
+          </div>
+          <div class="pipeline__bar"
+            role="progressbar" aria-label="처리 진행률"
+            aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
+            id="pipeline-bar">
+            <div class="pipeline__fill" id="pipeline-fill"></div>
+          </div>
+
+          <ol class="pipeline-steps" aria-label="처리 단계">
+            <li class="pipeline-step" id="ps-0" data-status="pending">
+              <span class="ps-dot" aria-hidden="true"></span>
+              <span class="ps-name">텍스트 추출</span>
+              <span class="ps-tag"></span>
+            </li>
+            <li class="pipeline-step" id="ps-1" data-status="pending">
+              <span class="ps-dot" aria-hidden="true"></span>
+              <span class="ps-name">AI 카드뉴스 생성</span>
+              <span class="ps-tag"></span>
+            </li>
+            <li class="pipeline-step" id="ps-2" data-status="pending">
+              <span class="ps-dot" aria-hidden="true"></span>
+              <span class="ps-name">카드 구조화</span>
+              <span class="ps-tag"></span>
+            </li>
+          </ol>
+        </div>
+
+        <!-- DONE -->
+        <a class="btn btn-primary btn-lg editor-btn" id="editor-btn" href="#" hidden>
+          카드 에디터 열기 →
+        </a>
+
+        <!-- ERROR -->
+        <div class="proc-error" id="proc-error" hidden>
+          <p class="proc-error__title">처리 중 오류가 발생했습니다.</p>
+          <p class="proc-error__desc">PDF 파일을 확인하고 다시 시도해주세요.</p>
+          <div class="proc-error__actions">
+            <button class="btn btn-outline" id="proc-close">닫기</button>
+            <button class="btn btn-primary" id="proc-retry">다시 시도</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<style>
+  /* ─── Overlay ─── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--s4);
+    background: oklch(14% 0.04 152 / 0.72);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 220ms ease, visibility 220ms ease;
+  }
+  .modal-overlay.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  /* ─── Card ─── */
+  .modal-card {
+    background: var(--surface);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 480px;
+    box-shadow:
+      0 2px 8px oklch(0% 0 0 / 0.06),
+      0 16px 40px oklch(0% 0 0 / 0.14),
+      0 40px 80px oklch(0% 0 0 / 0.08);
+    transform: translateY(20px);
+    transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+    max-height: calc(100dvh - var(--s8));
+    overflow-y: auto;
+    outline: none;
+  }
+  .modal-overlay.is-open .modal-card {
+    transform: translateY(0);
+  }
+
+  /* ─── Header ─── */
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--s6) var(--s6) 0;
+  }
+  .modal-header--locked {
+    padding-bottom: 0;
+  }
+  .modal-title {
+    font-size: var(--t-lg);
+    font-weight: 700;
+    color: var(--text-1);
+    letter-spacing: -0.025em;
+  }
+  .modal-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-md);
+    border: none;
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: background 140ms, color 140ms;
+    flex-shrink: 0;
+  }
+  .modal-close:hover { background: var(--bg-subtle); color: var(--text-1); }
+  .modal-close:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+
+  /* ─── Body ─── */
+  .modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s4);
+    padding: var(--s6);
+  }
+
+  /* ─── Upload Zone ─── */
+  .upload-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bg);
+    padding: var(--s10) var(--s6);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--s3);
+    cursor: pointer;
+    text-align: center;
+    transition: border-color 160ms, background 160ms;
+  }
+  .upload-zone:hover,
+  .upload-zone:focus-visible {
+    border-color: var(--accent);
+    background: var(--accent-faint);
+  }
+  .upload-zone:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+  .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-faint);
+    border-style: solid;
+  }
+  .upload-zone__icon {
+    color: var(--text-3);
+    transition: color 160ms, transform 160ms;
+  }
+  .upload-zone:hover .upload-zone__icon,
+  .upload-zone.drag-over .upload-zone__icon {
+    color: var(--accent);
+    transform: translateY(-2px);
+  }
+  .upload-zone__main {
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: var(--text-2);
+  }
+  .upload-zone__hint {
+    font-size: var(--t-xs);
+    color: var(--text-3);
+  }
+  .upload-zone__drop-text {
+    display: none;
+    font-size: var(--t-base);
+    font-weight: 700;
+    color: var(--accent);
+  }
+  /* Drag-over: swap content */
+  .upload-zone.drag-over .upload-zone__main,
+  .upload-zone.drag-over .upload-zone__hint {
+    display: none;
+  }
+  .upload-zone.drag-over .upload-zone__drop-text {
+    display: block;
+  }
+
+  /* ─── File chip ─── */
+  .file-chip {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    padding: var(--s3) var(--s4);
+    background: var(--accent-faint);
+    border: 1px solid var(--accent-subtle);
+    border-radius: var(--radius-md);
+    color: var(--accent);
+  }
+  .file-chip__info {
+    flex: 1;
+    min-width: 0;
+  }
+  .file-chip__name {
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: var(--text-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .file-chip__size {
+    font-size: var(--t-xs);
+    color: var(--text-3);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+  .file-chip__remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 140ms, color 140ms;
+  }
+  .file-chip__remove:hover { background: var(--accent-subtle); color: var(--text-1); }
+  .file-chip__remove:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 2px; }
+
+  /* ─── File error ─── */
+  .file-error {
+    font-size: var(--t-xs);
+    color: oklch(50% 0.16 25);
+    background: oklch(97% 0.02 25);
+    border: 1px solid oklch(88% 0.05 25);
+    border-radius: var(--radius-sm);
+    padding: var(--s2) var(--s3);
+  }
+
+  /* ─── Card count ─── */
+  .card-count {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s2);
+    padding: var(--s4);
+    background: var(--bg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-subtle);
+  }
+  .card-count__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .card-count__label {
+    font-size: var(--t-sm);
+    font-weight: 600;
+    color: var(--text-1);
+  }
+  .card-count__output {
+    font-size: var(--t-sm);
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .card-count__range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--t-xs);
+    color: var(--text-3);
+    margin-top: var(--s1);
+  }
+
+  /* ─── Slider ─── */
+  .card-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(
+      to right,
+      var(--accent) 0%,
+      var(--accent) var(--pct, 16.67%),
+      var(--border) var(--pct, 16.67%),
+      var(--border) 100%
+    );
+    outline: none;
+    cursor: pointer;
+    border: none;
+    margin-block: var(--s1);
+  }
+  .card-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid var(--accent);
+    box-shadow: 0 1px 4px oklch(0% 0 0 / 0.15);
+    cursor: pointer;
+    transition: box-shadow 140ms;
+  }
+  .card-slider::-webkit-slider-thumb:hover {
+    box-shadow: 0 0 0 6px oklch(38% 0.14 152 / 0.12);
+  }
+  .card-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid var(--accent);
+    box-shadow: 0 1px 4px oklch(0% 0 0 / 0.15);
+    cursor: pointer;
+  }
+  .card-slider:focus-visible {
+    outline: 2.5px solid var(--accent);
+    outline-offset: 4px;
+    border-radius: 2px;
+  }
+
+  /* Submit */
+  .modal-submit {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* ─── Pipeline ─── */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s4);
+  }
+  .pipeline__meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .pipeline__label {
+    font-size: var(--t-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+  .pipeline__pct {
+    font-size: var(--t-sm);
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .pipeline__bar {
+    height: 5px;
+    background: var(--border-subtle);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .pipeline__fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    width: 0%;
+    transition: width 250ms linear;
+  }
+
+  /* ─── Pipeline steps ─── */
+  .pipeline-steps {
+    display: flex;
+    flex-direction: column;
+    margin-top: var(--s1);
+  }
+  .pipeline-step {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    padding: var(--s3) 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .pipeline-step:last-child { border-bottom: none; }
+
+  /* Step dot */
+  .ps-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 220ms, border-color 220ms;
+  }
+  .pipeline-step[data-status="pending"] .ps-dot {
+    border: 1.5px solid var(--border);
+  }
+  .pipeline-step[data-status="active"] .ps-dot {
+    border: 2px solid var(--accent);
+    background: var(--accent-faint);
+    animation: pulse-dot 1.6s ease infinite;
+  }
+  .pipeline-step[data-status="done"] .ps-dot {
+    background: var(--accent);
+    border: 2px solid var(--accent);
+  }
+  .pipeline-step[data-status="done"] .ps-dot::after {
+    content: '';
+    display: block;
+    width: 7px;
+    height: 4px;
+    border-left: 1.75px solid white;
+    border-bottom: 1.75px solid white;
+    transform: translateY(-1px) rotate(-45deg);
+  }
+
+  /* Step name */
+  .ps-name {
+    flex: 1;
+    font-size: var(--t-sm);
+    font-weight: 500;
+    color: var(--text-2);
+    transition: color 200ms, font-weight 200ms;
+  }
+  .pipeline-step[data-status="active"] .ps-name {
+    color: var(--text-1);
+    font-weight: 600;
+  }
+  .pipeline-step[data-status="done"] .ps-name {
+    color: var(--text-3);
+  }
+
+  /* Step tag */
+  .ps-tag {
+    font-size: var(--t-xs);
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
+  }
+  .pipeline-step[data-status="pending"] .ps-tag { color: var(--text-3); }
+  .pipeline-step[data-status="active"] .ps-tag { color: var(--accent); font-weight: 600; }
+  .pipeline-step[data-status="done"] .ps-tag { color: oklch(55% 0.12 152); }
+
+  @keyframes pulse-dot {
+    0%   { box-shadow: 0 0 0 0   oklch(38% 0.14 152 / 0.4); }
+    70%  { box-shadow: 0 0 0 7px oklch(38% 0.14 152 / 0); }
+    100% { box-shadow: 0 0 0 0   oklch(38% 0.14 152 / 0); }
+  }
+
+  /* ─── Editor CTA ─── */
+  .editor-btn {
+    width: 100%;
+    justify-content: center;
+    margin-top: var(--s2);
+    text-decoration: none;
+  }
+
+  /* ─── Processing error ─── */
+  .proc-error {
+    text-align: center;
+    padding: var(--s4) 0 var(--s2);
+  }
+  .proc-error__title {
+    font-size: var(--t-base);
+    font-weight: 700;
+    color: var(--text-1);
+    margin-bottom: var(--s2);
+  }
+  .proc-error__desc {
+    font-size: var(--t-sm);
+    color: var(--text-2);
+    margin-bottom: var(--s6);
+    line-height: 1.6;
+  }
+  .proc-error__actions {
+    display: flex;
+    gap: var(--s3);
+    justify-content: center;
+  }
+
+  /* ─── Reduced motion ─── */
+  @media (prefers-reduced-motion: reduce) {
+    .modal-card { transition: none; }
+    .modal-overlay { transition: opacity 100ms; }
+    .pipeline-step[data-status="active"] .ps-dot { animation: none; }
+    .pipeline__fill { transition: none; }
+    .upload-zone__icon { transition: none; }
+  }
+
+  /* ─── Mobile ─── */
+  @media (max-width: 520px) {
+    .modal-card { border-radius: 16px 16px 0 0; }
+    .modal-overlay { align-items: flex-end; padding: 0; }
+    .modal-overlay.is-open .modal-card { transform: translateY(0); }
+    .modal-overlay .modal-card { transform: translateY(100%); }
+    .modal-overlay.is-open .modal-card { transform: translateY(0); }
+    .modal-card { max-height: 92dvh; }
+    .upload-zone { padding: var(--s8) var(--s4); }
+  }
+</style>
+
+<script>
+  (function () {
+    const overlay   = /** @type {HTMLElement} */ (document.getElementById('upload-modal'));
+    if (!overlay) return;
+
+    const card            = /** @type {HTMLElement} */ (overlay.querySelector('.modal-card'));
+    const closeBtn        = document.getElementById('modal-close');
+    const fileInput       = /** @type {HTMLInputElement} */ (document.getElementById('file-input'));
+    const uploadZone      = document.getElementById('upload-zone');
+    const fileChip        = document.getElementById('file-chip');
+    const fileChipName    = document.getElementById('file-chip-name');
+    const fileChipSize    = document.getElementById('file-chip-size');
+    const fileChipRemove  = document.getElementById('file-chip-remove');
+    const fileError       = document.getElementById('file-error');
+    const cardSlider      = /** @type {HTMLInputElement} */ (document.getElementById('card-slider'));
+    const cardOutput      = document.getElementById('card-count-output');
+    const submitBtn       = /** @type {HTMLButtonElement} */ (document.getElementById('modal-submit'));
+    const viewUpload      = document.getElementById('view-upload');
+    const viewProcessing  = document.getElementById('view-processing');
+    const pipelinePct     = document.getElementById('pipeline-pct');
+    const pipelineFill    = document.getElementById('pipeline-fill');
+    const pipelineBar     = document.getElementById('pipeline-bar');
+    const titleProc       = document.getElementById('modal-title-proc');
+    const editorBtn       = document.getElementById('editor-btn');
+    const procError       = document.getElementById('proc-error');
+    const procClose       = document.getElementById('proc-close');
+    const procRetry       = document.getElementById('proc-retry');
+
+    // ── State ──────────────────────────────────────────────────
+    let state         = 'idle';   // idle | file-selected | processing | done | error
+    let selectedFile  = null;
+    let procRaf       = null;
+    let lastTrigger   = null;
+    let dragCounter   = 0;
+
+    // ── Open / Close ───────────────────────────────────────────
+    function openModal(trigger) {
+      lastTrigger = trigger || null;
+      overlay.classList.add('is-open');
+      overlay.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => card.focus(), 40);
+    }
+
+    function closeModal() {
+      if (state === 'processing') return;
+      overlay.classList.remove('is-open');
+      overlay.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      if (lastTrigger) lastTrigger.focus();
+      setTimeout(resetAll, 230);
+    }
+
+    function resetAll() {
+      state = 'idle';
+      selectedFile = null;
+      if (procRaf) { cancelAnimationFrame(procRaf); procRaf = null; }
+
+      viewUpload.hidden     = false;
+      viewProcessing.hidden = true;
+      editorBtn.hidden      = true;
+      procError.hidden      = true;
+
+      uploadZone.hidden = false;
+      fileChip.hidden   = true;
+      fileError.hidden  = true;
+      fileInput.value   = '';
+      uploadZone.classList.remove('drag-over');
+
+      cardSlider.value = '5';
+      updateSlider();
+
+      submitBtn.disabled = true;
+      submitBtn.setAttribute('aria-disabled', 'true');
+      submitBtn.textContent = '카드뉴스 생성 시작';
+
+      document.querySelectorAll('.pipeline-step').forEach(s => {
+        s.dataset.status = 'pending';
+        s.querySelector('.ps-tag').textContent = '';
+      });
+      if (pipelineFill) pipelineFill.style.width = '0%';
+      if (pipelinePct)  pipelinePct.textContent  = '0%';
+      if (pipelineBar)  pipelineBar.setAttribute('aria-valuenow', '0');
+      if (titleProc)    titleProc.textContent = '카드뉴스 생성';
+    }
+
+    // ── File handling ──────────────────────────────────────────
+    function validateFile(file) {
+      if (!file.name.toLowerCase().endsWith('.pdf')) {
+        return 'PDF 파일만 업로드할 수 있습니다.';
+      }
+      const mb = file.size / (1024 * 1024);
+      if (mb > 50) {
+        return `파일 크기가 50MB를 초과합니다. (${mb.toFixed(1)}MB)`;
+      }
+      return null;
+    }
+
+    function handleFile(file) {
+      if (!file) return;
+      const err = validateFile(file);
+      if (err) {
+        fileError.textContent = err;
+        fileError.hidden = false;
+        uploadZone.hidden = false;
+        fileChip.hidden = true;
+        selectedFile = null;
+        submitBtn.disabled = true;
+        fileInput.value = '';
+        return;
+      }
+      selectedFile = file;
+      fileError.hidden = true;
+      uploadZone.hidden = true;
+      fileChip.hidden = false;
+      fileChipName.textContent = file.name;
+      fileChipSize.textContent = `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+      submitBtn.disabled = false;
+      submitBtn.removeAttribute('aria-disabled');
+      state = 'file-selected';
+    }
+
+    // ── Slider ─────────────────────────────────────────────────
+    function updateSlider() {
+      const v   = parseInt(cardSlider.value, 10);
+      const pct = ((v - 3) / 12) * 100;
+      cardSlider.style.setProperty('--pct', `${pct.toFixed(2)}%`);
+      cardOutput.textContent = `${v}장`;
+    }
+
+    // ── Processing simulation ──────────────────────────────────
+    // [stepIndex, startPct, endPct, durationMs]
+    const PHASES = [
+      [0,  0,  33, 1400],   // 텍스트 추출
+      [1, 33,  90, 3800],   // AI 카드뉴스 생성
+      [2, 90, 100,  900],   // 카드 구조화
+    ];
+
+    function setStep(idx, status, tag) {
+      const el = document.getElementById(`ps-${idx}`);
+      if (!el) return;
+      el.dataset.status = status;
+      el.querySelector('.ps-tag').textContent = tag;
+    }
+
+    function setProgress(pct) {
+      const r = Math.round(pct);
+      pipelineFill.style.width = `${pct.toFixed(1)}%`;
+      pipelinePct.textContent  = `${r}%`;
+      pipelineBar.setAttribute('aria-valuenow', String(r));
+    }
+
+    function startProcessing() {
+      state = 'processing';
+      viewUpload.hidden     = false; // keep in DOM but swap content
+      viewUpload.hidden     = true;
+      viewProcessing.hidden = false;
+
+      PHASES.forEach(([i]) => setStep(i, 'pending', '대기 중'));
+
+      let phaseIdx  = 0;
+      let phaseStart = null;
+
+      function tick(now) {
+        if (!phaseStart) phaseStart = now;
+
+        if (phaseIdx >= PHASES.length) {
+          setProgress(100);
+          PHASES.forEach(([i]) => setStep(i, 'done', '완료'));
+          onDone();
+          return;
+        }
+
+        const [stepIdx, startPct, endPct, dur] = PHASES[phaseIdx];
+        const elapsed  = now - phaseStart;
+        const progress = Math.min(elapsed / dur, 1);
+        const pct      = startPct + (endPct - startPct) * progress;
+
+        setStep(stepIdx, 'active', '진행 중');
+        for (let i = 0; i < stepIdx; i++) setStep(i, 'done', '완료');
+        setProgress(pct);
+
+        if (progress >= 1) {
+          phaseIdx++;
+          phaseStart = null;
+        }
+
+        procRaf = requestAnimationFrame(tick);
+      }
+
+      procRaf = requestAnimationFrame(tick);
+    }
+
+    function onDone() {
+      state = 'done';
+      editorBtn.href    = '/editor/demo';
+      editorBtn.hidden  = false;
+      if (titleProc) titleProc.textContent = '카드뉴스 생성 완료';
+      setTimeout(() => editorBtn.focus(), 50);
+    }
+
+    // ── Drag & drop ─────────────────────────────────────────────
+    uploadZone?.addEventListener('dragenter', e => {
+      e.preventDefault();
+      dragCounter++;
+      uploadZone.classList.add('drag-over');
+    });
+    uploadZone?.addEventListener('dragleave', () => {
+      dragCounter--;
+      if (dragCounter <= 0) { dragCounter = 0; uploadZone.classList.remove('drag-over'); }
+    });
+    uploadZone?.addEventListener('dragover', e => e.preventDefault());
+    uploadZone?.addEventListener('drop', e => {
+      e.preventDefault();
+      dragCounter = 0;
+      uploadZone.classList.remove('drag-over');
+      handleFile(e.dataTransfer?.files[0]);
+    });
+
+    // ── Focus trap ─────────────────────────────────────────────
+    function focusable() {
+      return Array.from(card.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )).filter(el => !el.closest('[hidden]') && el.offsetParent !== null);
+    }
+
+    overlay.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { closeModal(); return; }
+      if (e.key !== 'Tab') return;
+      const els   = focusable();
+      if (!els.length) return;
+      const first = els[0];
+      const last  = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
+    });
+
+    // ── Wire up listeners ──────────────────────────────────────
+
+    // Any [data-open-modal] triggers the modal
+    document.addEventListener('click', e => {
+      const t = e.target.closest('[data-open-modal]');
+      if (t) { e.preventDefault(); openModal(t); }
+    });
+
+    // Overlay background click → close
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+
+    closeBtn?.addEventListener('click', closeModal);
+
+    // Upload zone interaction
+    uploadZone?.addEventListener('click', () => fileInput.click());
+    uploadZone?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
+
+    fileInput?.addEventListener('change', () => {
+      if (fileInput.files?.[0]) handleFile(fileInput.files[0]);
+    });
+
+    // File chip remove
+    fileChipRemove?.addEventListener('click', () => {
+      selectedFile = null;
+      state = 'idle';
+      uploadZone.hidden = false;
+      fileChip.hidden   = true;
+      fileError.hidden  = true;
+      fileInput.value   = '';
+      submitBtn.disabled = true;
+      submitBtn.setAttribute('aria-disabled', 'true');
+    });
+
+    // Slider
+    cardSlider?.addEventListener('input', updateSlider);
+
+    // Submit
+    submitBtn?.addEventListener('click', () => {
+      if (state === 'file-selected' && selectedFile) startProcessing();
+    });
+
+    // Error state actions
+    procClose?.addEventListener('click', closeModal);
+    procRetry?.addEventListener('click', resetAll);
+
+    // Editor link: close modal on navigate
+    editorBtn?.addEventListener('click', () => {
+      overlay.classList.remove('is-open');
+      overlay.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    });
+
+    // Init
+    updateSlider();
+  })();
+</script>

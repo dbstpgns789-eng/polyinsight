@@ -175,6 +175,38 @@ When writing docs:
 
 ---
 
+## 12. Monorepo Structure (v2.1 — Current)
+
+```
+polyinsight/
+  CLAUDE.md          ← 모든 Claude가 읽는 공통 규칙 (이 파일)
+  package.json       ← npm workspaces 루트
+  docs/              ← canonical 공유 문서 — 복사본 생성 금지
+  backend/           ← FastAPI + S1-S8 파이프라인 (Python, 포트 8000)
+  frontend/          ← React 18 + Vite 카드 에디터 (포트 5173)
+  landing/           ← Astro 4.16 랜딩 페이지 (포트 4321)
+    CLAUDE.md        ← landing 전용 추가 규칙
+```
+
+**포트 할당 (충돌 없음)**:
+- `backend`:  8000 (FastAPI uvicorn)
+- `frontend`: 5173 (Vite dev server)
+- `landing`:  4321 (Astro dev server)
+
+**각 Claude 역할별 필수 읽기 파일**:
+
+| Claude 역할 | 필수 파일 |
+|---|---|
+| 모든 Claude | 루트 `CLAUDE.md` |
+| Backend/Full-stack | `docs/04_architecture.md`, `docs/07_api_data_model.md` |
+| Landing Claude | `landing/CLAUDE.md`, `landing/PRODUCT.md`, `docs/09_landing_content.md` |
+| Frontend Claude | `docs/12_card_editor_content.md`, `docs/10_screen_design.md` |
+
+**docs/ 원칙**: 파일 하나, 위치 하나. 각 workspace에 복사본 생성 금지.
+docs 변경 → 코드 변경 순서를 지킨다.
+
+---
+
 ## 11. Change Log
 
 | Date       | Version | Change Summary                                              |

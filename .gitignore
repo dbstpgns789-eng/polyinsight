@@ -30,3 +30,9 @@ Thumbs.db
 # Test reports
 test_report.html
 .pytest_cache/
+
+# Landing (Astro)
+landing/node_modules/
+landing/dist/
+landing/.astro/
+landing/.env
