@@ -3,13 +3,10 @@
   "private": true,
   "version": "1.0.0",
   "description": "PolyInsight — 학술 논문 PDF → 카드뉴스 생성 서비스",
-  "workspaces": ["frontend", "landing"],
+  "workspaces": ["web"],
   "scripts": {
-    "dev:frontend":    "npm run dev --workspace=frontend",
-    "dev:landing":     "npm run dev --workspace=landing",
-    "build:frontend":  "npm run build --workspace=frontend",
-    "build:landing":   "npm run build --workspace=landing",
-    "preview:landing": "npm run preview --workspace=landing"
+    "dev:web":   "npm run dev --workspace=web",
+    "build:web": "npm run build --workspace=web"
   },
   "engines": { "node": ">=18.0.0" }
 }

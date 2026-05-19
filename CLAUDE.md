@@ -175,23 +175,23 @@ When writing docs:
 
 ---
 
-## 12. Monorepo Structure (v2.1 — Current)
+## 12. Monorepo Structure (v2.2 — Current)
 
 ```
 polyinsight/
   CLAUDE.md          ← 모든 Claude가 읽는 공통 규칙 (이 파일)
+  PRODUCT.md         ← 브랜드/제품 정의 (impeccable 스킬 참조)
+  DESIGN.md          ← 디자인 시스템 토큰 (impeccable 스킬 참조)
   package.json       ← npm workspaces 루트
   docs/              ← canonical 공유 문서 — 복사본 생성 금지
   backend/           ← FastAPI + S1-S8 파이프라인 (Python, 포트 8000)
-  frontend/          ← React 18 + Vite 카드 에디터 (포트 5173)
-  landing/           ← Astro 4.16 랜딩 페이지 (포트 4321)
-    CLAUDE.md        ← landing 전용 추가 규칙
+  web/               ← Next.js 15 프로덕션 프론트엔드 (포트 3000)
+    CLAUDE.md        ← web 전용 추가 규칙
 ```
 
 **포트 할당 (충돌 없음)**:
-- `backend`:  8000 (FastAPI uvicorn)
-- `frontend`: 5173 (Vite dev server)
-- `landing`:  4321 (Astro dev server)
+- `backend`: 8000 (FastAPI uvicorn)
+- `web`:     3000 (Next.js dev server)
 
 **각 Claude 역할별 필수 읽기 파일**:
 
@@ -199,8 +199,7 @@ polyinsight/
 |---|---|
 | 모든 Claude | 루트 `CLAUDE.md` |
 | Backend/Full-stack | `docs/04_architecture.md`, `docs/07_api_data_model.md` |
-| Landing Claude | `landing/CLAUDE.md`, `landing/PRODUCT.md`, `docs/09_landing_content.md` |
-| Frontend Claude | `docs/12_card_editor_content.md`, `docs/10_screen_design.md` |
+| Web Claude | `web/CLAUDE.md`, `docs/10_screen_design.md`, `docs/12_card_editor_content.md` |
 
 **docs/ 원칙**: 파일 하나, 위치 하나. 각 workspace에 복사본 생성 금지.
 docs 변경 → 코드 변경 순서를 지킨다.
@@ -211,5 +210,23 @@ docs 변경 → 코드 변경 순서를 지킨다.
 
 | Date       | Version | Change Summary                                              |
 |------------|---------|-------------------------------------------------------------|
+| 2026-05-19 | v2.2    | frontend/, landing/ 삭제 (deprecated 프로토타입), web/ 단독 프론트엔드로 확정, PRODUCT.md/DESIGN.md 루트로 이동 |
+| 2026-05-19 | v2.1    | Monorepo 통합 (landing/, web/ 추가), CSS 이식 실패 회고 → web/CLAUDE.md 규칙 추가 |
 | 2025-05-05 | v2.0    | S3/S4 removed (absorbed into S6), S5 removed, Playwright, SQLite, S6 rewrite |
 | (previous) | v1.0    | Sequential S1-S8, Pillow, in-memory dict, S5 included       |
+
+## 13. CSS 이식 공통 규칙
+
+복수의 CSS 시스템을 하나로 합칠 때 발생하는 토큰 불일치 방지 규칙.
+`web/CLAUDE.md` 섹션 6에서 구체적 매핑 테이블 확인.
+
+**핵심 원칙**: 이식(코드 옮기기) 전에 통합(디자인 언어 통일)이 선행되어야 한다.
+
+```
+NEVER  @theme 블록에 hex/rgb 색상값을 직접 쓴다 — 반드시 var() 참조
+NEVER  "빌드 성공"을 이식 완료 기준으로 삼는다
+ALWAYS 이식 전 토큰 매핑 테이블을 작성한다
+ALWAYS 이식 후 브라우저에서 두 영역의 색상이 동일한지 시각 검증한다
+```
+
+자세한 사례 분석: `docs/14_migration_retrospective.md`
