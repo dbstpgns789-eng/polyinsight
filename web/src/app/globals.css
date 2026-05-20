@@ -985,10 +985,11 @@ h1, h2, h3, h4, h5 {
 }
 .auth-input::placeholder { color: var(--text-3); }
 .auth-input:hover:not(:focus) { border-color: oklch(78% 0.012 152); }
-.auth-input:focus {
+.auth-input:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px oklch(38% 0.14 152 / 0.12);
 }
+.auth-input:focus:not(:focus-visible) { outline: none; }
 .auth-input[aria-invalid="true"] {
   border-color: var(--risk-critical-border);
   background: var(--risk-critical-faint);
