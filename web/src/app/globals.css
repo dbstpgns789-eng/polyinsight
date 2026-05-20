@@ -1268,6 +1268,7 @@ h1, h2, h3, h4, h5 {
 .dash-filter-tab:hover { background: var(--bg-subtle); color: var(--text-1); }
 .dash-filter-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dash-filter-tab.is-active { background: var(--accent-subtle); color: var(--accent); }
+.dash-filter-tab.is-active .dash-filter-tab__count { opacity: 1; }
 .dash-filter-tab__count {
   font-size: var(--t-xs);
   font-weight: 600;
@@ -1358,7 +1359,7 @@ h1, h2, h3, h4, h5 {
   transition: box-shadow 180ms ease, border-color 180ms ease;
 }
 .proj-card:hover { box-shadow: var(--shadow-sm); border-color: var(--border-hover); }
-.proj-card.is-processing { pointer-events: none; }
+.proj-card.is-processing { pointer-events: none; opacity: 0.8; }
 
 /* 썸네일 스트립 */
 .proj-strip {
@@ -1575,6 +1576,7 @@ h1, h2, h3, h4, h5 {
   text-align: center;
 }
 .proj-action:hover { background: var(--bg-subtle); color: var(--text-1); border-color: oklch(78% 0.01 152); }
+.proj-action:active { transform: scale(0.98); }
 .proj-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .proj-action--primary {
   background: var(--accent-subtle);
@@ -1660,6 +1662,17 @@ h1, h2, h3, h4, h5 {
   .dash-filters { flex-wrap: wrap; row-gap: var(--s2); }
   .dash-filters__tabs { order: 1; min-width: 100%; }
   .dash-sort { order: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proj-card { transition: none; }
+  .proj-strip__thumb { transition: none; }
+  .proj-strip__progress-fill { transition: none; }
+  .proj-action,
+  .proj-action--icon,
+  .dash-filter-tab,
+  .dash-sort,
+  .dash-search__input { transition: none; }
 }
 
 /* ─── Dashboard v2 (list layout) ─────────────────── */
