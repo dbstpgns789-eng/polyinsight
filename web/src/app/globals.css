@@ -1209,31 +1209,6 @@ h1, h2, h3, h4, h5 {
   margin-bottom: var(--s8);
 }
 
-/* 통계 행 */
-.dash-stats {
-  display: flex;
-  align-items: center;
-  gap: var(--s8);
-  padding-bottom: var(--s6);
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: var(--s6);
-}
-.dash-stat { display: flex; flex-direction: column; gap: var(--s1); }
-.dash-stat__label {
-  font-size: var(--t-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-3);
-}
-.dash-stat__num {
-  font-size: 1.625rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: var(--text-1);
-  line-height: 1;
-}
-.dash-stat__sep { width: 1px; height: 2rem; background: var(--border-subtle); flex-shrink: 0; }
 
 /* 필터 */
 .dash-filters {
@@ -1658,8 +1633,7 @@ h1, h2, h3, h4, h5 {
 
 @media (max-width: 768px) {
   .app-header__nav { display: none; }
-  .dash-stats { gap: var(--s6); overflow-x: auto; padding-bottom: var(--s4); }
-  .dash-filters { flex-wrap: wrap; row-gap: var(--s2); }
+.dash-filters { flex-wrap: wrap; row-gap: var(--s2); }
   .dash-filters__tabs { order: 1; min-width: 100%; }
   .dash-sort { order: 2; }
 }

@@ -147,29 +147,6 @@ export default function DashboardPage() {
     <div className="dash">
       <h1 className="dash__title">내 카드뉴스</h1>
 
-      {!isEmpty && (
-        <div className="dash-stats" aria-label="프로젝트 현황 요약">
-          <div className="dash-stat">
-            <span className="dash-stat__label">전체</span>
-            <span className="dash-stat__num">{stats.all}</span>
-          </div>
-          <div className="dash-stat__sep" aria-hidden="true" />
-          <div className="dash-stat">
-            <span className="dash-stat__label">완성</span>
-            <span className="dash-stat__num">{stats.done}</span>
-          </div>
-          <div className="dash-stat__sep" aria-hidden="true" />
-          <div className="dash-stat">
-            <span className="dash-stat__label">임시저장</span>
-            <span className="dash-stat__num">{stats.draft}</span>
-          </div>
-          <div className="dash-stat__sep" aria-hidden="true" />
-          <div className="dash-stat">
-            <span className="dash-stat__label">처리중</span>
-            <span className="dash-stat__num">{stats.processing}</span>
-          </div>
-        </div>
-      )}
 
       {isEmpty ? (
         <div className="dash-empty">
