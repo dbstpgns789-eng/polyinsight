@@ -3,7 +3,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import useUiStore from '@/store/uiStore';
-import { IconEdit, IconDownload, IconRefresh, IconWarning } from '@/components/ui/Icons';
+import {
+  IconEdit, IconDownload, IconRefresh, IconWarning,
+  IconTrash, IconSearch,
+} from '@/components/ui/Icons';
 
 type Status = 'done' | 'draft' | 'processing' | 'failed';
 type FilterTab = 'all' | Status;
@@ -15,9 +18,12 @@ interface Project {
   filename: string;
   date: string;
   cardCount: number;
+  ratio: string;
   status: Status;
+  thumbnailUrl?: string;
   processingStep?: string;
   processingPercent?: number;
+  failedReason?: string;
 }
 
 const MOCK_PROJECTS: Project[] = [
@@ -27,6 +33,7 @@ const MOCK_PROJECTS: Project[] = [
     filename: 'kim2024_smartfarm_review.pdf',
     date: '2026.05.18',
     cardCount: 5,
+    ratio: '1:1',
     status: 'done',
   },
   {
@@ -35,6 +42,7 @@ const MOCK_PROJECTS: Project[] = [
     filename: 'lee2024_carbon_capture_econ.pdf',
     date: '2026.05.17',
     cardCount: 5,
+    ratio: '1:1',
     status: 'done',
   },
   {
@@ -43,6 +51,7 @@ const MOCK_PROJECTS: Project[] = [
     filename: 'park2026_hydrogen_fuel_durability.pdf',
     date: '2026.05.16',
     cardCount: 5,
+    ratio: '1:1',
     status: 'draft',
   },
   {
@@ -51,6 +60,7 @@ const MOCK_PROJECTS: Project[] = [
     filename: 'choi2026_laser_welding_steel.pdf',
     date: '2026.05.20',
     cardCount: 5,
+    ratio: '1:1',
     status: 'processing',
     processingStep: '핵심 내용 분석 중...',
     processingPercent: 65,
@@ -61,7 +71,9 @@ const MOCK_PROJECTS: Project[] = [
     filename: 'jung2025_ceramic_hightemp.pdf',
     date: '2026.05.15',
     cardCount: 5,
+    ratio: '1:1',
     status: 'failed',
+    failedReason: '스캔 PDF는 처리할 수 없습니다.',
   },
 ];
 
@@ -90,9 +102,16 @@ const FILTER_EMPTY: Record<FilterTab, string> = {
 
 const FILTER_TABS: FilterTab[] = ['all', 'done', 'draft', 'processing', 'failed'];
 
+function getResultCountText(filter: FilterTab, search: string, count: number): string {
+  if (search.trim()) return `"${search.trim()}" 결과 ${count}개`;
+  if (filter === 'all') return `총 ${count}개 카드뉴스`;
+  return `${FILTER_LABELS[filter]} ${count}개`;
+}
+
 export default function DashboardPage() {
   const [filter, setFilter] = useState<FilterTab>('all');
   const [sort, setSort] = useState<SortKey>('newest');
+  const [search, setSearch] = useState('');
   const { openUploadModal } = useUiStore();
 
   const projects = MOCK_PROJECTS;
@@ -106,13 +125,23 @@ export default function DashboardPage() {
     failed: projects.filter(p => p.status === 'failed').length,
   };
 
-  const filtered = projects.filter(p => filter === 'all' || p.status === filter);
+  const trimmedSearch = search.trim().toLowerCase();
+  const searched = trimmedSearch
+    ? projects.filter(p =>
+        p.title.toLowerCase().includes(trimmedSearch) ||
+        p.filename.toLowerCase().includes(trimmedSearch)
+      )
+    : projects;
+
+  const filtered = searched.filter(p => filter === 'all' || p.status === filter);
   const sorted = [...filtered].sort((a, b) => {
     if (sort === 'name') return a.title.localeCompare(b.title, 'ko');
     const da = a.date.replace(/\./g, '');
     const db = b.date.replace(/\./g, '');
     return sort === 'oldest' ? da.localeCompare(db) : db.localeCompare(da);
   });
+
+  const resultCountText = getResultCountText(filter, search, sorted.length);
 
   return (
     <div className="dash">
@@ -162,6 +191,20 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
+          <div className="dash-search">
+            <span className="dash-search__icon" aria-hidden="true">
+              <IconSearch size={14} />
+            </span>
+            <input
+              type="search"
+              className="dash-search__input"
+              placeholder="제목이나 파일명으로 검색"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              aria-label="카드뉴스 검색"
+            />
+          </div>
+
           <div className="dash-filters">
             <div className="dash-filters__tabs" role="tablist" aria-label="상태 필터">
               {FILTER_TABS.map(tab => (
@@ -192,10 +235,16 @@ export default function DashboardPage() {
             </select>
           </div>
 
+          <p className="dash-result-count" role="status" aria-live="polite">
+            {resultCountText}
+          </p>
+
           <div className="dash-grid" role="list" aria-label="프로젝트 목록">
             {sorted.length === 0 ? (
               <p className="dash-filter-empty" role="status">
-                {FILTER_EMPTY[filter]}
+                {trimmedSearch
+                  ? `"${search.trim()}"와 일치하는 카드뉴스가 없습니다.`
+                  : FILTER_EMPTY[filter]}
               </p>
             ) : (
               sorted.map(project => (
@@ -210,7 +259,13 @@ export default function DashboardPage() {
 }
 
 function ProjectCard({ project }: { project: Project }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isBlurred = project.status === 'processing' || project.status === 'failed';
+
+  function handleDelete() {
+    // TODO: DELETE /api/jobs/:id
+    setConfirmDelete(false);
+  }
 
   return (
     <article
@@ -218,12 +273,19 @@ function ProjectCard({ project }: { project: Project }) {
       role="listitem"
     >
       <div
-        className={`proj-strip${isBlurred ? ' is-blurred' : ''}`}
+        className={`proj-strip${isBlurred ? ' is-blurred' : ''}${project.thumbnailUrl ? ' proj-strip--preview' : ''}`}
         aria-hidden="true"
       >
-        {[1, 2, 3, 4, 5].map(n => (
-          <div key={n} className="proj-strip__thumb" />
-        ))}
+        {project.thumbnailUrl ? (
+          <div
+            className="proj-strip__preview"
+            style={{ backgroundImage: `url(${project.thumbnailUrl})` }}
+          />
+        ) : (
+          [1, 2, 3, 4, 5].map(n => (
+            <div key={n} className="proj-strip__thumb" />
+          ))
+        )}
 
         {project.status === 'processing' && (
           <div className="proj-strip__overlay">
@@ -245,15 +307,21 @@ function ProjectCard({ project }: { project: Project }) {
             </span>
           </div>
         )}
+
+        <div className="proj-strip__badges" aria-hidden="true">
+          <span className="proj-strip__badge-item">{project.ratio}</span>
+          <span className="proj-strip__badge-item">{project.cardCount}장</span>
+        </div>
       </div>
 
       <div className="proj-card__body">
         <h2 className="proj-card__title">{project.title}</h2>
         <p className="proj-card__file">{project.filename}</p>
+        {project.status === 'failed' && project.failedReason && (
+          <p className="proj-card__fail-reason">{project.failedReason}</p>
+        )}
         <div className="proj-card__meta">
           <time dateTime={project.date.replace(/\./g, '-')}>{project.date}</time>
-          <span aria-hidden="true">·</span>
-          <span>{project.cardCount}장</span>
           <span aria-hidden="true">·</span>
           <span className={`proj-status proj-status--${project.status}`}>
             {STATUS_LABELS[project.status]}
@@ -262,42 +330,72 @@ function ProjectCard({ project }: { project: Project }) {
       </div>
 
       {project.status !== 'processing' && (
-        <div className="proj-card__actions">
-          {project.status === 'done' && (
+        <div className={`proj-card__actions${confirmDelete ? ' proj-card__actions--confirm' : ''}`}>
+          {confirmDelete ? (
             <>
-              <Link
-                href={`/editor/${project.id}`}
-                className="proj-action proj-action--primary"
+              <span className="proj-confirm-text">정말 삭제하시겠습니까?</span>
+              <button
+                className="proj-action proj-action--danger"
+                style={{ flex: '0 0 auto' }}
+                onClick={handleDelete}
               >
-                <IconEdit size={12} />
-                수정하기
-              </Link>
-              <Link
-                href={`/editor/${project.id}?export=1`}
+                삭제
+              </button>
+              <button
                 className="proj-action"
+                style={{ flex: '0 0 auto' }}
+                onClick={() => setConfirmDelete(false)}
               >
-                <IconDownload size={12} />
-                다운로드
-              </Link>
+                취소
+              </button>
             </>
-          )}
-          {project.status === 'draft' && (
-            <Link
-              href={`/editor/${project.id}`}
-              className="proj-action proj-action--primary"
-              style={{ flex: 1 }}
-            >
-              이어하기
-            </Link>
-          )}
-          {project.status === 'failed' && (
-            <button
-              className="proj-action proj-action--danger"
-              style={{ flex: 1 }}
-            >
-              <IconRefresh size={12} />
-              재시도
-            </button>
+          ) : (
+            <>
+              {project.status === 'done' && (
+                <>
+                  <Link
+                    href={`/editor/${project.id}`}
+                    className="proj-action proj-action--primary"
+                  >
+                    <IconEdit size={12} />
+                    수정하기
+                  </Link>
+                  <Link
+                    href={`/editor/${project.id}?export=1`}
+                    className="proj-action"
+                  >
+                    <IconDownload size={12} />
+                    다운로드
+                  </Link>
+                </>
+              )}
+              {project.status === 'draft' && (
+                <Link
+                  href={`/editor/${project.id}`}
+                  className="proj-action proj-action--primary"
+                  style={{ flex: 1 }}
+                >
+                  이어하기
+                </Link>
+              )}
+              {project.status === 'failed' && (
+                <button
+                  className="proj-action proj-action--danger"
+                  style={{ flex: 1 }}
+                >
+                  <IconRefresh size={12} />
+                  재시도
+                </button>
+              )}
+              <button
+                className="proj-action proj-action--icon"
+                onClick={() => setConfirmDelete(true)}
+                aria-label={`${project.title} 삭제`}
+                title="삭제"
+              >
+                <IconTrash size={12} />
+              </button>
+            </>
           )}
         </div>
       )}
