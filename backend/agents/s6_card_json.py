@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -418,8 +419,10 @@ def _build_mock_card_data(
 class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
     """S6: section_map + card_count → CardEditorData (가변 CardSlot 리스트)."""
 
-    MAX_RETRIES = 3
-    SECTION_MAX_CHARS = 12000
+    MAX_RETRIES = 5
+    SECTION_MAX_CHARS = 50000
+    # 503 서버 과부하 시 대기 시간 (초): 1차 30s, 2차 60s, 3차 120s ...
+    _503_BACKOFF = [30, 60, 120, 180]
 
     async def execute(self, input_data: S6Input) -> S6Output:
         if settings.DEV_MOCK_LLM:
@@ -455,8 +458,9 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
                 raw = await llm_client.call(
                     system_prompt=_SYSTEM,
                     user_prompt=user_prompt,
-                    max_tokens=6000,
+                    max_tokens=16000,
                     temperature=0.2,
+                    timeout_s=120,
                 )
                 parsed = json.loads(self._extract_json(raw))
                 card_data = self._build_card_editor_data(parsed)
@@ -475,6 +479,10 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
             except Exception as exc:
                 last_exc = exc
                 logger.warning("S6: attempt %d failed — %s", attempt + 1, exc)
+                if "503" in str(exc) and attempt < self.MAX_RETRIES - 1:
+                    wait = self._503_BACKOFF[min(attempt, len(self._503_BACKOFF) - 1)]
+                    logger.info("S6: 503 서버 과부하 — %ds 대기 후 재시도", wait)
+                    await asyncio.sleep(wait)
 
         raise RuntimeError(f"ERR-S6-001: {last_exc}")
 
