@@ -1057,6 +1057,9 @@ h1, h2, h3, h4, h5 {
 
 .auth-spinner { animation: auth-spin 0.75s linear infinite; flex-shrink: 0; }
 @keyframes auth-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .auth-spinner { animation: none; opacity: 0.55; }
+}
 
 @media (max-width: 768px) {
   .auth-layout { grid-template-columns: 1fr; }
