@@ -131,8 +131,10 @@
   --risk-ok-bg:     oklch(93% 0.05 152);
   --risk-ok-border: oklch(80% 0.08 152);
 
-  --status-saving-bg: oklch(95% 0.03 200);
-  --status-saving:    oklch(38% 0.1  200);
+  --status-saving-bg:      oklch(95% 0.03 200);
+  --status-saving:         oklch(38% 0.1  200);
+  --status-processing-bg:  oklch(95% 0.04 230);
+  --status-processing:     var(--status-processing);
 
   --overlay-bg:    oklch(14% 0.04 152 / 0.7);
   --overlay-scrim: oklch(8% 0.01 152 / 0.55);
@@ -1252,6 +1254,7 @@ h1, h2, h3, h4, h5 {
   align-items: center;
   gap: var(--s2);
   padding: 6px var(--s3);
+  min-height: 36px;
   border-radius: var(--radius-sm);
   font-size: var(--t-sm);
   font-weight: 500;
@@ -1422,9 +1425,13 @@ h1, h2, h3, h4, h5 {
 }
 .proj-strip__progress-fill {
   height: 100%;
+  width: 100%;
   background: var(--accent);
   border-radius: 4px;
-  transition: width 600ms ease;
+  transform-origin: left;
+  transform: scaleX(0);
+  transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
 }
 .proj-strip__stage {
   font-size: 10px;
@@ -1538,7 +1545,7 @@ h1, h2, h3, h4, h5 {
 }
 .proj-status--done     { background: var(--risk-ok-bg); color: var(--risk-ok); }
 .proj-status--draft    { background: var(--bg-subtle); color: var(--text-2); }
-.proj-status--processing { background: oklch(95% 0.04 230); color: oklch(38% 0.18 230); }
+.proj-status--processing { background: var(--status-processing-bg); color: var(--status-processing); }
 .proj-status--failed   { background: var(--risk-critical-faint); color: var(--risk-critical); }
 
 /* 카드 액션 */
@@ -1555,6 +1562,7 @@ h1, h2, h3, h4, h5 {
   justify-content: center;
   gap: var(--s1);
   padding: 7px var(--s3);
+  min-height: 36px;
   border-radius: var(--radius-sm);
   font-size: var(--t-xs);
   font-weight: 600;
@@ -1579,13 +1587,14 @@ h1, h2, h3, h4, h5 {
   border-color: var(--risk-critical-border);
   background: var(--risk-critical-faint);
 }
-.proj-action--danger:hover { background: oklch(95% 0.04 25); }
+.proj-action--danger:hover { background: var(--risk-critical-subtle); }
 
 /* 삭제 아이콘 버튼 */
 .proj-action--icon {
   flex: 0 0 auto;
-  width: 30px;
+  width: 36px;
   padding: 7px 0;
+  min-height: 36px;
   justify-content: center;
   color: var(--text-3);
   border-color: transparent;
@@ -1749,7 +1758,7 @@ h1, h2, h3, h4, h5 {
 }
 .proj-row__icon--done     { color: var(--risk-ok); }
 .proj-row__icon--draft    { color: var(--text-3); }
-.proj-row__icon--processing { color: oklch(38% 0.18 230); }
+.proj-row__icon--processing { color: var(--status-processing); }
 .proj-row__icon--failed   { color: var(--risk-critical); }
 
 /* 스피너 애니메이션 */
@@ -1805,14 +1814,14 @@ h1, h2, h3, h4, h5 {
 }
 .proj-row__progress-fill {
   height: 100%;
-  background: oklch(38% 0.18 230);
+  background: var(--status-processing);
   border-radius: 3px;
   transition: width 600ms ease;
 }
 .proj-row__progress-label {
   font-size: 10px;
   font-weight: 600;
-  color: oklch(38% 0.18 230);
+  color: var(--status-processing);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -1867,7 +1876,7 @@ h1, h2, h3, h4, h5 {
   border-color: var(--risk-critical-border);
   background: var(--risk-critical-faint);
 }
-.proj-row__btn--danger:hover { background: oklch(95% 0.04 25); }
+.proj-row__btn--danger:hover { background: var(--risk-critical-subtle); }
 
 /* v2 빈 상태 — v1과 동일 컴포넌트 재사용 가능하므로 별도 클래스 없음 */
 

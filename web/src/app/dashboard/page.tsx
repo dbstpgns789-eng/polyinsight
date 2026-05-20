@@ -294,7 +294,7 @@ function ProjectCard({ project }: { project: Project }) {
             <div className="proj-strip__progress-track">
               <div
                 className="proj-strip__progress-fill"
-                style={{ width: `${project.processingPercent ?? 0}%` }}
+                style={{ transform: `scaleX(${(project.processingPercent ?? 0) / 100})` }}
               />
             </div>
             <span className="proj-strip__stage">{project.processingStep}</span>
