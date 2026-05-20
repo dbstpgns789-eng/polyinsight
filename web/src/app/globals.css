@@ -89,6 +89,7 @@
   --s2:  8px;
   --s3:  12px;
   --s4:  16px;
+  --s5:  20px;
   --s6:  24px;
   --s8:  32px;
   --s10: 40px;
@@ -878,7 +879,7 @@ h1, h2, h3, h4, h5 {
   border: 1px solid var(--dark-border);
   border-radius: var(--radius-lg);
   padding: var(--s4);
-  max-width: 240px;
+  max-width: 15rem;
   display: flex;
   flex-direction: column;
   gap: var(--s3);
@@ -943,7 +944,7 @@ h1, h2, h3, h4, h5 {
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--s5);
 }
 
 .auth-form__head { margin-bottom: var(--s2); }
@@ -1077,7 +1078,7 @@ h1, h2, h3, h4, h5 {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0;
+    gap: var(--s2);
     padding-bottom: var(--s8);
     text-align: center;
   }
