@@ -77,6 +77,14 @@
   --dark-bg:   oklch(14% 0.04 152);
   --dark-bg-2: oklch(19% 0.04 152);
 
+  --dark-text-1:    oklch(92% 0.008 152);
+  --dark-text-2:    oklch(72% 0.015 152);
+  --dark-text-3:    oklch(60% 0.04 152);
+  --dark-border:    oklch(24% 0.045 152);
+  --dark-chip-bg:   oklch(20% 0.055 152);
+  --dark-chip-border: oklch(28% 0.07 152);
+  --border-hover:   oklch(78% 0.012 152);
+
   --s1:  4px;
   --s2:  8px;
   --s3:  12px;
@@ -206,7 +214,7 @@ h1, h2, h3, h4, h5 {
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 
-.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary { background: var(--accent); color: oklch(99% 0.003 152); border-color: var(--accent); }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn-primary:focus-visible { outline: 2.5px solid var(--accent); outline-offset: 3px; }
 
@@ -831,7 +839,7 @@ h1, h2, h3, h4, h5 {
   font-size: 1.125rem;
   font-weight: 700;
   letter-spacing: -0.04em;
-  color: oklch(92% 0.008 152);
+  color: var(--dark-text-1);
   text-decoration: none;
   flex-shrink: 0;
 }
@@ -850,13 +858,13 @@ h1, h2, h3, h4, h5 {
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -0.035em;
-  color: oklch(95% 0.01 152);
+  color: var(--dark-text-1);
   margin-bottom: var(--s4);
 }
 
 .auth-brand__sub {
   font-size: 1rem;
-  color: oklch(55% 0.04 152);
+  color: var(--dark-text-2);
   line-height: 1.7;
   letter-spacing: -0.01em;
 }
@@ -867,7 +875,7 @@ h1, h2, h3, h4, h5 {
 
 .auth-proof-card {
   background: var(--dark-bg-2);
-  border: 1px solid oklch(24% 0.045 152);
+  border: 1px solid var(--dark-border);
   border-radius: var(--radius-lg);
   padding: var(--s4);
   max-width: 240px;
@@ -884,20 +892,20 @@ h1, h2, h3, h4, h5 {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: oklch(60% 0.04 152);
+  color: var(--dark-text-3);
 }
 
 .auth-proof-card__finding {
   font-size: 0.9375rem;
   line-height: 1.55;
-  color: oklch(72% 0.015 152);
+  color: var(--dark-text-2);
   letter-spacing: -0.01em;
 }
 
 .auth-proof-card__num {
   font-size: 1.125rem;
   font-weight: 700;
-  color: oklch(90% 0.015 152);
+  color: var(--dark-text-1);
   letter-spacing: -0.03em;
 }
 
@@ -908,8 +916,8 @@ h1, h2, h3, h4, h5 {
   font-size: 11px;
   font-weight: 600;
   color: oklch(75% 0.12 152);
-  background: oklch(20% 0.055 152);
-  border: 1px solid oklch(28% 0.07 152);
+  background: var(--dark-chip-bg);
+  border: 1px solid var(--dark-chip-border);
   padding: 3px 8px;
   border-radius: var(--radius-sm);
   width: fit-content;
@@ -968,7 +976,6 @@ h1, h2, h3, h4, h5 {
   color: var(--text-2);
 }
 
-.auth-field__forgot { text-align: right; margin-top: calc(-1 * var(--s1)); }
 
 .auth-input {
   width: 100%;
@@ -984,10 +991,10 @@ h1, h2, h3, h4, h5 {
   letter-spacing: -0.01em;
 }
 .auth-input::placeholder { color: var(--text-3); }
-.auth-input:hover:not(:focus) { border-color: oklch(78% 0.012 152); }
+.auth-input:hover:not(:focus) { border-color: var(--border-hover); }
 .auth-input:focus-visible {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px oklch(38% 0.14 152 / 0.12);
+  box-shadow: 0 0 0 3px oklch(from var(--accent) l c h / 0.12);
 }
 .auth-input:focus:not(:focus-visible) { outline: none; }
 .auth-input[aria-invalid="true"] {
