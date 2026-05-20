@@ -1200,9 +1200,9 @@ h1, h2, h3, h4, h5 {
   padding-block: var(--s10) var(--s16);
 }
 .dash__title {
-  font-size: var(--t-xl);
+  font-size: var(--t-2xl);
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   color: var(--text-1);
   margin-bottom: var(--s8);
 }
@@ -1263,6 +1263,7 @@ h1, h2, h3, h4, h5 {
   font-family: inherit;
 }
 .dash-filter-tab:hover { background: var(--bg-subtle); color: var(--text-1); }
+.dash-filter-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dash-filter-tab.is-active { background: var(--accent-subtle); color: var(--accent); }
 .dash-filter-tab__count {
   font-size: var(--t-xs);
@@ -1359,7 +1360,7 @@ h1, h2, h3, h4, h5 {
 /* 썸네일 스트립 */
 .proj-strip {
   position: relative;
-  height: 72px;
+  height: 90px;
   display: flex;
   overflow: hidden;
   background: var(--bg-subtle);
@@ -1566,6 +1567,7 @@ h1, h2, h3, h4, h5 {
   text-align: center;
 }
 .proj-action:hover { background: var(--bg-subtle); color: var(--text-1); border-color: oklch(78% 0.01 152); }
+.proj-action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .proj-action--primary {
   background: var(--accent-subtle);
   color: var(--accent);
@@ -1594,6 +1596,7 @@ h1, h2, h3, h4, h5 {
   border-color: var(--risk-critical-border);
   background: var(--risk-critical-faint);
 }
+.proj-action--icon:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* 삭제 확인 인라인 */
 .proj-card__actions--confirm {

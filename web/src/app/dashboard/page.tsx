@@ -271,6 +271,8 @@ function ProjectCard({ project }: { project: Project }) {
     <article
       className={`proj-card${project.status === 'processing' ? ' is-processing' : ''}`}
       role="listitem"
+      aria-disabled={project.status === 'processing' ? 'true' : undefined}
+      aria-busy={project.status === 'processing' ? 'true' : undefined}
     >
       <div
         className={`proj-strip${isBlurred ? ' is-blurred' : ''}${project.thumbnailUrl ? ' proj-strip--preview' : ''}`}
