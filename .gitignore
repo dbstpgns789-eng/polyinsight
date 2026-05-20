@@ -31,6 +31,17 @@ Thumbs.db
 test_report.html
 .pytest_cache/
 
+# Pipeline test outputs (generated artifacts)
+pipeline_debug.log
+render_output/
+render_output_v2/
+render_output_pipeline/
+s1_output.json
+s1_output_raw.txt
+
+# DB (local dev)
+polyinsight.db
+
 # Landing (Astro)
 landing/node_modules/
 landing/dist/
