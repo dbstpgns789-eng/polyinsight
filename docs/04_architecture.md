@@ -1,5 +1,5 @@
 # Architecture Design
-> PolyInsight v2.0 | 2025-05-05
+> PolyInsight v2.0 | 2026-05-17 (최종 업데이트)
 
 ---
 
@@ -14,7 +14,7 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 - Orchestrator가 파이프라인의 유일한 제어자. 에이전트는 서로 직접 호출하지 않는다.
 - 각 스테이지는 검증된 입력을 받고 타입이 정의된 출력을 반환한다.
 - S8은 업스트림 실패 여부와 무관하게 항상 실행된다.
-- S6는 원문 텍스트만을 사실 근거로 삼는다. LLM 요약(S3/S4)은 힌트 전용.
+- S6는 원문 텍스트만을 사실 근거로 삼는다. 기여 추출은 S6 내부 CoT로 흡수 (S3/S4 제거됨).
 
 **배포 형태 (MVP)**:
 - 단일 프로세스 (FastAPI + asyncio)
@@ -30,10 +30,13 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 
 | 항목 | v1.0 (이전) | v2.0 (현재) |
 |---|---|---|
-| S3/S4 실행 방식 | 순차 (S3 완료 후 S4) | **병렬** (`asyncio.gather`) |
+| S2 Section Parsing | 존재 (regex + LLM fallback) | **제거** — S1이 pymupdf4llm Markdown으로 section_map 직접 생성 |
+| S3/S4 Summary/Contributions | 순차 → 병렬 | **제거** — S6 내부 CoT (SEARCH→EXTRACT→WRITE→SCORE→SIGNAL)로 흡수 |
 | S5 (홍보 문장) | 존재 | **제거** (KITECH 버전 불필요) |
-| S6 사실 근거 | S3/S4 출력 기반 | **원문 section_map 우선** — S3/S4는 힌트 |
+| S6 사실 근거 | S3/S4 출력 기반 | **원문 section_map 직접 읽기** (CoT 내부에서 기여 추출) |
+| S6 레이아웃 결정 | 없음 | **signals 시스템** — LLM이 구조 신호 주석, 코드가 레이아웃 결정 |
 | S7 렌더링 엔진 | Pillow (Python 이미지 합성) | **Playwright** (headless Chromium) |
+| S7 템플릿 체계 | 없음 | **type_a/b/c/d/e/g/k.html** — layout variant 기반 |
 | 저장소 | 인메모리 dict (TTL 30분) | **SQLite** 영구 저장 |
 | 파일 보존 | 프로세스 재시작 시 소멸 | PNG/ZIP 24시간 TTL, 메타데이터 영구 |
 
@@ -52,32 +55,23 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
   ▼
 [Orchestrator]
   │
-  ├─ S1: Text Extraction      pdfplumber / PyMuPDF
-  │        │
-  │        │  raw_text, page_map
-  │        ▼
-  ├─ S2: Section Parsing      regex + LLM fallback
-  │        │
-  │        │  section_map {title, abstract, methods, results, ...}
-  │        ▼
-  │     asyncio.gather()
-  ├─────┬──────────────────────────┐
-  │     │                          │
-  │  S3: Korean Summary        S4: Key Contributions
-  │  (section_map → KO 요약)   (section_map → 핵심 기여)
-  │     │                          │
-  │     └──────────┬───────────────┘
-  │                │  s3_result, s4_result (힌트)
-  │                ▼
-  ├─ S6: Card News JSON        원문 direct read + S3/S4 as hints
-  │        │                   (S5 없음 — KITECH 버전)
-  │        │  card_data (FieldValue 스키마)
+  ├─ S1: Text Extraction      fitz(PyMuPDF) 직접 추출 + pdfplumber fallback
+  │        │                   pymupdf4llm Markdown → section_map 직접 생성
+  │        │                   PAGE 마커 삽입 (<!-- PAGE N -->)
+  │        │  S1Output { raw_text, page_map, section_map, metadata }
+  │        ▼                   [S2 제거: S1이 section_map 직접 생성]
+  │
+  ├─ S6: Card News JSON        원문 section_map 직접 읽기
+  │        │                   CoT: SEARCH → EXTRACT → WRITE → SCORE → SIGNAL
+  │        │                   LLM이 signals 주석 → 코드가 layout variant 결정
+  │        │  S6Output { card_data(CardEditorData), critical_count, high_count }
   │        ▼
   ├─ S7: PNG Rendering         Playwright headless Chromium
-  │        │                   1080×1080 × 5장, 순차 렌더링
-  │        │  png_bytes[]
+  │        │                   layout_variants → type_a/b/c/d/e/g/k.html 선택
+  │        │                   1080×1080 × 5장
+  │        │  S7Output { images: list[bytes] }
   │        ▼
-  └─ S8: Output Packaging      SQLite 저장, ZIP 생성, 상태 업데이트
+  └─ S8: Output Packaging      SQLite 저장, ZIP 생성 (항상 실행)
            │
            │  job_id, status = DONE
            ▼
@@ -94,14 +88,12 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 
 | 스테이지 | 입력 | 출력 | 실패 시 |
 |---|---|---|---|
-| **S1** Text Extraction | PDF bytes | `raw_text: str`, `page_map: dict` | 파이프라인 중단. ERROR 상태 저장. |
-| **S2** Section Parsing | `raw_text` | `section_map: dict[str, SectionText]` | 빈 section_map → degraded_mode 플래그. |
-| **S3** Korean Summary | `section_map` | `summary_ko: str`, `confidence: float` | 빈 문자열 반환. S6에서 힌트 미사용. |
-| **S4** Key Contributions | `section_map` | `contributions: list[str]` | 빈 리스트 반환. S6에서 힌트 미사용. |
-| ~~S5~~ | ~~제거됨~~ | ~~제거됨~~ | — |
-| **S6** Card News JSON | `section_map` + `s3_result` + `s4_result` | `CardData` (FieldValue 스키마) | 필드별 `confidence=low`, `risk_level=CRITICAL`. |
-| **S7** PNG Rendering | `CardData` + `images` + `profile` | `png_bytes[5]` | 해당 카드 skip. 부분 성공 허용. |
-| **S8** Output Packaging | `png_bytes[]` + `CardData` | SQLite row 업데이트, ZIP bytes | 항상 실행. 실패해도 상태만 ERROR로 표기. |
+| **S1** Text Extraction | `S1Input { job_id, pdf_bytes }` | `S1Output { raw_text, page_map, section_map, metadata, word_count, degraded }` | 파이프라인 중단. S8만 실행 (상태 기록). |
+| ~~S2~~ | ~~제거됨~~ | ~~제거됨~~ | S1이 section_map 직접 생성 |
+| ~~S3/S4~~ | ~~제거됨~~ | ~~제거됨~~ | S6 내부 CoT로 흡수 |
+| **S6** Card News JSON | `S6Input { job_id, section_map, page_map, paper_metadata }` | `S6Output { card_data(CardEditorData), critical_count, high_count }` | 3회 재시도 후 `ERR-S6-001`. 파이프라인 중단. |
+| **S7** PNG Rendering | `S7Input { job_id, card_data, theme }` | `S7Output { images: list[bytes], warnings }` | 해당 카드 skip. 부분 성공 허용. |
+| **S8** Output Packaging | `S8Input { job_id, card_data, images, warnings }` | `S8Output { job_id, status }` | 항상 실행. 예외 삼킴, status=ERROR 기록. |
 
 **FieldValue 스키마** (S6 출력 단위):
 
@@ -126,32 +118,31 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 
 ```
 backend/
-├── main.py                  FastAPI 앱 진입점, 라우터 등록, 앱 상태 초기화
-├── orchestrator.py          파이프라인 실행 제어 (유일한 컨트롤러)
+├── main.py                  FastAPI 앱 진입점, lifespan(migrate+TTL cleaner)
 ├── agents/
-│   ├── s1_extractor.py      pdfplumber / PyMuPDF 텍스트 추출
-│   ├── s2_parser.py         섹션 파싱 (regex + LLM fallback)
-│   ├── s3_summary.py        한국어 요약 생성
-│   ├── s4_contributions.py  핵심 기여 추출
-│   ├── s6_card_json.py      카드뉴스 JSON 생성 (원문 우선)
-│   ├── s7_renderer.py       Playwright PNG 렌더링
-│   └── s8_packaging.py      SQLite 저장 + ZIP 생성
+│   ├── base.py              BaseAgent[InputT, OutputT] ABC
+│   ├── orchestrator.py      파이프라인 실행 제어 (유일한 컨트롤러)
+│   ├── s1_extractor.py      fitz 직접 추출 + pdfplumber fallback, section_map 생성
+│   ├── s6_card_json.py      CoT(SEARCH→EXTRACT→WRITE→SCORE→SIGNAL) + layout 결정
+│   ├── s7_renderer.py       Playwright PNG 렌더링, variant→type_*.html 선택
+│   └── s8_packaging.py      SQLite 저장 + ZIP 생성 (항상 실행)
+├── templates/
+│   ├── _shared.css          공통 디자인 토큰 (--theme-primary 등)
+│   ├── type_a.html          표지형 (Card1, 항상 고정)
+│   ├── type_b.html          범용 헤더+카드형 (폴백)
+│   ├── type_c.html          수치 강조 그리드형 (stat_count >= 3)
+│   ├── type_d.html          before/after 비교형 (has_comparison=true)
+│   ├── type_e.html          훅/전면텍스트형 (is_hook=true)
+│   ├── type_g.html          플로우형 (has_process_steps, step_count >= 3)
+│   └── type_k.html          클로징 (Card5, 항상 고정)
 ├── api/
-│   └── routes/
-│       ├── upload.py        POST /api/upload
-│       ├── status.py        GET  /api/status/:jobId
-│       ├── cards.py         GET/PATCH /api/cards/:jobId
-│       ├── export.py        POST /api/cards/:jobId/export
-│       │                    GET  /api/export/:exportId/status
-│       │                    GET  /api/export/:exportId/download
-│       │                    POST /api/export/:exportId/retry
-│       └── result.py        GET  /api/result/:jobId
+│   └── routes/              (Phase 4 미구현)
 ├── core/
-│   ├── models.py            Pydantic 스키마 (RunState, CardData, FieldValue)
-│   ├── db.py                SQLite 연결 및 마이그레이션
-│   └── config.py            환경변수, 상수
+│   ├── models.py            Pydantic 스키마 (Card1~5+Signals, CardEditorData, FieldValue)
+│   ├── db.py                SQLite WAL, migrate(), create_job(), update_job() 등
+│   └── config.py            pydantic-settings (ANTHROPIC_API_KEY, LLM_MODEL 등)
 └── storage/
-    └── export_store.py      ExportJob 인메모리 상태 (렌더링 진행 추적용)
+    └── export_store.py      ExportJobRecord 인메모리 싱글턴
 ```
 
 ### 3-2. Frontend (4개 화면)
@@ -201,39 +192,43 @@ Orchestrator는 파이프라인의 **유일한 진입점**이다.
 에이전트는 Orchestrator를 통해서만 호출된다.
 
 ```python
-async def run_pipeline(job_id: str, pdf_bytes: bytes):
-    state = RunState(job_id=job_id)
+# backend/agents/orchestrator.py
+async def run_pipeline(job_id: str, pdf_bytes: bytes, theme: CardTheme | None = None) -> None:
+    """S1→S6→S7→S8 파이프라인. S8는 항상 실행."""
 
-    # S1 — 실패 시 즉시 중단
-    state = await s1_extractor.run(state, pdf_bytes)
-    if state.status == "error":
-        await s8_packaging.run(state)
-        return
+    # S1 — 블로킹 실패: 예외 시 즉시 종료
+    await db.update_job(job_id, status=RUNNING, stage="S1", progress=10)
+    s1_out = await s1_agent.execute(S1Input(job_id=job_id, pdf_bytes=pdf_bytes))
+    # 실패 시 except에서 ERROR 상태 저장 후 return
 
-    # S2
-    state = await s2_parser.run(state)
+    # S6 — LLM 카드 JSON 생성 (3회 재시도, 실패 시 ERR-S6-001)
+    await db.update_job(job_id, status=RUNNING, stage="S6", progress=50)
+    s6_out = await s6_agent.execute(S6Input(
+        job_id=job_id,
+        section_map=s1_out.section_map,
+        page_map=s1_out.page_map,
+        paper_metadata=s1_out.metadata,
+    ))
 
-    # S3 + S4 병렬
-    s3_result, s4_result = await asyncio.gather(
-        s3_summary.run(state),
-        s4_contributions.run(state),
-        return_exceptions=True,
-    )
-    state.s3_result = s3_result if not isinstance(s3_result, Exception) else None
-    state.s4_result = s4_result if not isinstance(s4_result, Exception) else None
+    # S7 — PNG 렌더링 (부분 성공 허용)
+    await db.update_job(job_id, status=RUNNING, stage="S7", progress=75)
+    s7_out = await s7_agent.execute(S7Input(
+        job_id=job_id,
+        card_data=s6_out.card_data,
+        theme=theme or CardTheme(),
+    ))
 
-    # S6 — 원문 우선, S3/S4는 힌트
-    state = await s6_card_json.run(state)
-
-    # S7 — 부분 성공 허용
-    state = await s7_renderer.run(state)
-
-    # S8 — 항상 실행
-    await s8_packaging.run(state)
+    # S8 — 항상 실행 (예외 삼킴)
+    await s8_agent.execute(S8Input(
+        job_id=job_id,
+        card_data=s6_out.card_data,
+        images=s7_out.images,
+        warnings=s6_out.warnings + s7_out.warnings,
+    ))
 ```
 
-**RunState**: 파이프라인 전체에서 공유되는 단일 상태 객체.
-스테이지는 RunState를 수정하지 않고 새 RunState를 반환한다 (불변 전달 원칙).
+각 에이전트는 `BaseAgent[InputT, OutputT]`를 상속하고 `execute(input_data)` 하나만 구현한다.
+RunState는 Orchestrator가 직접 `db.update_job()`으로 관리 — 에이전트가 직접 DB를 건드리지 않는다.
 
 ---
 
@@ -286,22 +281,18 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes):
 
 | 스테이지 | 실패 유형 | 파이프라인 영향 |
 |---|---|---|
-| S1 Text Extraction | **블로킹** | 즉시 중단. S8만 실행 (상태 기록). |
-| S2 Section Parsing | **논블로킹** | degraded_mode=True 플래그. 빈 section_map으로 계속. |
-| S3 Korean Summary | **논블로킹** | 예외 포착. None 반환. S6에서 힌트 미사용. |
-| S4 Key Contributions | **논블로킹** | 예외 포착. None 반환. S6에서 힌트 미사용. |
-| S6 Card News JSON | **논블로킹** | 필드별 CRITICAL 마킹. 빈 카드로 에디터 진입 허용. |
+| S1 Text Extraction | **블로킹** | 즉시 중단. ERROR 상태 저장. S8 실행 없이 종료. |
+| S6 Card News JSON | **블로킹** (3회 재시도 후) | `ERR-S6-001` raise. Orchestrator가 catch → ERROR 기록. |
 | S7 PNG Rendering | **논블로킹** | 카드별 독립. 일부 실패 시 나머지 계속. 부분 ZIP 허용. |
-| S8 Output Packaging | **항상 실행** | 실패해도 상태만 ERROR 기록. 파이프라인 종료. |
+| S8 Output Packaging | **항상 실행** | 예외 삼킴. status=ERROR만 기록. 파이프라인 종료. |
 
 ### 5-2. 재시도 정책
 
 | 대상 | 재시도 범위 | 트리거 |
 |---|---|---|
 | 파이프라인 전체 | S1부터 재실행 | 대시보드 "재시도" 버튼 |
-| S3/S4 개별 | 해당 스테이지만 재실행 | 자동 (최대 2회) |
+| S6 LLM 호출 | 최대 3회 자동 재시도 | 자동 (ERR-S6-001 후 중단) |
 | PNG 렌더링 (S7) | 실패 카드만 재렌더링 | 내보내기 모달 "실패 카드 재시도" |
-| LLM API 호출 | 지수 백오프 (0.5s, 1s, 2s) | 자동 (최대 3회) |
 
 ---
 
@@ -373,9 +364,52 @@ CREATE TABLE researchers (
 
 ---
 
-## 7. 변경 이력
+## 7. S6 Signals 시스템
+
+S6는 카드 내용을 생성할 때 **레이아웃 결정용 구조 신호(signals)**를 함께 주석으로 달고,
+코드(`_infer_layout()`)가 이를 읽어 layout variant를 결정한다.
+
+### 7-1. signals 스키마
+
+```python
+class Card2Signals(BaseModel):
+    is_hook: bool = False           # intro가 문제제기/의문/한계면 True
+
+class Card3Signals(BaseModel):
+    stat_count: int = 0             # achievement+problem 내 수치 개수
+    has_process_steps: bool = False # 실험/제조 단계가 순서 서술이면 True
+    step_count: int = 0             # 단계 수
+
+class Card4Signals(BaseModel):
+    has_comparison: bool = False    # 기존 vs 신기술 비교 구조 명확하면 True
+```
+
+### 7-2. layout variant 선택 규칙
+
+| 카드 | 조건 | variant | 템플릿 |
+|---|---|---|---|
+| Card1 | 항상 | A | type_a.html |
+| Card2 | is_hook=true | E | type_e.html |
+| Card2 | is_hook=false | B | type_b.html |
+| Card3 | stat_count >= 3 | C | type_c.html |
+| Card3 | has_process_steps and step_count >= 3 | G | type_g.html |
+| Card3 | 위 조건 미충족 | B | type_b.html |
+| Card4 | has_comparison=true | D | type_d.html |
+| Card4 | has_comparison=false | B | type_b.html |
+| Card5 | 항상 | K | type_k.html |
+
+### 7-3. 설계 근거
+
+LLM은 텍스트 구조 판단에 강하지만 일관성이 없다.
+코드는 일관성이 보장되지만 맥락 파악이 약하다.
+→ **LLM이 구조 신호를 주석으로 달고, 코드가 규칙으로 variant를 결정**하는 하이브리드 방식.
+
+---
+
+## 8. 변경 이력
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-05-17 | v2.1 | S2 제거 (S1이 section_map 직접 생성), S3/S4 제거 (S6 CoT 흡수), signals 시스템 추가, type_* 템플릿 체계 도입, S7 variant 기반 렌더링, 실 API 연결 후 카드 품질 ~60% 향상 확인 |
 | 2025-05-05 | v2.0 | S3/S4 병렬화, S5 제거, Playwright 교체, SQLite 도입, FieldValue 스키마 정의 |
 | (이전) | v1.0 | 순차 파이프라인 S1~S8, S5 포함, Pillow 렌더링, 인메모리 dict (TTL 30분) |
