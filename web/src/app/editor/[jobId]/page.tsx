@@ -18,7 +18,7 @@ export default function EditorPage() {
   const jobId = params.jobId as string
   const isDemo = jobId === 'demo'
 
-  const { data, isLoading, isError, isSaving, debouncedSave, saveNow, previewKey } = useCardData(
+  const { data, isLoading, isError, isSaving, debouncedSave, saveNow } = useCardData(
     isDemo ? '' : jobId
   )
   const exportModalOpen = useUiStore((s) => s.exportModalOpen)
