@@ -12,6 +12,8 @@ import ClosingCard from './templates/ClosingCard'
 import ProblemCard from './templates/ProblemCard'
 import CoverCard from './templates/CoverCard'
 import HookCard from './templates/HookCard'
+import ShowcaseCard from './templates/ShowcaseCard'
+import DefinitionCard from './templates/DefinitionCard'
 
 export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> = {
   brand:      BrandCard,
@@ -19,9 +21,9 @@ export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> 
   problem:    ProblemCard,
   cover:      CoverCard,
   hook:       HookCard,
+  showcase:   ShowcaseCard,
+  definition: DefinitionCard,
   // Phase 2에서 추가 예정:
-  // showcase:   ShowcaseCard,
-  // definition: DefinitionCard,
   // data:       DataCard,
   // flow:       FlowCard,
   // compare2:   Compare2Card,
