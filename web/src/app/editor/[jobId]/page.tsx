@@ -143,9 +143,7 @@ export default function EditorPage() {
           cards={cards}
           activeCardIdx={activeCardIdx}
           onSelectCard={setActiveCardIdx}
-          onFieldChange={handleFieldChange}
-          onConfirmRisk={handleConfirmRisk}
-          focusedField={focusedField}
+          theme={cardData?.theme}
         />
 
         <MidCanvas

@@ -113,10 +113,9 @@ export default function MidCanvas({
         </button>
       </div>
 
-      {/* ── 하단 바 ── */}
+      {/* ── 하단 바: 카운터 + 액션 패널 (썸네일 strip은 LeftPanel로 이전) ── */}
       <div style={{ background: 'var(--surface)', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-        {/* Row 1: 카운터 + 액션 패널 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', padding: '12px 22px 0', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', padding: '12px 22px', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
               {pad(cardNum)}
@@ -137,81 +136,8 @@ export default function MidCanvas({
 
           <div />
         </div>
-
-        {/* Row 2: 썸네일 스트립 (Phase 6에서 LeftPanel로 이전 예정) */}
-        <div style={{ padding: '14px 22px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, justifyContent: 'center', overflowX: 'auto', padding: '2px 0', scrollbarWidth: 'thin' }}>
-            {cards.map((card, idx) => (
-              <FilmThumb
-                key={card.card_num}
-                card={card}
-                theme={effectiveTheme}
-                idx={card.card_num}
-                isActive={idx === activeCardIdx}
-                onClick={() => onSelectCard(idx)}
-              />
-            ))}
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button
-                type="button"
-                aria-label="카드 추가"
-                className="bb-add-btn"
-                style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 62, height: 62, border: '1.5px dashed var(--border)', borderRadius: 12, background: 'var(--surface-mid)', color: 'var(--ink-3)', cursor: 'pointer', transition: 'border-color 130ms ease, color 130ms ease, background-color 130ms ease' }}
-              >
-                <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </main>
-  )
-}
-
-// ── 썸네일 (React 카드 thumbnail 모드) ────────────────────────────────────
-function FilmThumb({ card, theme, idx, isActive, onClick }: {
-  card: Card; theme: CardTheme; idx: number; isActive: boolean; onClick: () => void
-}) {
-  const size = isActive ? 88 : 62
-  const scale = size / CARD_SIZE
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-      <button
-        onClick={onClick}
-        aria-label={`카드 ${idx}`}
-        className="bb-thumb-btn"
-        style={{
-          position: 'relative',
-          width: size,
-          height: size,
-          flexShrink: 0,
-          border: isActive ? '2px solid var(--brand)' : '1.5px solid var(--border)',
-          borderRadius: 9,
-          background: 'var(--surface)',
-          cursor: 'pointer',
-          padding: 0,
-          overflow: 'hidden',
-          transition: 'border-color 130ms ease, box-shadow 130ms ease, transform 90ms ease',
-          boxShadow: isActive
-            ? '0 0 0 3px var(--brand-soft), 0 6px 16px -6px oklch(38% 0.14 152 / 0.35)'
-            : undefined,
-        }}
-      >
-        <CardRenderer
-          card={card}
-          theme={theme}
-          mode="thumbnail"
-          scale={scale}
-        />
-        {/* 상단 브랜드 밴드 오버레이 */}
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 5, background: 'var(--brand)', opacity: isActive ? 1 : 0.85, pointerEvents: 'none' }} />
-        {/* 카드 번호 (우상단) */}
-        <div style={{ position: 'absolute', top: 6, right: 6, fontSize: 8.5, fontWeight: 800, color: 'var(--ink-3)', fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', lineHeight: 1, pointerEvents: 'none' }}>
-          {pad(idx)}
-        </div>
-      </button>
-    </div>
   )
 }
 
