@@ -13,6 +13,7 @@ from ..core.models import (
     MatchQuality, RiskLevel, ClaimType, FieldSource,
     CardStorybeat, Storyboard,
     S6Input, S6Output,
+    THEME_PRESETS,
 )
 
 logger = logging.getLogger(__name__)
@@ -131,10 +132,13 @@ risk_level 규칙:
 - normalized            → MEDIUM
 - exact 또는 qualitative → LOW
 
-테마 컬러 제안 (강제 아님):
-농업/식품: #3BAF6B | 환경/에너지: #0EA5BE | 로봇/제조: #F59E20
-의료/바이오: #6C5CE7 | 소재/화학: #7B5FFF | 센서/전자: #F5C430
-기본(미분류): #2563EB
+recommended_theme — 논문 연구 분야에 따라 정확히 하나를 선택:
+tech_blue: AI·ML·컴퓨터·네트워크·센서·전자
+forest_green: 바이오·화학·폴리머·재료·식품·농업·환경
+sunset_orange: 에너지·배터리·기계·제조·로봇
+royal_violet: 의료·임상·건강·약학
+golden_yellow: 경제·정책·사회·혁신
+slate: 기타
 
 반환: JSON만. 설명 없음."""
 
@@ -167,6 +171,7 @@ cards 배열은 그 계획을 따른다.
 아래 JSON 스키마를 완성하라:
 
 {{
+  "recommended_theme": "tech_blue",
   "storyboard": {{
     "story_arc": "전체 스토리 한 문장 요약",
     "beats": [
@@ -413,7 +418,11 @@ def _build_mock_card_data(
         ],
     )
 
-    return CardEditorData(storyboard=storyboard, meta=meta, cards=cards)
+    return CardEditorData(
+        storyboard=storyboard, meta=meta, cards=cards,
+        theme=THEME_PRESETS["tech_blue"],
+        recommended_theme_key="tech_blue",
+    )
 
 
 class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
@@ -507,7 +516,15 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
                 template_type=raw_card["template_type"],
                 fields=fields,
             ))
-        return CardEditorData(storyboard=storyboard, meta=meta, cards=cards)
+
+        raw_key = parsed.get("recommended_theme", "tech_blue")
+        theme_key = raw_key if raw_key in THEME_PRESETS else "tech_blue"
+        theme = THEME_PRESETS[theme_key]
+
+        return CardEditorData(
+            storyboard=storyboard, meta=meta, cards=cards,
+            theme=theme, recommended_theme_key=theme_key,
+        )
 
     # ── 후처리 ────────────────────────────────────────────────────────────────
 
