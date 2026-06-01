@@ -8,6 +8,7 @@ import Topbar from '@/components/editor/Topbar'
 import LeftPanel from '@/components/editor/LeftPanel'
 import MidCanvas from '@/components/editor/MidCanvas'
 import RightPanel from '@/components/editor/RightPanel'
+import FactDrawer from '@/components/editor/FactDrawer'
 import ExportModal from '@/components/export/ExportModal'
 import type { CardDataPayload, ApiResponse, CardTheme } from '@/types/editor'
 import { MOCK_EDITOR_DATA } from '@/lib/mockData'
@@ -27,6 +28,7 @@ export default function EditorPage() {
   const [localData, setLocalData] = useState<CardDataPayload | null>(null)
   const [focusedField, setFocusedField] = useState<string | null>(null)
   const [imageUploadRequested, setImageUploadRequested] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   const apiData = isDemo ? MOCK_EDITOR_DATA : (data as ApiResponse | undefined)
   const cardData = localData ?? apiData?.cardData
@@ -52,19 +54,30 @@ export default function EditorPage() {
     })
   }, [activeCardIdx, apiData, debouncedSave])
 
-  const handleConfirmRisk = useCallback((fieldKey: string) => {
+  const handleConfirmRiskAt = useCallback((cardIdx: number, fieldKey: string) => {
     setLocalData((prev) => {
       const base = prev ?? apiData?.cardData
       if (!base) return prev
       const updatedCards = base.cards.map((card, idx) => {
-        if (idx !== activeCardIdx) return card
+        if (idx !== cardIdx) return card
         const field = card.fields?.[fieldKey]
         if (!field) return card
         return { ...card, fields: { ...card.fields, [fieldKey]: { ...field, risk_level: undefined } } }
       })
       return { ...base, cards: updatedCards }
     })
-  }, [activeCardIdx, apiData])
+  }, [apiData])
+
+  // LeftPanel은 activeCardIdx 기준으로 confirm 호출 (기존 시그니처 유지)
+  const handleConfirmRisk = useCallback((fieldKey: string) => {
+    handleConfirmRiskAt(activeCardIdx, fieldKey)
+  }, [activeCardIdx, handleConfirmRiskAt])
+
+  const handleDrawerItemClick = useCallback((cardIdx: number, fieldKey: string) => {
+    setActiveCardIdx(cardIdx)
+    setFocusedField(fieldKey)
+    setDrawerOpen(false)
+  }, [])
 
   const handleImageUpdate = useCallback((imageUrl: string | null) => {
     setLocalData((prev) => {
@@ -159,6 +172,14 @@ export default function EditorPage() {
           onThemeChange={handleThemeChange}
         />
       </div>
+
+      <FactDrawer
+        cards={cards}
+        open={drawerOpen}
+        onToggle={() => setDrawerOpen((v) => !v)}
+        onItemClick={handleDrawerItemClick}
+        onConfirm={handleConfirmRiskAt}
+      />
 
       {exportModalOpen && <ExportModal />}
     </div>
