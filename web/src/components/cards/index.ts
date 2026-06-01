@@ -15,6 +15,10 @@ import HookCard from './templates/HookCard'
 import ShowcaseCard from './templates/ShowcaseCard'
 import DefinitionCard from './templates/DefinitionCard'
 import DataCard from './templates/DataCard'
+import FlowCard from './templates/FlowCard'
+import Compare2Card from './templates/Compare2Card'
+import Grid4Card from './templates/Grid4Card'
+import Circle3Card from './templates/Circle3Card'
 
 export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> = {
   brand:      BrandCard,
@@ -25,11 +29,10 @@ export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> 
   showcase:   ShowcaseCard,
   definition: DefinitionCard,
   data:       DataCard,
-  // Phase 2에서 추가 예정:
-  // flow:       FlowCard,
-  // compare2:   Compare2Card,
-  // grid4:      Grid4Card,
-  // circle3:    Circle3Card,
+  flow:       FlowCard,
+  compare2:   Compare2Card,
+  grid4:      Grid4Card,
+  circle3:    Circle3Card,
 }
 
 export { default as CardRenderer } from './CardRenderer'
