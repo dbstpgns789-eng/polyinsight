@@ -4,13 +4,12 @@ import { useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import useCardData from '@/hooks/useCardData'
 import useUiStore from '@/store/uiStore'
-import EditorTopBar from '@/components/editor/EditorTopBar'
-import ContentPanel from '@/components/editor/ContentPanel'
-import CardPreview from '@/components/editor/CardPreview'
-import DesignPanel from '@/components/editor/DesignPanel'
-import ActionBar from '@/components/editor/ActionBar'
+import Topbar from '@/components/editor/Topbar'
+import LeftPanel from '@/components/editor/LeftPanel'
+import MidCanvas from '@/components/editor/MidCanvas'
+import RightPanel from '@/components/editor/RightPanel'
 import ExportModal from '@/components/export/ExportModal'
-import type { CardDataPayload, ApiResponse } from '@/types/editor'
+import type { CardDataPayload, ApiResponse, CardTheme } from '@/types/editor'
 import { MOCK_EDITOR_DATA } from '@/lib/mockData'
 
 export default function EditorPage() {
@@ -19,9 +18,10 @@ export default function EditorPage() {
   const isDemo = jobId === 'demo'
 
   const { data, isLoading, isError, isSaving, debouncedSave, saveNow, previewKey } = useCardData(
-    isDemo ? '' : jobId   // demo일 때는 API 호출 안 함 (enabled: !!jobId → '' → false)
+    isDemo ? '' : jobId
   )
   const exportModalOpen = useUiStore((s) => s.exportModalOpen)
+  const openExportModal = useUiStore((s) => s.openExportModal)
 
   const [activeCardIdx, setActiveCardIdx] = useState(0)
   const [localData, setLocalData] = useState<CardDataPayload | null>(null)
@@ -43,10 +43,7 @@ export default function EditorPage() {
         if (idx !== activeCardIdx) return card
         return {
           ...card,
-          fields: {
-            ...card.fields,
-            [fieldKey]: { ...(card.fields?.[fieldKey] ?? {}), value },
-          },
+          fields: { ...card.fields, [fieldKey]: { ...(card.fields?.[fieldKey] ?? {}), value } },
         }
       })
       const updated = { ...base, cards: updatedCards }
@@ -63,10 +60,7 @@ export default function EditorPage() {
         if (idx !== activeCardIdx) return card
         const field = card.fields?.[fieldKey]
         if (!field) return card
-        return {
-          ...card,
-          fields: { ...card.fields, [fieldKey]: { ...field, risk_level: undefined } },
-        }
+        return { ...card, fields: { ...card.fields, [fieldKey]: { ...field, risk_level: undefined } } }
       })
       return { ...base, cards: updatedCards }
     })
@@ -86,34 +80,53 @@ export default function EditorPage() {
     })
   }, [activeCardIdx, apiData, debouncedSave])
 
+  const handleThemeChange = useCallback((theme: CardTheme) => {
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      const updated = { ...base, theme }
+      saveNow(updated)
+      return updated
+    })
+  }, [apiData, saveNow])
+
   const handleSaveNow = () => {
     if (localData) saveNow(localData)
   }
 
   if (!isDemo && isLoading) return (
-    <div className="flex items-center justify-center h-screen bg-surface-subtle">
+    <div className="flex items-center justify-center h-screen bg-canvas-subtle">
       <div className="text-center">
-        <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-[13px] text-ink-muted">카드 데이터 로딩중...</p>
+        <div className="w-8 h-8 border-2 border-forest-green border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-[13px] text-ink-3">카드 데이터 로딩중...</p>
       </div>
     </div>
   )
 
   if (!isDemo && isError) return (
-    <div className="flex items-center justify-center h-screen bg-surface-subtle">
+    <div className="flex items-center justify-center h-screen bg-canvas-subtle">
       <div className="text-center">
         <p className="text-4xl mb-3">⚠️</p>
-        <p className="text-[14px] text-ink-secondary font-medium">카드 데이터를 불러올 수 없습니다.</p>
+        <p className="text-[14px] text-ink-2 font-medium">카드 데이터를 불러올 수 없습니다.</p>
       </div>
     </div>
   )
 
   return (
-    <div className="flex flex-col h-screen bg-surface-subtle">
-      <EditorTopBar filename={filename} saveState={saveState} onSaveNow={handleSaveNow} />
+    // h-screen + overflow-hidden → 뷰포트 핏 (DESIGN_3.md §1)
+    <div className="flex flex-col h-screen overflow-hidden bg-canvas-subtle" style={{ wordBreak: 'keep-all' }}>
 
-      <div className="flex flex-1 overflow-hidden" style={{ marginTop: 64, marginBottom: 52 }}>
-        <ContentPanel
+      {/* Topbar: sticky, h-14 (56px) */}
+      <Topbar
+        filename={filename}
+        saveState={saveState}
+        onSaveNow={handleSaveNow}
+        onExport={isDemo ? undefined : () => openExportModal(jobId)}
+      />
+
+      {/* 3단 워크플로우 */}
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        <LeftPanel
           cards={cards}
           activeCardIdx={activeCardIdx}
           onSelectCard={setActiveCardIdx}
@@ -122,7 +135,7 @@ export default function EditorPage() {
           focusedField={focusedField}
         />
 
-        <CardPreview
+        <MidCanvas
           jobId={jobId}
           cards={cards}
           activeCardIdx={activeCardIdx}
@@ -133,16 +146,17 @@ export default function EditorPage() {
           onImageUploadRequest={() => setImageUploadRequested(true)}
         />
 
-        <DesignPanel
+        <RightPanel
           jobId={jobId}
           activeCard={cards[activeCardIdx]}
           onImageUpdate={handleImageUpdate}
           imageUploadRequested={imageUploadRequested}
           onImageUploadHandled={() => setImageUploadRequested(false)}
+          currentThemePrimary={cardData?.theme?.primary}
+          recommendedThemeKey={cardData?.recommended_theme_key}
+          onThemeChange={handleThemeChange}
         />
       </div>
-
-      <ActionBar jobId={jobId} cards={cards} />
 
       {exportModalOpen && <ExportModal />}
     </div>
