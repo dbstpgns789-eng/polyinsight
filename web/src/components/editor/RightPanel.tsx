@@ -16,35 +16,6 @@ interface Props {
   onThemeChange: (theme: CardTheme) => void
 }
 
-// ── 프리셋 정의 ────────────────────────────────────────────────────────────
-const THEMES = [
-  {
-    id: 'forest-light',
-    label: 'Forest Light',
-    previewBg: 'bg-canvas-subtle',
-    gradient: 'bg-gradient-to-br from-white to-canvas-muted',
-  },
-  {
-    id: 'deep-dark',
-    label: 'Deep Dark',
-    previewBg: 'bg-dark-slate',
-    gradient: 'bg-gradient-to-br from-slate-800 to-black',
-  },
-  {
-    id: 'academic-gray',
-    label: 'Academic Gray',
-    previewBg: 'bg-canvas-muted',
-    gradient: 'bg-gradient-to-br from-gray-100 to-gray-300',
-  },
-  {
-    id: 'ivory-soft',
-    label: 'Ivory Soft',
-    previewBg: '',
-    previewStyle: { background: '#FDFBF7' },
-    gradientStyle: { background: 'linear-gradient(to bottom right, #fff, #F5EFE6)' },
-  },
-] as const
-
 const IMAGE_SLOTS = [
   { icon: 'splitscreen',    title: '전체 배경',  type: 'bg' },
   { icon: 'web_asset',      title: '상단 인셋',  type: 'inset_top' },
@@ -76,7 +47,6 @@ export default function RightPanel({
   currentThemePrimary, recommendedThemeKey, onThemeChange,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [theme, setTheme]             = useState<typeof THEMES[number]['id']>('forest-light')
   const [fontFamily, setFontFamily]   = useState<'serif' | 'sans'>('serif')
   const [letterSpacing, setLs]        = useState(0)
   const [lineHeight, setLh]           = useState(1.6)
@@ -140,35 +110,40 @@ export default function RightPanel({
       {/* ── 스크롤 영역 ── */}
       <div className="flex-1 overflow-y-auto flex flex-col min-h-0" style={{ padding: '14px 22px', gap: 24 }}>
 
-        {/* §1 — 비주얼 테마 */}
+        {/* §1 — 테마 색상 */}
         <section>
-          <SectionHead>비주얼 테마</SectionHead>
-          <div className="grid grid-cols-2" style={{ gap: 8 }}>
-            {THEMES.map(t => {
-              const isActive = theme === t.id
+          <SectionHead>테마 색상</SectionHead>
+          <div className="grid grid-cols-3" style={{ gap: 8 }}>
+            {THEME_PRESETS.map(t => {
+              const isActive = currentThemePrimary === t.primary
+              const isRecommended = recommendedThemeKey === t.key
               return (
                 <button
-                  key={t.id}
-                  onClick={() => setTheme(t.id)}
-                  className={`flex flex-col items-start transition-all bg-surface-bright ${
+                  key={t.key}
+                  aria-label={t.label}
+                  onClick={() => onThemeChange({ primary: t.primary, dark: t.dark })}
+                  className={`relative flex flex-col items-center gap-1 transition-all ${
                     isActive
-                      ? 'border-2 border-forest-green'
-                      : 'border border-surface-border hover:bg-forest-green-ghost'
+                      ? 'border-2 border-forest-green bg-forest-green-wash'
+                      : 'border border-surface-border bg-surface-bright hover:bg-forest-green-ghost'
                   }`}
-                  style={{ gap: 4, padding: 8, borderRadius: 10 }}
+                  style={{ padding: '8px 4px', borderRadius: 10 }}
                 >
-                  <div
-                    className={`w-full border border-border-subtle rounded-md mb-1 relative overflow-hidden ${t.previewBg}`}
-                    style={{ height: 48, ...(('previewStyle' in t) ? t.previewStyle : {}) }}
-                  >
-                    {'gradientStyle' in t
-                      ? <div className="absolute inset-0" style={t.gradientStyle} />
-                      : <div className={`absolute inset-0 ${t.gradient}`} />
-                    }
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.03em', color: 'var(--ink)', lineHeight: 1 }}>
+                  <div className="w-8 h-8 rounded-full" style={{ background: t.primary }} />
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, color: 'var(--ink)',
+                    lineHeight: 1.2, textAlign: 'center',
+                  }}>
                     {t.label}
                   </span>
+                  {isRecommended && (
+                    <span
+                      className="absolute -top-1.5 -right-1.5 text-[8px] font-bold px-1 rounded-full"
+                      style={{ background: '#16A34A', color: '#fff', lineHeight: 1.6 }}
+                    >
+                      AI
+                    </span>
+                  )}
                 </button>
               )
             })}
@@ -296,47 +271,6 @@ export default function RightPanel({
           </div>
         </section>
 
-        <div style={{ height: 1, background: 'var(--border-soft)' }} />
-
-        {/* §4 — 테마 색상 */}
-        <section>
-          <SectionHead>테마 색상</SectionHead>
-          <div className="grid grid-cols-3" style={{ gap: 8 }}>
-            {THEME_PRESETS.map(t => {
-              const isActive = currentThemePrimary === t.primary
-              const isRecommended = recommendedThemeKey === t.key
-              return (
-                <button
-                  key={t.key}
-                  aria-label={t.label}
-                  onClick={() => onThemeChange({ primary: t.primary, dark: t.dark })}
-                  className={`relative flex flex-col items-center gap-1 transition-all ${
-                    isActive
-                      ? 'border-2 border-forest-green bg-forest-green-wash'
-                      : 'border border-surface-border bg-surface-bright hover:bg-forest-green-ghost'
-                  }`}
-                  style={{ padding: '8px 4px', borderRadius: 10 }}
-                >
-                  <div className="w-8 h-8 rounded-full" style={{ background: t.primary }} />
-                  <span style={{
-                    fontSize: 10, fontWeight: 600, color: 'var(--ink)',
-                    lineHeight: 1.2, textAlign: 'center',
-                  }}>
-                    {t.label}
-                  </span>
-                  {isRecommended && (
-                    <span
-                      className="absolute -top-1.5 -right-1.5 text-[8px] font-bold px-1 rounded-full"
-                      style={{ background: '#16A34A', color: '#fff', lineHeight: 1.6 }}
-                    >
-                      AI
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </section>
 
       </div>
     </aside>
