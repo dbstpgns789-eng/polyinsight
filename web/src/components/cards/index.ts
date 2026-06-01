@@ -14,6 +14,7 @@ import CoverCard from './templates/CoverCard'
 import HookCard from './templates/HookCard'
 import ShowcaseCard from './templates/ShowcaseCard'
 import DefinitionCard from './templates/DefinitionCard'
+import DataCard from './templates/DataCard'
 
 export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> = {
   brand:      BrandCard,
@@ -23,8 +24,8 @@ export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> 
   hook:       HookCard,
   showcase:   ShowcaseCard,
   definition: DefinitionCard,
+  data:       DataCard,
   // Phase 2에서 추가 예정:
-  // data:       DataCard,
   // flow:       FlowCard,
   // compare2:   Compare2Card,
   // grid4:      Grid4Card,

@@ -23,7 +23,7 @@ export const TEMPLATE_FIELDS: Readonly<Record<string, TemplateSchema>> = {
   showcase:   { text: ['title', 'body'],                                          parsed: { icon1: 'colon', icon2: 'colon', icon3: 'colon' } },
   definition: { text: ['term', 'term_detail', 'definition_text', 'body'],         parsed: {} },
   closing:    { text: ['title_white', 'title_accent', 'body'],                    parsed: {} },
-  data:       { text: ['title', 'data_unit', 'source'],                           parsed: { bars: 'pipe' } },
+  data:       { text: ['title', 'data_unit', 'source', 'bar_max'],                parsed: { bars: 'pipe' } },
   brand:      { text: ['tagline', 'body', 'cta', 'footer_text'],                  parsed: {} },
 } as const
 
