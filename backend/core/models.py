@@ -38,12 +38,12 @@ class FieldSource(BaseModel):
 
 
 class FieldValue(BaseModel):
-    value: str
-    confidence: Literal["high", "medium", "low"]
-    match_quality: MatchQuality
-    claim_type: ClaimType
-    source: FieldSource
-    risk_level: RiskLevel
+    value: str = ""
+    confidence: Literal["high", "medium", "low"] = "low"
+    match_quality: MatchQuality = MatchQuality.SEMANTIC
+    claim_type: ClaimType = ClaimType.QUALITATIVE
+    source: FieldSource = Field(default_factory=lambda: FieldSource(section="editor", page=0))
+    risk_level: RiskLevel = RiskLevel.LOW
     verified: bool = False
 
 
@@ -91,10 +91,31 @@ class Storyboard(BaseModel):
     beats: List[CardStorybeat]
 
 
+# ---------------------------------------------------------------------------
+# Theme — defined here so CardEditorData can reference it
+# ---------------------------------------------------------------------------
+
+class CardTheme(BaseModel):
+    primary: str = "#2563EB"
+    dark: str = "#1A4C96"
+
+
+THEME_PRESETS: dict[str, CardTheme] = {
+    "tech_blue":     CardTheme(primary="#2563EB", dark="#1A4C96"),
+    "forest_green":  CardTheme(primary="#16A34A", dark="#166534"),
+    "sunset_orange": CardTheme(primary="#EA580C", dark="#9A3412"),
+    "royal_violet":  CardTheme(primary="#7C3AED", dark="#4C1D95"),
+    "golden_yellow": CardTheme(primary="#D97706", dark="#92400E"),
+    "slate":         CardTheme(primary="#475569", dark="#1E293B"),
+}
+
+
 class CardEditorData(BaseModel):
     storyboard: Storyboard | None = None       # S6 기획 결과, 디버깅·UI 표시용
     meta: CardMeta
     cards: List[CardSlot]                      # 가변 길이 (S6가 결정)
+    theme: CardTheme = Field(default_factory=CardTheme)
+    recommended_theme_key: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -168,11 +189,6 @@ class S6Output(BaseModel):
 # ---------------------------------------------------------------------------
 # S7
 # ---------------------------------------------------------------------------
-
-class CardTheme(BaseModel):
-    primary: str = "#2563EB"
-    dark: str = "#1A4C96"
-
 
 class S7Input(BaseModel):
     job_id: str
