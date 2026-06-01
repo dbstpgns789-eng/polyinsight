@@ -47,3 +47,38 @@ landing/node_modules/
 landing/dist/
 landing/.astro/
 landing/.env
+
+# Claude / skill internal
+.superpowers/
+.impeccable/
+.agents/
+.claude/skills/
+.claude/worktrees/
+skills-lock.json
+skills-lock.jso
+
+# Debug artifacts
+debug_*.png
+debug_*.py
+debug_*.mjs
+screenshot_*.png
+gemini-code-*.html
+web/debug_*
+web/screenshot_*
+web/take_screenshot.py
+web/src/components/editor/extract_assignments.py
+
+# Next.js
+web/.next/
+web/out/
+
+# Sample / debug rendering artifacts
+샘플폴더/
+typeC_sample/
+render_compare/
+render_compare.py
+render_test.py
+render_test_v2.py
+run.py
+prompt.md
+gemini-code-*.html
