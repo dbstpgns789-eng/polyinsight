@@ -142,7 +142,9 @@ export default function EditorPage() {
           onSelectCard={setActiveCardIdx}
           theme={cardData?.theme}
           isDemo={isDemo}
+          focusedField={focusedField}
           onFieldFocus={(field) => setFocusedField(field)}
+          onFieldChange={handleFieldChange}
           onImageUploadRequest={() => setImageUploadRequested(true)}
         />
 
