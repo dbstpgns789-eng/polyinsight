@@ -1,0 +1,89 @@
+<!-- image_slot: none -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+{% include '_shared.css' %}
+:root { --theme-primary: {{ theme_primary }}; --theme-dark: {{ theme_dark }}; }
+
+.card-canvas {
+  background: linear-gradient(135deg, #1A4C96 0%, #2563EB 50%, #0EA5A0 100%);
+  display: flex; flex-direction: column;
+}
+
+.brand-main {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 72px 80px;
+}
+
+.brand-frame {
+  border: 2px solid rgba(255,255,255,0.45);
+  border-radius: 20px;
+  padding: 56px 64px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 28px;
+  width: 100%;
+}
+
+.brand-tagline {
+  font-size: 48px; font-weight: 900;
+  line-height: 1.2; letter-spacing: -0.01em;
+  color: #fff; text-align: center;
+  word-break: keep-all;
+}
+
+.brand-divider {
+  width: 56px; height: 4px;
+  background: rgba(255,255,255,0.50);
+  border-radius: 2px;
+}
+
+.brand-body {
+  font-size: 26px; font-weight: 400;
+  line-height: 1.75; color: rgba(255,255,255,0.85);
+  text-align: center; word-break: keep-all;
+}
+
+.brand-cta {
+  font-size: 18px; font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  margin-top: 8px;
+}
+
+/* 하단 다크 바 */
+.brand-footer {
+  height: 72px; flex-shrink: 0;
+  background: rgba(0,0,0,0.30);
+  display: flex; align-items: center;
+  justify-content: center;
+}
+
+.brand-footer-text {
+  font-size: 18px; font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  letter-spacing: 0.02em;
+}
+</style>
+</head>
+<body>
+<div class="card-canvas">
+
+  <div class="brand-main">
+    <div class="brand-frame">
+      <div class="brand-tagline">{{ tagline }}</div>
+      <div class="brand-divider"></div>
+      <div class="brand-body">{{ body }}</div>
+      {% if cta %}<div class="brand-cta">{{ cta }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="brand-footer">
+    <div class="brand-footer-text">{{ footer_text or 'PolyInsight · AI Card News Generator' }}</div>
+  </div>
+
+</div>
+</body>
+</html>

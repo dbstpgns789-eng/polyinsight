@@ -1,0 +1,99 @@
+<!-- image_slot: bg -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+{% include '_shared.css' %}
+:root { --theme-primary: {{ theme_primary }}; --theme-dark: {{ theme_dark }}; }
+
+.card-canvas { background: #0A0F1E; }
+
+.cover-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(160deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.30) 50%, rgba(0,0,0,0.70) 100%);
+  z-index: 1;
+}
+
+.tri-dark {
+  position: absolute; bottom: 0; right: 0;
+  width: 480px; height: 480px;
+  background: rgba(10,15,30,0.85);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  z-index: 3;
+}
+.tri-accent {
+  position: absolute; bottom: 0; right: 0;
+  width: 220px; height: 220px;
+  background: var(--theme-primary);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  z-index: 4;
+}
+
+.cover-body {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  justify-content: center;
+  padding: 80px 72px;
+  z-index: 10;
+}
+
+.cover-edition {
+  display: inline-block;
+  padding: 8px 28px;
+  border: 1.5px solid rgba(255,255,255,0.35);
+  border-radius: 100px;
+  font-size: 20px; font-weight: 600;
+  color: rgba(255,255,255,0.80);
+  letter-spacing: 0.04em;
+  margin-bottom: 36px;
+  align-self: flex-start;
+}
+
+.cover-title {
+  font-size: 88px; font-weight: 900;
+  line-height: 1.08; letter-spacing: -0.025em;
+  color: #fff; word-break: keep-all;
+  margin-bottom: 28px;
+  max-width: 820px;
+}
+
+.cover-subtitle {
+  font-size: 28px; font-weight: 500;
+  color: rgba(255,255,255,0.80);
+  letter-spacing: 0.01em; word-break: keep-all;
+  padding-bottom: 14px;
+  border-bottom: 3px solid var(--theme-primary);
+  display: inline-block;
+}
+
+.cover-org {
+  position: absolute; bottom: 44px; left: 72px;
+  font-size: 19px; font-weight: 600;
+  color: rgba(255,255,255,0.50);
+  letter-spacing: 0.02em; z-index: 10;
+}
+</style>
+</head>
+<body>
+<div class="card-canvas">
+  {% set mode = slot_mode or 'bg' %}
+  {% if bg_image and mode == 'inset_right' %}
+    <div class="inset-right-panel"><img src="{{ bg_image }}" alt=""></div>
+  {% else %}
+    {% if bg_image %}<img class="bg-photo" src="{{ bg_image }}" alt="">{% endif %}
+    <div class="cover-overlay"></div>
+    <div class="tri-dark"></div>
+    <div class="tri-accent"></div>
+  {% endif %}
+
+  <div class="cover-body" {% if mode == 'inset_right' and bg_image %}style="right:420px;"{% endif %}>
+    {% if edition %}<span class="cover-edition">{{ edition }}</span>{% endif %}
+    <div class="cover-title">{{ title }}</div>
+    <div class="cover-subtitle">{{ subtitle }}</div>
+  </div>
+
+  <div class="cover-org">{{ org }}</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,137 @@
+<!-- image_slot: inset_right -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+{% include '_shared.css' %}
+:root { --theme-primary: {{ theme_primary }}; --theme-dark: {{ theme_dark }}; }
+
+.card-canvas { background: #0F1117; }
+
+/* inset_right: 좌측 텍스트 + 우측 이미지 패널 */
+.def-text-area {
+  position: absolute; inset: 0; right: 420px;
+  display: flex; flex-direction: column;
+  justify-content: center;
+  padding: 72px 56px 72px 72px;
+  z-index: 10;
+}
+
+.def-text-area.full-width { right: 0; padding: 72px; }
+
+/* inset_top: 상단 이미지 + 하단 흰 카드 */
+.def-top {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 380px; overflow: hidden;
+}
+.def-top img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.def-top::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(15,17,23,0.30) 0%, rgba(15,17,23,0.75) 100%);
+}
+
+.def-top-text {
+  position: absolute; top: 0; left: 0; right: 0;
+  padding: 52px 64px 0;
+  z-index: 5;
+}
+
+.def-bottom-card {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 720px;
+  background: rgba(255,255,255,0.97);
+  border-radius: 28px 28px 0 0;
+  padding: 40px 60px 52px;
+  display: flex; flex-direction: column;
+  justify-content: center;
+  z-index: 10;
+}
+
+.def-bottom-card .def-term { color: #212529; }
+.def-bottom-card .def-term-detail { color: #868E96; }
+.def-bottom-card .def-divider { background: var(--theme-primary); }
+.def-bottom-card .def-definition { color: #212529; }
+.def-bottom-card .def-body-text { color: #495057; }
+
+/* 공통 타이포 */
+.def-card-num {
+  position: absolute; top: 60px; right: 60px;
+  font-size: 19px; font-weight: 700;
+  color: rgba(255,255,255,0.20);
+  letter-spacing: 0.06em; z-index: 20;
+}
+
+.def-term {
+  font-size: 72px; font-weight: 900;
+  line-height: 1.1; letter-spacing: -0.025em;
+  color: #fff; word-break: keep-all;
+  margin-bottom: 4px;
+}
+
+.def-term-detail {
+  font-size: 21px; font-weight: 400;
+  color: rgba(255,255,255,0.40);
+  margin-bottom: 24px;
+}
+
+.def-divider {
+  width: 56px; height: 5px;
+  background: var(--theme-primary);
+  border-radius: 3px; margin-bottom: 28px;
+}
+
+.def-definition {
+  font-size: 27px; font-weight: 500;
+  color: rgba(255,255,255,0.90);
+  line-height: 1.55; word-break: keep-all;
+  margin-bottom: 28px;
+}
+
+.def-body-text {
+  font-size: 21px; font-weight: 400;
+  color: rgba(255,255,255,0.58);
+  line-height: 1.75; word-break: keep-all;
+}
+</style>
+</head>
+<body>
+<div class="card-canvas">
+  {% set mode = slot_mode or 'inset_right' %}
+
+  {% if mode == 'inset_top' %}
+    <div class="def-top">
+      {% if bg_image %}<img src="{{ bg_image }}" alt="">{% endif %}
+    </div>
+    <div class="def-top-text">
+      <div class="def-card-num" style="position:relative;top:auto;right:auto;text-align:right;">{{ card_num }}</div>
+    </div>
+    <div class="def-bottom-card">
+      <div class="def-term">{{ term }}</div>
+      {% if term_detail %}<div class="def-term-detail">{{ term_detail }}</div>{% endif %}
+      <div class="def-divider"></div>
+      <div class="def-definition">: {{ definition_text }}</div>
+      {% if body %}<div class="def-body-text">{{ body }}</div>{% endif %}
+    </div>
+
+  {% else %}
+    {# inset_right (default) #}
+    {% if bg_image %}
+      <div class="inset-right-panel"><img src="{{ bg_image }}" alt=""></div>
+    {% endif %}
+    <div class="def-card-num">{{ card_num }}</div>
+    <div class="def-text-area{% if not bg_image %} full-width{% endif %}">
+      <div class="def-term">{{ term }}</div>
+      {% if term_detail %}<div class="def-term-detail">{{ term_detail }}</div>{% endif %}
+      <div class="def-divider"></div>
+      <div class="def-definition">: {{ definition_text }}</div>
+      {% if body %}<div class="def-body-text">{{ body }}</div>{% endif %}
+    </div>
+  {% endif %}
+
+</div>
+</body>
+</html>

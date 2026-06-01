@@ -1,0 +1,112 @@
+<!-- image_slot: none -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+{% include '_shared.css' %}
+:root { --theme-primary: {{ theme_primary }}; --theme-dark: {{ theme_dark }}; }
+
+.card-canvas {
+  background: #0A0A0A;
+  display: flex; flex-direction: column;
+  padding: 68px 64px 56px;
+}
+
+.data-card-num {
+  position: absolute; top: 60px; right: 60px;
+  font-size: 19px; font-weight: 700;
+  color: rgba(255,255,255,0.20);
+  letter-spacing: 0.06em;
+}
+
+.data-title {
+  font-size: 56px; font-weight: 900;
+  line-height: 1.15; letter-spacing: -0.02em;
+  color: #fff; word-break: keep-all;
+  margin-bottom: 8px;
+}
+
+.data-unit {
+  font-size: 19px; font-weight: 400;
+  color: rgba(255,255,255,0.40);
+  margin-bottom: 40px;
+}
+
+/* 바 차트 */
+.bar-chart {
+  flex: 1;
+  display: flex; align-items: flex-end;
+  gap: 16px; padding-bottom: 48px;
+  position: relative;
+}
+
+/* Y축 구분선 */
+.bar-chart::after {
+  content: '';
+  position: absolute; bottom: 48px; left: 0; right: 0;
+  height: 1px; background: rgba(255,255,255,0.10);
+}
+
+.bar-col {
+  flex: 1; display: flex;
+  flex-direction: column; align-items: center;
+  gap: 10px;
+}
+
+.bar-value {
+  font-size: 22px; font-weight: 800;
+  color: var(--theme-primary);
+}
+
+.bar-body {
+  width: 100%; border-radius: 10px 10px 0 0;
+  background: var(--theme-primary);
+  opacity: 0.85;
+  min-height: 20px;
+}
+
+.bar-label {
+  position: absolute; bottom: 16px;
+  font-size: 18px; font-weight: 500;
+  color: rgba(255,255,255,0.55);
+  text-align: center;
+  width: 100%;
+}
+
+.data-source {
+  font-size: 16px; font-weight: 400;
+  color: rgba(255,255,255,0.30);
+  text-align: center; margin-top: 8px;
+}
+</style>
+</head>
+<body>
+<div class="card-canvas">
+  <div class="data-card-num">{{ card_num }}</div>
+  <div class="data-title">{{ title }}</div>
+  {% if data_unit %}<div class="data-unit">{{ data_unit }}</div>{% endif %}
+
+  <div class="bar-chart">
+    {% set bar_items = bars.split('|') %}
+    {% set max_val = bar_max | int %}
+    {% for item in bar_items %}
+      {% set parts = item.split(':') %}
+      {% if parts | length >= 2 %}
+      {% set label = parts[0] %}
+      {% set val = parts[1] %}
+      {% set val_num = val | replace('만','') | replace('천','') | replace('%','') | float %}
+      {% set pct = ((val_num / max_val) * 560) | int %}
+      <div class="bar-col" style="position:relative;">
+        <div class="bar-value">{{ val }}</div>
+        <div class="bar-body" style="height: {{ pct }}px;"></div>
+        <div class="bar-label">{{ label }}</div>
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% if source %}<div class="data-source">출처: {{ source }}</div>{% endif %}
+</div>
+</body>
+</html>

@@ -26,16 +26,17 @@ async def run_pipeline(
     job_id: str,
     pdf_bytes: bytes,
     theme: CardTheme | None = None,
+    card_count: int = 5,
 ) -> None:
     """Full S1→S6→S7→S8 pipeline. S8 always runs."""
     if theme is None:
         theme = CardTheme()
 
     async with _job_semaphore:
-        await _execute(job_id, pdf_bytes, theme)
+        await _execute(job_id, pdf_bytes, theme, card_count)
 
 
-async def _execute(job_id: str, pdf_bytes: bytes, theme: CardTheme) -> None:
+async def _execute(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_count: int = 5) -> None:
     warnings: list[str] = []
 
     # ── S1: PDF extraction ────────────────────────────────────────────────────
@@ -66,6 +67,7 @@ async def _execute(job_id: str, pdf_bytes: bytes, theme: CardTheme) -> None:
                 section_map=s1_out.section_map,
                 page_map=s1_out.page_map,
                 paper_metadata=s1_out.metadata,
+                card_count=card_count,
             )
         )
         warnings.extend(s6_out.warnings)

@@ -1,0 +1,122 @@
+<!-- image_slot: bg -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+{% include '_shared.css' %}
+:root { --theme-primary: {{ theme_primary }}; --theme-dark: {{ theme_dark }}; }
+
+.card-canvas { background: #111; }
+
+.c3-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.60);
+  z-index: 1;
+}
+
+.c3-body {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  padding: 64px 68px 60px;
+  z-index: 10;
+}
+
+.c3-card-num {
+  font-size: 19px; font-weight: 700;
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 0.06em;
+  align-self: flex-end;
+}
+
+.c3-title {
+  font-size: 60px; font-weight: 900;
+  line-height: 1.15; letter-spacing: -0.02em;
+  color: #fff; word-break: keep-all;
+  margin-top: 16px; margin-bottom: 40px;
+}
+
+.c3-circles {
+  display: flex; gap: 20px;
+  justify-content: center;
+  margin-bottom: 32px;
+  flex-shrink: 0;
+}
+
+.c3-circle {
+  width: 200px; height: 200px; border-radius: 50%;
+  background: var(--theme-dark);
+  border: 2px solid rgba(255,255,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 4px;
+  flex-shrink: 0;
+}
+
+/* inset_right 모드에서 좁아진 너비에 맞춰 서클 축소 */
+.c3-body.narrow .c3-circle { width: 160px; height: 160px; }
+.c3-body.narrow .c3-circle-text { font-size: 22px; }
+.c3-body.narrow .c3-title { font-size: 50px; }
+
+.c3-circle-text {
+  font-size: 26px; font-weight: 800;
+  color: #fff; text-align: center;
+  line-height: 1.3; word-break: keep-all;
+  padding: 0 12px;
+}
+
+.c3-circle-sub {
+  font-size: 18px; font-weight: 400;
+  color: rgba(255,255,255,0.60);
+  text-align: center;
+}
+
+.c3-card {
+  background: rgba(255,255,255,0.95);
+  border-radius: 22px;
+  padding: 32px 44px;
+  flex: 1;
+  display: flex; align-items: center;
+}
+
+.c3-card-text {
+  font-size: 24px; font-weight: 400;
+  line-height: 1.75; color: #212529;
+  word-break: keep-all; text-align: center;
+  width: 100%;
+}
+
+.c3-card-text strong { font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="card-canvas">
+  {% set mode = slot_mode or 'bg' %}
+  {% if bg_image and mode == 'inset_right' %}
+    <div class="inset-right-panel"><img src="{{ bg_image }}" alt=""></div>
+  {% else %}
+    {% if bg_image %}<img class="bg-photo" src="{{ bg_image }}" alt="">{% endif %}
+    <div class="c3-overlay"></div>
+  {% endif %}
+
+  <div class="c3-body{% if mode == 'inset_right' and bg_image %} narrow{% endif %}"
+       {% if mode == 'inset_right' and bg_image %}style="right:420px;"{% endif %}>
+    <div class="c3-card-num">{{ card_num }}</div>
+    <div class="c3-title">{{ title }}</div>
+
+    <div class="c3-circles">
+      {% for item in [c1, c2, c3] %}
+      {% set parts = item.split(':') %}
+      <div class="c3-circle">
+        <div class="c3-circle-text">{{ parts[0] }}</div>
+        {% if parts|length > 1 %}<div class="c3-circle-sub">{{ parts[1] }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="c3-card">
+      <div class="c3-card-text">{{ body }}</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

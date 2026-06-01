@@ -195,6 +195,62 @@ body {
   flex-shrink: 0;
 }
 
+/* ── 이미지 슬롯 ── */
+
+/* bg: 전체 배경 사진 */
+.bg-photo {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  z-index: 0;
+}
+.bg-overlay {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1;
+}
+
+/* inset_right: 우측 패널 사진 */
+.inset-right-panel {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: 420px; overflow: hidden;
+  z-index: 0;
+}
+.inset-right-panel img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  display: block;
+}
+.inset-right-panel::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg,
+    rgba(15,17,23,1) 0%,
+    rgba(15,17,23,0.30) 40%,
+    rgba(15,17,23,0) 100%);
+}
+
+/* inner: 흰 카드 내부 인라인 이미지 */
+.inner-image {
+  border-radius: 14px; overflow: hidden;
+  width: 100%; flex-shrink: 0;
+}
+.inner-image img {
+  width: 100%; display: block;
+  object-fit: cover; max-height: 320px;
+}
+.image-zone {
+  width: 100%;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--surface-card);
+}
+.image-zone img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+
 /* ── 기관 로고 자리 ── */
 .org-logo-cover {
   position: absolute;
