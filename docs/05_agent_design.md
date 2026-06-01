@@ -90,11 +90,11 @@ async def run_pipeline(
     await db.save_card_data(job_id, s6_out.card_data)
     await db.update_job(job_id, stage="S7", progress=65)
 
-    # S7 — theme은 기본값 사용 (추후 사용자 DesignPanel에서 오버라이드)
+    # S7 — S6 추천 테마 사용. 사용자가 RightPanel에서 오버라이드한 경우 user_theme 우선
     s7_out: S7Output = await s7_agent.execute(S7Input(
         job_id=job_id,
         card_data=s6_out.card_data,
-        theme=CardTheme(),  # primary="#2563EB", dark="#1A4C96"
+        theme=s6_out.card_data.user_theme or s6_out.card_data.recommended_theme,
     ))
     await db.update_job(job_id, stage="S8", progress=90)
 
@@ -204,7 +204,25 @@ S6는 파이프라인에서 **할루시네이션 위험이 가장 높은 단계*
 |------|------|
 | 입력 | `S6Input(job_id, section_map, page_map, paper_metadata, card_count=5)` |
 | 출력 | `S6Output(card_data: CardEditorData, critical_count, high_count, warnings)` |
-| card_data 구조 | `CardEditorData(meta: CardMeta, cards: List[CardSlot])` — card_count만큼의 CardSlot |
+| card_data 구조 | `CardEditorData(meta: CardMeta, cards: List[CardSlot], recommended_theme: CardTheme)` — card_count만큼의 CardSlot |
+
+#### recommended_theme 결정 규칙
+
+S6는 논문 도메인·논조를 분석해 적합한 `CardTheme`을 추천한다.
+추천은 LLM이 아닌 **규칙 기반(rule-based)**으로 결정한다 — S6 LLM 호출 비용 증가 없음.
+
+| 조건 (키워드 / 도메인) | 추천 테마 |
+|---|---|
+| 생명과학, 환경, 재료, 농업 — hue 152 계열 | `forest-light` |
+| 컴퓨터과학, 인공지능, 전자 — 어두운 계열 | `deep-dark` |
+| 사회과학, 인문, 교육, 경제 — 중립 계열 | `academic-gray` |
+| 의학, 심리, 의생명 — 따뜻한 중립 계열 | `ivory-soft` |
+| 판단 불가 / 도메인 키워드 없음 | `forest-light` (기본) |
+
+도메인 판단 근거: `paper_metadata.title` + `section_map`의 Abstract 첫 200자에서 키워드 매칭.
+
+추천값은 `CardEditorData.recommended_theme`에 저장되어 프론트엔드와 S7 모두에 전달된다.
+사용자가 RightPanel에서 테마를 변경하면 `user_theme`이 `recommended_theme`을 오버라이드한다.
 | 실패 유형 | **논블로킹** — LLM 파싱 실패 3회 시 ERR-S6-001 (에이전트가 예외 raise, Orchestrator 처리) |
 | 의존성 | `llm_client` (Gemini), `FieldValue` 스키마 |
 

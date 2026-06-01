@@ -1,5 +1,5 @@
 # API & Data Model
-> PolyInsight v2.0 | 2025-05-05
+> PolyInsight v2.1 | 2026-05-18
 
 ---
 
@@ -14,7 +14,8 @@ PDF를 업로드하고 파이프라인을 백그라운드로 시작한다.
 
 **Request** — `multipart/form-data`
 ```
-file: File   (PDF, 최대 50MB)
+file:       File     (PDF, 최대 50MB)
+card_count: integer  (3~15, 기본값 5) — 생성할 카드 수
 ```
 
 **Response** `202 Accepted`
@@ -57,8 +58,6 @@ file: File   (PDF, 최대 50MB)
 {
   "jobId": "uuid-v4",
   "cardData": { /* CardEditorData — §2-4 참고 */ },
-  "layoutVariants": { "1": "A", "2": "B", "3": "A", "4": "C", "5": "A" },
-  "autoSaveStatus": "saved",
   "updatedAt": "2025-05-05T12:00:00Z"
 }
 ```
@@ -66,13 +65,12 @@ file: File   (PDF, 최대 50MB)
 ---
 
 #### `PATCH /api/cards/:jobId/data`
-카드 에디터 자동저장. 변경된 필드만 전송.
+카드 에디터 자동저장. CardEditorData 전체 교체.
 
 **Request** `application/json`
 ```json
 {
-  "cardData": { /* 부분 CardEditorData */ },
-  "layoutVariants": { "1": "B" }
+  "cardData": { /* CardEditorData 전체 */ }
 }
 ```
 
@@ -358,7 +356,13 @@ class CardStatus:
 ### 2-4. CardEditorData (프론트 타입)
 
 ```typescript
+// 카드 수가 가변 (card_count에 따라 3~15장)
+// 에디터는 cards[] 배열을 순서대로 렌더링
+interface CardThemeId = 'forest-light' | 'deep-dark' | 'academic-gray' | 'ivory-soft'
+
 interface CardEditorData {
+  recommended_theme: CardThemeId   // S6가 도메인 분석 후 결정. 변경 불가 (읽기 전용)
+  user_theme: CardThemeId | null   // 사용자가 RightPanel에서 선택한 값. null이면 recommended_theme 사용
   meta: {
     org:            FieldValue
     dept:           FieldValue
@@ -366,38 +370,27 @@ interface CardEditorData {
     month:          FieldValue
     edition_number: FieldValue
   }
-  card1: {
-    pretitle:      FieldValue
-    title:         FieldValue
-    mascot_bubble: FieldValue
-  }
-  card2: {
-    intro:        FieldValue
-    keyword_line: FieldValue
-    footnote:     FieldValue
-  }
-  card3: {
-    problem:       FieldValue
-    achievement:   FieldValue
-    mascot_bubble: FieldValue
-    photo_caption: FieldValue
-  }
-  card4: {
-    before_label:  FieldValue
-    after_label:   FieldValue
-    description:   FieldValue
-    result:        FieldValue
-    mascot_bubble: FieldValue
-  }
-  card5: {
-    pre_title:  FieldValue
-    main_title: FieldValue
-    cta:        FieldValue
-    team_name:  FieldValue
-  }
-  layout_variants: Record<number, 'A' | 'B' | 'C' | 'D'>
+  cards: CardSlot[]
 }
+
+interface CardSlot {
+  card_num:      number          // 1, 2, 3, ...
+  template_type: TemplateType    // "cover" | "hook" | "flow" 등 — 에디터에서 변경 불가
+  fields: Record<string, FieldValue>  // 템플릿별 텍스트 필드 — 에디터에서 value 수정 가능
+  image_url: string | null       // 에디터에서 이미지 업로드 시 채움
+}
+
+type TemplateType =
+  | 'cover' | 'hook' | 'problem' | 'circle3' | 'compare2'
+  | 'grid4' | 'definition' | 'flow' | 'data' | 'showcase'
+  | 'closing' | 'brand'
 ```
+
+**에디터 편집 범위**:
+- `fields[*].value` — 텍스트 내용 수정 가능
+- `fields[*].verified` — 확인 완료 버튼으로 true 변경 가능
+- `image_url` — 이미지 업로드로 채움
+- `template_type` — **변경 불가** (LLM이 결정, 사용자 고정)
 
 ---
 
@@ -499,5 +492,7 @@ interface ExportStatus {
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-06-01 | v2.2 | CardEditorData에 `recommended_theme` / `user_theme` 추가. AI 테마 추천 + 사용자 오버라이드 설계 확정. |
+| 2026-05-18 | v2.1 | POST /api/upload에 card_count 추가. CardEditorData → CardSlot 가변 구조. layout_variants 제거. 라우터 구현 완료. |
 | 2025-05-05 | v2.0 | API 전면 재설계. S5 제거. export API 6개 추가. FieldValue 스키마 확정. 에러 코드 체계화. |
 | (이전) | v1.0 | 단순 upload/status/result 3개 엔드포인트. S5 포함. 인메모리 응답. |
