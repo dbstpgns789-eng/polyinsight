@@ -106,8 +106,8 @@ export default function EditorTopBar({ filename, saveState = 'idle', onSaveNow }
   const docTitle = filename ?? '카드 에디터'
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 h-16 bg-surface/90 backdrop-blur-md backdrop-saturate-[140%] border-b border-surface-border flex items-stretch">
-      <div className="w-full grid grid-cols-[auto_1fr_auto] items-center gap-6" style={{ padding: '0 clamp(16px, 1.5vw, 28px)' }}>
+    <header className="fixed top-0 left-0 right-0 z-40 h-16 bg-surface/90 backdrop-blur-md backdrop-saturate-[140%] border-b border-surface-border flex items-center justify-between relative" style={{ padding: '0 clamp(16px, 1.5vw, 28px)' }}>
+      <div className="contents">
 
         {/* ── LEFT: 브랜드 + 구분선 + 파일 칩 ── */}
         <div className="flex items-center gap-3.5 min-w-0">
@@ -151,8 +151,8 @@ export default function EditorTopBar({ filename, saveState = 'idle', onSaveNow }
           )}
         </div>
 
-        {/* ── CENTER: 브레드크럼 (grid 1fr → 진짜 가운데) ── */}
-        <nav className="flex items-center justify-center gap-2.5 min-w-0 text-[14px] leading-none" aria-label="경로">
+        {/* ── CENTER: 브레드크럼 — 뷰포트 정중앙 절대 위치 ── */}
+        <nav className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2.5 text-[14px] leading-none pointer-events-auto" aria-label="경로">
           <button
             type="button"
             onClick={() => router.push('/dashboard')}
@@ -171,48 +171,51 @@ export default function EditorTopBar({ filename, saveState = 'idle', onSaveNow }
           </span>
         </nav>
 
-        {/* ── RIGHT: 아이콘 버튼 + 저장 ── */}
-        <div className="flex items-center gap-1">
+        {/* ── RIGHT ── */}
+        <div className="flex items-center">
 
-          {/* 클라우드 동기화 (미구현) */}
-          <BetaLocked>
-            <button
-              type="button"
-              aria-label="동기화 상태"
-              className="relative w-9 h-9 rounded-md bg-transparent text-ink-secondary inline-flex items-center justify-center transition-colors hover:bg-surface-subtle hover:text-ink"
-            >
-              <IconCloud />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-status-error border-[1.5px] border-surface" aria-label="동기화되지 않음" />
-            </button>
-          </BetaLocked>
+          {/* 유틸리티 아이콘 그룹 */}
+          <div className="flex items-center gap-0.5">
+            <BetaLocked>
+              <button
+                type="button"
+                aria-label="동기화 상태"
+                className="relative w-9 h-9 rounded-md bg-transparent text-ink-secondary inline-flex items-center justify-center transition-colors hover:bg-surface-subtle hover:text-ink"
+              >
+                <IconCloud />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-status-error border-[1.5px] border-surface" aria-label="동기화되지 않음" />
+              </button>
+            </BetaLocked>
 
-          {/* 설정 (미구현) */}
-          <BetaLocked>
-            <button
-              type="button"
-              aria-label="설정"
-              className="w-9 h-9 rounded-md bg-transparent text-ink-secondary inline-flex items-center justify-center transition-colors hover:bg-surface-subtle hover:text-ink"
-            >
-              <IconGear />
-            </button>
-          </BetaLocked>
+            <BetaLocked>
+              <button
+                type="button"
+                aria-label="설정"
+                className="w-9 h-9 rounded-md bg-transparent text-ink-secondary inline-flex items-center justify-center transition-colors hover:bg-surface-subtle hover:text-ink"
+              >
+                <IconGear />
+              </button>
+            </BetaLocked>
 
-          {/* 프로필 (미구현) */}
-          <BetaLocked>
-            <button
-              type="button"
-              aria-label="내 계정"
-              className="w-9 h-9 rounded-full border border-surface-border bg-surface text-ink-secondary inline-flex items-center justify-center mx-1.5 transition-colors hover:bg-surface-subtle"
-            >
-              <IconUser />
-            </button>
-          </BetaLocked>
+            <BetaLocked>
+              <button
+                type="button"
+                aria-label="내 계정"
+                className="w-9 h-9 rounded-full border border-surface-border bg-surface text-ink-secondary inline-flex items-center justify-center transition-colors hover:bg-surface-subtle"
+              >
+                <IconUser />
+              </button>
+            </BetaLocked>
+          </div>
 
-          {/* 저장 버튼 */}
+          {/* 구분선 */}
+          <div className="w-px h-5 bg-surface-border mx-4" aria-hidden="true" />
+
+          {/* 저장 버튼 — DESIGN.md h-10(40px), px-6 */}
           <button
             type="button"
             onClick={onSaveNow}
-            className="inline-flex items-center gap-2.5 h-9 px-5 rounded-[10px] bg-brand-600 text-surface font-semibold text-[14px] tracking-[-0.005em] shadow-sm transition-colors hover:bg-brand-700 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 focus-visible:ring-offset-2"
+            className="inline-flex items-center gap-3 h-10 px-6 rounded-[10px] bg-brand-600 text-surface font-semibold text-[14px] tracking-[-0.005em] shadow-sm transition-colors hover:bg-brand-700 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 focus-visible:ring-offset-2"
           >
             <span>저장</span>
             <IconDownload />
