@@ -1,8 +1,8 @@
 'use client'
 
 import { useRef, useEffect, useState } from 'react'
-import { getCardImageUrl } from '@/lib/api'
 import { getSlotMeta } from '@/lib/imageSlots'
+import type { SlotType } from '@/lib/imageSlots'
 import type { Card, CardTheme } from '@/types/editor'
 
 interface Props {
@@ -16,12 +16,57 @@ interface Props {
   onThemeChange: (theme: CardTheme) => void
 }
 
-const IMAGE_SLOTS = [
-  { icon: 'splitscreen',    title: '전체 배경',  type: 'bg' },
-  { icon: 'web_asset',      title: '상단 인셋',  type: 'inset_top' },
-  { icon: 'view_sidebar',   title: '우측 인셋',  type: 'inset_right' },
-  { icon: 'call_to_action', title: '텍스트 하단', type: 'inner' },
-] as const
+// ── 슬롯 위치 다이어그램 ───────────────────────────────────────────────────
+function SlotDiagram({ type }: { type: SlotType }) {
+  const base: React.CSSProperties = {
+    borderRadius: 8, background: 'var(--canvas-muted)',
+    overflow: 'hidden', position: 'relative', width: '100%', height: 68,
+    border: '1px solid var(--border-subtle)',
+  }
+  const img: React.CSSProperties = {
+    background: 'var(--brand)', opacity: 0.35, position: 'absolute',
+  }
+  const line = (w: string, h = 4): React.CSSProperties => ({
+    height: h, width: w, borderRadius: 2, background: 'var(--border-soft)',
+  })
+
+  if (type === 'bg') return (
+    <div style={base}>
+      <div style={{ ...img, inset: 0 }} />
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 14px', gap: 5 }}>
+        <div style={line('55%', 6)} />
+        <div style={line('75%')} />
+        <div style={line('45%')} />
+      </div>
+    </div>
+  )
+  if (type === 'inset_top') return (
+    <div style={base}>
+      <div style={{ ...img, top: 0, left: 0, right: 0, height: '44%' }} />
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '52%', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 14px', gap: 4 }}>
+        <div style={line('60%', 5)} />
+        <div style={line('85%')} />
+      </div>
+    </div>
+  )
+  if (type === 'inset_right') return (
+    <div style={{ ...base, display: 'flex' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 12px', gap: 4 }}>
+        <div style={line('80%', 5)} />
+        <div style={line('90%')} />
+        <div style={line('65%')} />
+      </div>
+      <div style={{ width: '38%', background: 'var(--brand)', opacity: 0.35 }} />
+    </div>
+  )
+  if (type === 'inner') return (
+    <div style={{ ...base, display: 'flex', flexDirection: 'column', padding: 10, gap: 6 }}>
+      <div style={line('45%', 5)} />
+      <div style={{ flex: 1, borderRadius: 4, background: 'var(--brand)', opacity: 0.35 }} />
+    </div>
+  )
+  return null
+}
 
 const THEME_PRESETS = [
   { key: 'tech_blue',     label: '테크 블루',    primary: '#2563EB', dark: '#1A4C96' },
@@ -47,15 +92,14 @@ export default function RightPanel({
   currentThemePrimary, recommendedThemeKey, onThemeChange,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [fontFamily, setFontFamily]   = useState<'serif' | 'sans'>('serif')
-  const [letterSpacing, setLs]        = useState(0)
-  const [lineHeight, setLh]           = useState(1.6)
-  const [uploading, setUploading]     = useState(false)
+  const [fontFamily, setFontFamily] = useState<'serif' | 'sans'>('serif')
+  const [letterSpacing, setLs]      = useState(0)
+  const [lineHeight, setLh]         = useState(1.6)
+  const [dragOver, setDragOver]     = useState(false)
 
-  const slotMeta     = activeCard ? getSlotMeta(activeCard.template_type) : null
-  const hasSlot      = !!slotMeta
-  const imageUrl     = activeCard?.image_url
-  const activeSlot   = slotMeta?.type ?? 'inset_top'
+  const slotMeta = activeCard ? getSlotMeta(activeCard.template_type) : null
+  const hasSlot  = slotMeta?.type !== 'none'
+  const imageUrl = activeCard?.image_url
 
   useEffect(() => {
     if (imageUploadRequested && hasSlot) {
@@ -64,24 +108,23 @@ export default function RightPanel({
     }
   }, [imageUploadRequested, hasSlot, onImageUploadHandled])
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !activeCard) return
-    setUploading(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch(`/api/jobs/${jobId}/cards/${activeCard.card_num}/image`, { method: 'POST', body: fd })
-      if (res.ok) { const { url } = await res.json(); onImageUpdate(url) }
-    } finally { setUploading(false); e.target.value = '' }
+  function readFile(file: File) {
+    const reader = new FileReader()
+    reader.onload = () => onImageUpdate(reader.result as string)
+    reader.readAsDataURL(file)
   }
 
-  async function handleRemoveImage() {
-    if (!activeCard) return
-    try {
-      await fetch(`/api/jobs/${jobId}/cards/${activeCard.card_num}/image`, { method: 'DELETE' })
-      onImageUpdate(null)
-    } catch {}
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) readFile(file)
+    e.target.value = ''
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file?.type.startsWith('image/')) readFile(file)
   }
 
   return (
@@ -152,75 +195,84 @@ export default function RightPanel({
 
         <div style={{ height: 1, background: 'var(--border-soft)' }} />
 
-        {/* §2 — 이미지 슬롯 */}
+        {/* §2 — 이미지 */}
         <section>
-          <div className="flex justify-between items-center" style={{ marginBottom: 12 }}>
-            <SectionHead>이미지 슬롯</SectionHead>
-          </div>
+          <SectionHead>이미지</SectionHead>
 
-          {/* 레이아웃 버튼 4개 */}
-          <div className="flex" style={{ gap: 8, marginBottom: 16 }}>
-            {IMAGE_SLOTS.map(slot => {
-              const isActive = hasSlot && activeSlot === slot.type
-              return (
-                <button
-                  key={slot.type}
-                  className={`flex-1 flex items-center justify-center transition-colors ${
-                    isActive
-                      ? 'border-2 border-forest-green bg-forest-green-wash'
-                      : 'border border-surface-border bg-surface-bright hover:bg-forest-green-ghost'
-                  }`}
-                  style={{ height: 40, borderRadius: 10 }}
-                  title={slot.title}
-                >
-                  <span
-                    className={`material-symbols-outlined ${isActive ? 'text-forest-green' : 'text-ink-3'}`}
-                    style={{ fontSize: 20 }}
-                  >
-                    {slot.icon}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* 현재 이미지 미리보기 */}
-          {imageUrl && (
-            <div className="relative mb-3 rounded-lg overflow-hidden border border-surface-border">
-              <img
-                src={getCardImageUrl(jobId, activeCard!.card_num)}
-                alt="카드 이미지"
-                className="w-full object-cover"
-                style={{ height: 80 }}
-              />
-              <button
-                onClick={handleRemoveImage}
-                aria-label="이미지 제거"
-                className="absolute top-1 right-1 w-6 h-6 bg-canvas/90 rounded-full flex items-center justify-center text-risk-critical hover:bg-canvas transition-colors"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>delete</span>
-              </button>
+          {!hasSlot ? (
+            /* 이미지 슬롯 없는 템플릿 */
+            <div className="flex flex-col items-center gap-2" style={{ padding: '16px 0' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--canvas-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 18, color: 'var(--ink-3)' }}>hide_image</span>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--ink-3)', textAlign: 'center', lineHeight: 1.6 }}>
+                이 템플릿은<br />이미지 슬롯이 없습니다
+              </p>
             </div>
-          )}
+          ) : (
+            <>
+              {/* 슬롯 위치 다이어그램 */}
+              <SlotDiagram type={slotMeta!.type} />
+              <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 6, marginBottom: 12, lineHeight: 1.5 }}>
+                <strong style={{ color: 'var(--ink-2)' }}>{slotMeta!.label}</strong>
+                {' '}— {slotMeta!.description}
+              </p>
 
-          {/* 업로드 버튼 */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-wait transition-colors"
-            style={{
-              height: 36, borderRadius: 10, fontSize: 12, fontWeight: 600,
-              letterSpacing: '0.03em', textTransform: 'uppercase',
-              border: '1px solid var(--brand)', color: 'var(--brand)',
-              background: 'transparent', cursor: 'pointer',
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--brand-soft)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent' }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>upload_file</span>
-            {uploading ? '업로드 중...' : '이미지 업로드'}
-          </button>
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+              {imageUrl ? (
+                /* 이미지 있음: 썸네일 + 버튼 */
+                <div>
+                  <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
+                    <img
+                      src={imageUrl}
+                      alt="카드 이미지"
+                      style={{ width: '100%', height: 96, objectFit: 'cover', display: 'block' }}
+                    />
+                    <button
+                      onClick={() => onImageUpdate(null)}
+                      aria-label="이미지 제거"
+                      style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>close</span>
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ width: '100%', height: 34, borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--canvas-subtle)', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}
+                  >
+                    이미지 교체
+                  </button>
+                </div>
+              ) : (
+                /* 이미지 없음: 큰 드래그존 */
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click() }}
+                  onDrop={handleDrop}
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                  onDragLeave={() => setDragOver(false)}
+                  style={{
+                    borderRadius: 12, cursor: 'pointer', padding: '22px 16px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                    border: `2px dashed ${dragOver ? 'var(--brand)' : 'var(--border-soft)'}`,
+                    background: dragOver ? 'var(--brand-soft)' : 'transparent',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 30, color: dragOver ? 'var(--brand)' : 'var(--ink-3)' }}>
+                    add_photo_alternate
+                  </span>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 2 }}>이미지 추가</p>
+                    <p style={{ fontSize: 11, color: 'var(--ink-3)' }}>클릭 또는 드래그</p>
+                  </div>
+                </div>
+              )}
+
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+            </>
+          )}
         </section>
 
         <div style={{ height: 1, background: 'var(--border-soft)' }} />
