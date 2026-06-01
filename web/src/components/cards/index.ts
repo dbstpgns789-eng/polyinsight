@@ -7,11 +7,13 @@
 
 import type { ComponentType } from 'react'
 import type { CardComponentProps } from './types'
+import BrandCard from './templates/BrandCard'
+import ClosingCard from './templates/ClosingCard'
 
 export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> = {
-  // Phase 2에서 추가:
-  // brand:      BrandCard,
-  // closing:    ClosingCard,
+  brand:      BrandCard,
+  closing:    ClosingCard,
+  // Phase 2에서 추가 예정:
   // problem:    ProblemCard,
   // cover:      CoverCard,
   // hook:       HookCard,
