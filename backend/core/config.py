@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "./polyinsight.db"
     LLM_MODEL: str = "claude-haiku-4-5-20251001"
     PLAYWRIGHT_TIMEOUT_MS: int = 15000
+    WEB_BASE_URL: str = "http://localhost:3000"  # S7 render 라우트 호스트 (Next.js)
     EXPORT_TTL_HOURS: int = 24
     MAX_CONCURRENT_JOBS: int = 5
     DEBUG: bool = False

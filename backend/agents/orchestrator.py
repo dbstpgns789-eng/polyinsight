@@ -84,6 +84,14 @@ async def _execute(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_count: 
         return
 
     # ── S7: PNG rendering ─────────────────────────────────────────────────────
+    # S7은 render 라우트(Next.js)가 DB에서 card_data를 읽어 렌더하므로,
+    # S7 호출 전에 반드시 DB에 저장해야 한다. (S8이 나중에 동일 데이터로 덮어씀)
+    try:
+        await db.save_card_data(job_id, s6_out.card_data.model_dump_json())
+    except Exception as exc:
+        logger.error("pre-S7 card_data save failed: %s", exc)
+        warnings.append(f"WARN-S7: card_data 사전 저장 실패 — {exc}")
+
     images: list[bytes] = []
     try:
         await db.update_job(job_id, status=JobStatus.RUNNING, stage="S7", progress=75)

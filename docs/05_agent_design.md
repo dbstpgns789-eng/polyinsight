@@ -536,25 +536,33 @@ def _validate_grounding(self, card_data: CardEditorData) -> list[str]:
 | 입력 | `S7Input(job_id, card_data: CardEditorData, theme: CardTheme)` |
 | 출력 | `S7Output(images: list[bytes], warnings)` — card_count만큼의 PNG |
 | 실패 유형 | **논블로킹** — 개별 카드 타임아웃/오류 시 해당 카드 skip, 나머지 계속 |
-| 의존성 | `playwright.async_api`, Jinja2, `backend/templates/*.html` |
+| 의존성 | `playwright.async_api`, `web/src/app/render/[jobId]/[cardNum]/page.tsx` (Next.js render 라우트, `settings.WEB_BASE_URL`) |
+| 사전조건 | **card_data가 DB에 저장돼 있어야 함** — render 라우트가 `GET /api/cards/{job}`로 DB를 읽기 때문. orchestrator는 S7 직전에 저장, export 엔드포인트는 이미 저장된 데이터로 호출 |
 
-### 6-2. 처리 흐름
+> **2026-06-02 (v2.x) — 렌더 소스 React 전환 (Phase A)**
+> S7은 PNG의 HTML 소스를 **Jinja2 → React 컴포넌트로 전환**했다. 에디터(`web/src/components/cards/templates/*Card.tsx`)와 export PNG가 **단일 소스**에서 나온다. 이중 구현(Jinja 정답지 ↔ React 미러) drift 부채를 제거하는 것이 목적.
+> - **Phase A (현재)**: 동작 경로를 React로 전환. 기존 Jinja 코드(`_build_card_context`, `render_slot_html`, `_playwright_render_async`, `LAYOUT_TEMPLATES`, `backend/templates/*.html`)는 fallback으로 **보존**.
+> - **Phase B (예정, 별도 커밋)**: 실데이터 검증 통과 후 Jinja 코드·`/preview` 엔드포인트·`web/src/app/compare/` 삭제.
+
+### 6-2. 처리 흐름 (React goto 방식)
 
 ```
-1. Playwright 브라우저 컨텍스트 시작
+1. Playwright 브라우저 컨텍스트 시작 (viewport 1080×1080, device_scale_factor=1)
 
-2. card_data.cards 순회 (가변 길이):
-   for slot in card_data.cards:
-     a. LAYOUT_TEMPLATES[slot.template_type] → HTML 파일명 결정
-     b. _build_card_context(slot, card_data, theme):
-        - meta 공통 필드 (org, dept, researcher, month, edition_number)
-        - slot.fields 에서 FieldValue.value 추출 → 동일 키로 주입
-        - slot.image_url → bg_image / image_url
-     c. Jinja2 템플릿 렌더링
-     d. page.set_content(html) + page.screenshot(1080×1080)
-     e. 타임아웃/오류 시 warnings에 추가, skip
+2. card_data.cards → URL 목록 생성:
+   urls = [f"{WEB_BASE_URL}/render/{job_id}/{slot.card_num}" for slot in cards]
 
-3. S7Output(images, warnings) 반환
+3. 각 URL 순회:
+   for url in urls:
+     a. page.goto(url, wait_until="networkidle")
+     b. page.wait_for_selector("[data-render-ready]", state="attached")
+        → render 라우트가 데이터 + document.fonts.ready 완료 후 body에 신호 부착.
+          state="attached" 필수: render 루트가 position:fixed라 body가 zero-area →
+          기본값 state="visible"이면 hidden 판정되어 timeout (2026-06-02 버그 수정).
+     c. page.screenshot(clip 1080×1080)
+     d. 타임아웃/오류 시 warnings에 추가, skip
+
+4. S7Output(images, warnings) 반환
    images 길이 < len(cards) → "partial render" 경고
 ```
 
@@ -782,5 +790,6 @@ async def test_s6_real_api(agent, paper_section_map):
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
 | 2026-05-18 | v2.0 | CardSlot 가변 구조, 12개 기능 기반 템플릿, S6 프롬프트 전면 재설계, card_count 파라미터, API 테스트 추가. |
+| 2026-06-02 | v1.2 | S7 렌더 소스 Jinja2 → React render 라우트 goto 전환 (Phase A). `wait_for_selector` state="attached" 수정, WEB_BASE_URL 설정, S7 사전 DB 저장 조건 명시. |
 | 2026-05-13 | v1.1 | LLM Anthropic→Gemini 교체, orchestrator 경로 수정, S7 Jinja2 주입 방식, 테스트 전략 추가. |
 | 2026-05-11 | v1.0 | 최초 작성. S1~S8 에이전트 계약 전체, S6 프롬프트 초안 포함. |

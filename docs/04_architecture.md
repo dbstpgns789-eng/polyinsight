@@ -120,7 +120,8 @@ backend/
 │   ├── base.py              BaseAgent[InputT, OutputT] 추상 클래스
 │   ├── s1_extractor.py      pdfplumber / PyMuPDF 텍스트 추출
 │   ├── s6_card_json.py      카드뉴스 JSON 생성 (Gemini, 가변 카드)
-│   ├── s7_renderer.py       Playwright PNG 렌더링 (Jinja2 + CardSlot)
+│   ├── s7_renderer.py       Playwright PNG 렌더링 (React render 라우트 goto, 2026-06-02~)
+│   │                        Jinja2 경로는 Phase B까지 fallback 보존
 │   └── s8_packaging.py      SQLite 저장 + ZIP 생성
 ├── routers/
 │   ├── jobs.py              POST /api/upload
@@ -365,5 +366,6 @@ CREATE TABLE researchers (
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
 | 2026-05-18 | v2.1 | 가변 카드 구조(CardSlot), 12개 기능 기반 템플릿, API 라우터 구현, card_count 파라미터 추가 |
+| 2026-06-02 | v2.x | S7 렌더 소스 Jinja2 → React render 라우트 전환 (Phase A, Jinja fallback 보존). orchestrator S7 직전 DB 저장 추가 |
 | 2025-05-05 | v2.0 | S3/S4 제거 (S6 흡수), S5 제거, Playwright 교체, SQLite 도입, FieldValue 스키마 정의 |
 | (이전) | v1.0 | 순차 파이프라인 S1~S8, S5 포함, Pillow 렌더링, 인메모리 dict (TTL 30분) |
