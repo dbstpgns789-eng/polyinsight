@@ -24,7 +24,9 @@ _MAX_PDF_BYTES = 50 * 1024 * 1024  # 50 MB
 async def upload_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile,
-    card_count: Annotated[int, Form(ge=3, le=15)] = 5,
+    # le=7: Haiku 4.5 출력 한계(8192 토큰) 안전권. 8장 이상은 큰 논문에서 JSON 잘림 위험.
+    # 미래 등급제에서 상위 모델(Sonnet 등) 사용 시 등급별로 상한 확장.
+    card_count: Annotated[int, Form(ge=3, le=7)] = 7,
 ):
     """PDF 업로드 → 파이프라인 백그라운드 시작."""
     if file.content_type not in ("application/pdf", "application/octet-stream"):

@@ -432,18 +432,25 @@ DOI: {doi}
   "source": {{
     "section": "원문 섹션명 (예: Results)",
     "page": 페이지번호(정수)
-  }},
-  "risk_level": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
-  "verified": false
+  }}
 }}
+# risk_level·verified는 LLM이 출력하지 않는다 (2026-06-03~).
+# 출력 토큰 절감 목적 — 코드(_post_process)가 match_quality·claim_type을 보고 자동 판정.
 
-risk_level 자동 판정:
+risk_level 자동 판정 (코드 전담):
 - quantitative + failed → CRITICAL
 - fuzzy 또는 semantic → HIGH
 - normalized → MEDIUM
 - exact 또는 qualitative → LOW
+verified → 항상 False로 초기화 (사용자가 에디터에서만 True).
 """
 ```
+
+> **출력 토큰 한계 (중요)**: Haiku 4.5의 최대 출력은 **8192 토큰**(컨텍스트 윈도우 200K와 별개의 천장). 카드 수가 많으면 JSON이 이 천장을 넘어 잘린다. 대응:
+> - LLM 출력에서 risk_level·verified 제외 (위) → 토큰 절감
+> - `card_count` 상한 **7** (`backend/routers/jobs.py`) — Haiku 안전권
+> - 출력 잘림 시 `stop_reason=="max_tokens"` → `LLMTruncationError` → S6가 즉시 중단(재시도 안 함) + `ERR-S6-002`. truncation은 동일 입력·저온이라 재시도해도 같은 위치에서 잘리므로.
+> - 미래 등급제: 상위 모델(Sonnet 4.6, 출력 64K)로 card_count 상한 확장.
 
 ### 5-5. LLM 호출 설정
 
@@ -790,6 +797,7 @@ async def test_s6_real_api(agent, paper_section_map):
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
 | 2026-05-18 | v2.0 | CardSlot 가변 구조, 12개 기능 기반 템플릿, S6 프롬프트 전면 재설계, card_count 파라미터, API 테스트 추가. |
+| 2026-06-03 | v1.3 | S6 출력 토큰 한계 대응: LLM 출력에서 risk_level·verified 제외(코드 자동 판정), card_count 상한 7, LLMTruncationError로 truncation 즉시 중단(ERR-S6-002). |
 | 2026-06-02 | v1.2 | S7 렌더 소스 Jinja2 → React render 라우트 goto 전환 (Phase A). `wait_for_selector` state="attached" 수정, WEB_BASE_URL 설정, S7 사전 DB 저장 조건 명시. |
 | 2026-05-13 | v1.1 | LLM Anthropic→Gemini 교체, orchestrator 경로 수정, S7 Jinja2 주입 방식, 테스트 전략 추가. |
 | 2026-05-11 | v1.0 | 최초 작성. S1~S8 에이전트 계약 전체, S6 프롬프트 초안 포함. |

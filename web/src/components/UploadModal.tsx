@@ -35,7 +35,7 @@ export default function UploadModal({ isOpen, onClose }: Props) {
   const [state, setState] = useState<ModalState>('idle');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState('');
-  const [cardCount, setCardCount] = useState(5);
+  const [cardCount, setCardCount] = useState(7);
   const [dragOver, setDragOver] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stepStatuses, setStepStatuses] = useState<StepStatus[]>(['pending', 'pending', 'pending']);
@@ -187,7 +187,7 @@ export default function UploadModal({ isOpen, onClose }: Props) {
     }
   }
 
-  const sliderPct = ((cardCount - 3) / 12) * 100;
+  const sliderPct = ((cardCount - 3) / 4) * 100;
   const isProcessingView = state === 'processing' || state === 'done' || state === 'error';
 
   if (!isOpen && state === 'idle') return null;
@@ -293,7 +293,7 @@ export default function UploadModal({ isOpen, onClose }: Props) {
                   id="card-slider"
                   className="card-slider"
                   min={3}
-                  max={15}
+                  max={7}
                   value={cardCount}
                   step={1}
                   style={{ '--pct': `${sliderPct.toFixed(2)}%` } as React.CSSProperties}
@@ -301,7 +301,7 @@ export default function UploadModal({ isOpen, onClose }: Props) {
                 />
                 <div className="card-count__range-labels" aria-hidden="true">
                   <span>3장 (간결)</span>
-                  <span>15장 (상세)</span>
+                  <span>7장 (상세)</span>
                 </div>
               </div>
 

@@ -15,7 +15,9 @@ PDF를 업로드하고 파이프라인을 백그라운드로 시작한다.
 **Request** — `multipart/form-data`
 ```
 file:       File     (PDF, 최대 50MB)
-card_count: integer  (3~15, 기본값 5) — 생성할 카드 수
+card_count: integer  (3~7, 기본값 7) — 생성할 카드 수
+                     ※ 상한 7: Haiku 4.5 출력 한계(8192 토큰) 안전권.
+                       8장 이상은 큰 논문에서 S6 JSON이 잘림. 등급제 시 상위 모델로 확장.
 ```
 
 **Response** `202 Accepted`
@@ -356,7 +358,7 @@ class CardStatus:
 ### 2-4. CardEditorData (프론트 타입)
 
 ```typescript
-// 카드 수가 가변 (card_count에 따라 3~15장)
+// 카드 수가 가변 (card_count에 따라 3~7장)
 // 에디터는 cards[] 배열을 순서대로 렌더링
 interface CardThemeId = 'forest-light' | 'deep-dark' | 'academic-gray' | 'ivory-soft'
 
@@ -492,6 +494,7 @@ interface ExportStatus {
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-06-03 | v2.3 | card_count 상한 15→7 (Haiku 출력 한계 안전권). S6 LLM 출력에서 risk_level·verified 제외 (코드 자동 판정). LLMTruncationError 도입 — 출력 천장 도달 시 ERR-S6-002 즉시 반환. |
 | 2026-06-01 | v2.2 | CardEditorData에 `recommended_theme` / `user_theme` 추가. AI 테마 추천 + 사용자 오버라이드 설계 확정. |
 | 2026-05-18 | v2.1 | POST /api/upload에 card_count 추가. CardEditorData → CardSlot 가변 구조. layout_variants 제거. 라우터 구현 완료. |
 | 2025-05-05 | v2.0 | API 전면 재설계. S5 제거. export API 6개 추가. FieldValue 스키마 확정. 에러 코드 체계화. |

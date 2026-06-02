@@ -24,6 +24,19 @@ class LLMAPIError(Exception):
         self.status_code = status_code
 
 
+class LLMTruncationError(Exception):
+    """출력이 max_tokens 천장에서 잘림. 동일 입력·저온이면 재시도해도 같은 결과이므로
+    호출자는 재시도하지 말고 입력(예: 카드 수)을 줄여야 한다."""
+
+    def __init__(self, output_tokens: int, max_tokens: int):
+        self.output_tokens = output_tokens
+        self.max_tokens = max_tokens
+        super().__init__(
+            f"output truncated at max_tokens ceiling "
+            f"(output_tokens={output_tokens}, max_tokens={max_tokens})"
+        )
+
+
 class LLMClient:
     def __init__(self, model: str | None = None) -> None:
         self.model = model or settings.LLM_MODEL
@@ -68,8 +81,13 @@ class LLMClient:
             raise LLMAPIError(str(exc), status_code=getattr(exc, "status_code", None)) from exc
 
         text = message.content[0].text if message.content else ""
-        logger.info("LLM call done | input_tokens=%d | output_tokens=%d",
-                    message.usage.input_tokens, message.usage.output_tokens)
+        logger.info("LLM call done | input_tokens=%d | output_tokens=%d | stop_reason=%s",
+                    message.usage.input_tokens, message.usage.output_tokens, message.stop_reason)
+
+        # 출력이 천장에서 잘리면 JSON이 미완성 → 재시도 무의미. 호출자에게 명확히 신호.
+        if message.stop_reason == "max_tokens":
+            raise LLMTruncationError(message.usage.output_tokens, capped_tokens)
+
         return text.strip()
 
 
