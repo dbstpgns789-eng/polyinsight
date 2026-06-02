@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import useCardData from '@/hooks/useCardData'
 import useUiStore from '@/store/uiStore'
@@ -18,7 +18,7 @@ export default function EditorPage() {
   const jobId = params.jobId as string
   const isDemo = jobId === 'demo'
 
-  const { data, isLoading, isError, isSaving, debouncedSave, saveNow } = useCardData(
+  const { data, isLoading, isError, isSaving, isSaveSuccess, debouncedSave, saveNow } = useCardData(
     isDemo ? '' : jobId
   )
   const exportModalOpen = useUiStore((s) => s.exportModalOpen)
@@ -34,6 +34,10 @@ export default function EditorPage() {
   const cardData = localData ?? apiData?.cardData
   const cards = cardData?.cards ?? []
   const filename = apiData?.filename
+
+  useEffect(() => {
+    if (isSaveSuccess) setLocalData(null)
+  }, [isSaveSuccess])
 
   const saveState = isDemo ? 'saved' : isSaving ? 'saving' : localData ? 'idle' : 'saved'
 

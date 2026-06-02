@@ -13,7 +13,7 @@
 
 'use client'
 
-import { type CSSProperties, type JSX, useCallback, useEffect, useRef } from 'react'
+import { type CSSProperties, type JSX, useCallback, useEffect, useRef, useState } from 'react'
 
 type Mode = 'edit' | 'render' | 'thumbnail'
 
@@ -48,6 +48,7 @@ export default function EditableText({
   const pendingRef = useRef<string | null>(null)
   const timerRef = useRef<number | null>(null)
   const isFocusedRef = useRef(false)
+  const [hovered, setHovered] = useState(false)
 
   // 외부 value 변경 반영: focused 중에는 절대 건드리지 않음.
   useEffect(() => {
@@ -115,14 +116,18 @@ export default function EditableText({
       className={className}
       style={{
         ...style,
-        outline: focused ? '1.5px solid var(--theme-primary)' : undefined,
+        cursor: isEditable ? 'text' : undefined,
+        background: isEditable && hovered && !focused ? 'rgba(22,163,74,0.08)' : undefined,
+        borderRadius: (isEditable && hovered && !focused) || focused ? 4 : undefined,
+        outline: focused ? '1.5px solid var(--brand)' : undefined,
         outlineOffset: focused ? '4px' : undefined,
-        borderRadius: focused ? 4 : undefined,
         whiteSpace: multiline ? 'pre-wrap' : undefined,
       }}
       onInput={isEditable ? handleInput : undefined}
       onFocus={isEditable ? handleFocus : undefined}
       onBlur={isEditable ? handleBlur : undefined}
+      onMouseEnter={isEditable ? () => setHovered(true) : undefined}
+      onMouseLeave={isEditable ? () => setHovered(false) : undefined}
     />
   )
 }

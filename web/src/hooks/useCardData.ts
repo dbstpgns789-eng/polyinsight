@@ -45,6 +45,7 @@ export default function useCardData(jobId: string) {
   return {
     ...query,
     isSaving: mutation.isPending,
+    isSaveSuccess: mutation.isSuccess,
     saveError: mutation.error,
     debouncedSave,
     saveNow,

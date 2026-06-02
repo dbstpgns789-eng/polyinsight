@@ -76,9 +76,11 @@ function IconDownload() {
 }
 
 // ── 컴포넌트 ──────────────────────────────────────────────────────────────
-export default function Topbar({ filename, onSaveNow, onExport }: Props) {
+export default function Topbar({ filename, saveState, onSaveNow, onExport }: Props) {
   const router = useRouter()
   const docTitle = filename ?? 'Research Paper'
+  const dotColor = saveState === 'saved' ? '#16A34A' : saveState === 'error' ? '#DC2626' : '#D97706'
+  const dotPulse = saveState === 'saving'
 
   return (
     <header
@@ -194,14 +196,14 @@ export default function Topbar({ filename, onSaveNow, onExport }: Props) {
           >
             <IconCloud />
             <span
-              className="absolute rounded-full"
+              className={`absolute rounded-full${dotPulse ? ' animate-pulse' : ''}`}
               style={{
                 top: 6, right: 6, width: 8, height: 8,
-                background: 'var(--status-error)',
+                background: dotColor,
                 borderWidth: 1.5, borderStyle: 'solid', borderColor: 'var(--surface)',
                 boxShadow: '0 0 0 0.5px rgba(15, 27, 22, 0.06)',
               }}
-              aria-label="동기화되지 않음"
+              aria-label={saveState === 'saved' ? '저장됨' : saveState === 'saving' ? '저장 중' : '저장되지 않음'}
             />
           </button>
 

@@ -58,8 +58,10 @@ export default function LeftPanel({ cards, activeCardIdx, onSelectCard, theme }:
         </h2>
         <button
           aria-label="카드 추가"
-          className="hover:bg-forest-green-wash p-1 rounded transition-colors"
-          style={{ color: 'var(--ink-2)' }}
+          disabled
+          title="준비 중"
+          className="p-1 rounded"
+          style={{ color: 'var(--ink-3)', opacity: 0.4, cursor: 'not-allowed' }}
         >
           <span className="material-symbols-outlined" style={{ fontSize: 20 }}>add</span>
         </button>
