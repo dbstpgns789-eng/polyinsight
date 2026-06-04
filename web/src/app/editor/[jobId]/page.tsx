@@ -158,6 +158,7 @@ export default function EditorPage() {
           activeCardIdx={activeCardIdx}
           onSelectCard={setActiveCardIdx}
           theme={cardData?.theme}
+          bgColor={cardData?.bg_color ?? '#111111'}
         />
 
         <MidCanvas

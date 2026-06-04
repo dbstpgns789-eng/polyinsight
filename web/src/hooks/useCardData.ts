@@ -26,20 +26,22 @@ export default function useCardData(jobId: string) {
 
   const debouncedSave = useCallback(
     (cardData: unknown) => {
+      if (!jobId) return
       if (timerRef.current) clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => {
         mutation.mutate(cardData)
       }, 1500)
     },
-    [mutation]
+    [jobId, mutation]
   )
 
   const saveNow = useCallback(
     (cardData: unknown) => {
+      if (!jobId) return
       if (timerRef.current) clearTimeout(timerRef.current)
       mutation.mutate(cardData)
     },
-    [mutation]
+    [jobId, mutation]
   )
 
   return {

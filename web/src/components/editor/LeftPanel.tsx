@@ -35,10 +35,11 @@ interface Props {
   activeCardIdx: number
   onSelectCard: (idx: number) => void
   theme?: CardTheme
+  bgColor?: string
 }
 
 // ── 메인 ─────────────────────────────────────────────────────────────────
-export default function LeftPanel({ cards, activeCardIdx, onSelectCard, theme }: Props) {
+export default function LeftPanel({ cards, activeCardIdx, onSelectCard, theme, bgColor }: Props) {
   const effectiveTheme = theme ?? DEFAULT_THEME
   const total = cards.length
   const criticalCount = cards.filter((c) => getCardRiskStatus(c) === 'crit').length
@@ -77,6 +78,7 @@ export default function LeftPanel({ cards, activeCardIdx, onSelectCard, theme }:
             key={card.card_num}
             card={card}
             theme={effectiveTheme}
+            bgColor={bgColor}
             idx={idx}
             isActive={idx === activeCardIdx}
             onClick={() => onSelectCard(idx)}
@@ -128,10 +130,11 @@ export default function LeftPanel({ cards, activeCardIdx, onSelectCard, theme }:
 
 // ── 썸네일 아이템 ─────────────────────────────────────────────────────────
 const ThumbItem = memo(function ThumbItem({
-  card, theme, idx, isActive, onClick,
+  card, theme, bgColor, idx, isActive, onClick,
 }: {
   card: Card
   theme: CardTheme
+  bgColor?: string
   idx: number
   isActive: boolean
   onClick: () => void
@@ -184,6 +187,7 @@ const ThumbItem = memo(function ThumbItem({
           <CardRenderer
             card={card}
             theme={theme}
+            bgColor={bgColor}
             mode="thumbnail"
             scale={scale}
           />
