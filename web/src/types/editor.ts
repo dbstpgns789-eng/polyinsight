@@ -23,6 +23,7 @@ export interface CardDataPayload {
   cards: Card[]
   theme?: CardTheme
   recommended_theme_key?: string
+  bg_color?: string
 }
 
 export interface ApiResponse {
