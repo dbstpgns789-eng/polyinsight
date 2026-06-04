@@ -21,7 +21,7 @@ export default function ClosingCard(props: CardComponentProps) {
       style={{
         width: '100%',
         height: '100%',
-        background: 'var(--theme-dark)',
+        background: 'var(--theme-bg, #111111)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
