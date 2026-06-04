@@ -115,7 +115,7 @@ export default function ColorPicker({ value, onChange, presets = DEFAULT_PRESETS
         {presets.map((p) => (
           <button
             key={p}
-            onClick={() => { commit(hexToHsv(p)); onChange(p) }}
+            onClick={() => commit(hexToHsv(p))}
             style={{
               width: 24, height: 24, borderRadius: '50%', background: p, border: 'none',
               cursor: 'pointer', flexShrink: 0,
