@@ -43,7 +43,7 @@ export default function DataCard(props: CardComponentProps) {
   return (
     <div style={{
       width: '100%', height: '100%',
-      background: '#0A0A0A',
+      background: 'var(--theme-bg, #111111)',
       display: 'flex', flexDirection: 'column',
       padding: '68px 64px 56px',
       position: 'relative',

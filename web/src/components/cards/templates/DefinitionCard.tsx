@@ -19,7 +19,7 @@ export default function DefinitionCard(props: CardComponentProps) {
   const hasImage = !!bgImage || mode === 'edit'
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#0F1117', position: 'relative' }}>
+    <div style={{ width: '100%', height: '100%', background: 'var(--theme-bg, #111111)', position: 'relative' }}>
       {/* 우측 이미지 패널 */}
       {hasImage && (
         <div style={{

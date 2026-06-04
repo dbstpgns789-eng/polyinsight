@@ -18,7 +18,7 @@ export default function CoverCard(props: CardComponentProps) {
   const bgImage = card.image_url
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#0A0F1E', position: 'relative' }}>
+    <div style={{ width: '100%', height: '100%', background: 'var(--theme-bg, #111111)', position: 'relative' }}>
       {/* bg image */}
       {bgImage ? (
         <img

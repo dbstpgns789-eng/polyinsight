@@ -29,7 +29,7 @@ export default function Compare2Card(props: CardComponentProps) {
   return (
     <div style={{
       width: '100%', height: '100%',
-      background: '#1A1D2E',
+      background: 'var(--theme-bg, #111111)',
       display: 'flex', flexDirection: 'column',
       padding: '64px 60px 56px',
       position: 'relative',

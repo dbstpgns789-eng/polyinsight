@@ -32,7 +32,7 @@ export default function FlowCard(props: CardComponentProps) {
   }
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#0D1117', position: 'relative' }}>
+    <div style={{ width: '100%', height: '100%', background: 'var(--theme-bg, #111111)', position: 'relative' }}>
       {bgImage ? (
         <img
           src={bgImage}

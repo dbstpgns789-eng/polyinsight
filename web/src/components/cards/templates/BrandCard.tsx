@@ -22,7 +22,7 @@ export default function BrandCard(props: CardComponentProps) {
       style={{
         width: '100%',
         height: '100%',
-        background: 'linear-gradient(135deg, #1A4C96 0%, #2563EB 50%, #0EA5A0 100%)',
+        background: 'var(--theme-bg, linear-gradient(135deg, #1A4C96 0%, #2563EB 50%, #0EA5A0 100%))',
         display: 'flex',
         flexDirection: 'column',
       }}

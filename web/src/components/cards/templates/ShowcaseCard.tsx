@@ -27,7 +27,7 @@ export default function ShowcaseCard(props: CardComponentProps) {
   }
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#111', position: 'relative' }}>
+    <div style={{ width: '100%', height: '100%', background: 'var(--theme-bg, #111111)', position: 'relative' }}>
       {/* 상단 이미지 (420px) */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 420, overflow: 'hidden' }}>
         {bgImage ? (
