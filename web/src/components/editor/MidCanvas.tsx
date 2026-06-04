@@ -27,6 +27,7 @@ interface Props {
   activeCardIdx: number
   onSelectCard: (idx: number) => void
   theme?: CardTheme
+  bgColor?: string
   isDemo?: boolean
   focusedField?: string | null
   onFieldFocus?: (field: string) => void
@@ -36,7 +37,7 @@ interface Props {
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────
 export default function MidCanvas({
-  cards, activeCardIdx, onSelectCard, theme, focusedField,
+  cards, activeCardIdx, onSelectCard, theme, bgColor, focusedField,
   onFieldFocus, onFieldChange, onImageUploadRequest,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -93,6 +94,7 @@ export default function MidCanvas({
           <CardRenderer
             card={activeCard}
             theme={effectiveTheme}
+            bgColor={bgColor}
             mode="edit"
             scale={scale}
             focusedField={focusedField}

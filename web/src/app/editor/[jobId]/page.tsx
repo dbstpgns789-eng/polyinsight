@@ -107,6 +107,16 @@ export default function EditorPage() {
     })
   }, [apiData, saveNow])
 
+  const handleBgColorChange = useCallback((bgColor: string) => {
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      const updated = { ...base, bg_color: bgColor }
+      saveNow(updated)
+      return updated
+    })
+  }, [apiData, saveNow])
+
   const handleSaveNow = () => {
     if (localData) saveNow(localData)
   }
@@ -156,6 +166,7 @@ export default function EditorPage() {
           activeCardIdx={activeCardIdx}
           onSelectCard={setActiveCardIdx}
           theme={cardData?.theme}
+          bgColor={cardData?.bg_color ?? '#111111'}
           isDemo={isDemo}
           focusedField={focusedField}
           onFieldFocus={(field) => setFocusedField(field)}
@@ -172,6 +183,8 @@ export default function EditorPage() {
           currentThemePrimary={cardData?.theme?.primary}
           recommendedThemeKey={cardData?.recommended_theme_key}
           onThemeChange={handleThemeChange}
+          bgColor={cardData?.bg_color ?? '#111111'}
+          onBgColorChange={handleBgColorChange}
         />
       </div>
 
