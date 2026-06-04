@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from 'react'
 import { getSlotMeta } from '@/lib/imageSlots'
 import type { SlotType } from '@/lib/imageSlots'
 import type { Card, CardTheme } from '@/types/editor'
+import ColorPicker, { hexToHsv, hsvToHex } from '@/components/ui/ColorPicker'
 
 interface Props {
   jobId: string
@@ -14,6 +15,8 @@ interface Props {
   currentThemePrimary?: string
   recommendedThemeKey?: string
   onThemeChange: (theme: CardTheme) => void
+  bgColor: string
+  onBgColorChange: (hex: string) => void
 }
 
 // ── 슬롯 위치 다이어그램 ───────────────────────────────────────────────────
@@ -77,6 +80,8 @@ const THEME_PRESETS = [
   { key: 'slate',         label: '슬레이트',     primary: '#475569', dark: '#1E293B' },
 ] as const
 
+const THEME_PRIMARY_PRESETS = THEME_PRESETS.map((t) => t.primary)
+
 // ── 섹션 헤더 ─────────────────────────────────────────────────────────────
 function SectionHead({ children }: { children: React.ReactNode }) {
   return (
@@ -90,12 +95,14 @@ function SectionHead({ children }: { children: React.ReactNode }) {
 export default function RightPanel({
   jobId, activeCard, onImageUpdate, imageUploadRequested, onImageUploadHandled,
   currentThemePrimary, recommendedThemeKey, onThemeChange,
+  bgColor, onBgColorChange,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [fontFamily, setFontFamily] = useState<'serif' | 'sans'>('serif')
   const [letterSpacing, setLs]      = useState(0)
   const [lineHeight, setLh]         = useState(1.6)
   const [dragOver, setDragOver]     = useState(false)
+  const [openColorRow, setOpenColorRow] = useState<'bg' | 'theme' | null>(null)
 
   const slotMeta = activeCard ? getSlotMeta(activeCard.template_type) : null
   const hasSlot  = slotMeta?.type !== 'none'
@@ -153,43 +160,74 @@ export default function RightPanel({
       {/* ── 스크롤 영역 ── */}
       <div className="flex-1 overflow-y-auto flex flex-col min-h-0" style={{ padding: '14px 22px', gap: 24 }}>
 
-        {/* §1 — 테마 색상 */}
+        {/* §1 — 색상 (아코디언) */}
         <section>
-          <SectionHead>테마 색상</SectionHead>
-          <div className="grid grid-cols-3" style={{ gap: 8 }}>
-            {THEME_PRESETS.map(t => {
-              const isActive = currentThemePrimary === t.primary
-              const isRecommended = recommendedThemeKey === t.key
-              return (
-                <button
-                  key={t.key}
-                  aria-label={t.label}
-                  onClick={() => onThemeChange({ primary: t.primary, dark: t.dark })}
-                  className={`relative flex flex-col items-center gap-1 transition-all ${
-                    isActive
-                      ? 'border-2 border-forest-green bg-forest-green-wash'
-                      : 'border border-surface-border bg-surface-bright hover:bg-forest-green-ghost'
-                  }`}
-                  style={{ padding: '8px 4px', borderRadius: 10 }}
-                >
-                  <div className="w-8 h-8 rounded-full" style={{ background: t.primary }} />
-                  <span style={{
-                    fontSize: 10, fontWeight: 600, color: 'var(--ink)',
-                    lineHeight: 1.2, textAlign: 'center',
-                  }}>
-                    {t.label}
-                  </span>
-                  {isRecommended && (
-                    <span
-                      className="absolute -top-1.5 -right-1.5 text-[8px] font-bold px-1 rounded-full"
-                      style={{ background: '#16A34A', color: '#fff', lineHeight: 1.6 }}
-                    >
+          <SectionHead>색상</SectionHead>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* 배경색 행 */}
+            <div>
+              <button
+                onClick={() => setOpenColorRow((v) => v === 'bg' ? null : 'bg')}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '7px 10px', borderRadius: 8, border: '1px solid transparent',
+                  background: openColorRow === 'bg' ? 'var(--canvas-subtle)' : 'transparent',
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>배경</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 3, background: bgColor, border: '1px solid rgba(255,255,255,0.2)' }} />
+                  <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'monospace' }}>{bgColor}</span>
+                  <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>{openColorRow === 'bg' ? '▴' : '▾'}</span>
+                </div>
+              </button>
+              {openColorRow === 'bg' && (
+                <div style={{ padding: '8px 10px 10px' }}>
+                  <ColorPicker value={bgColor} onChange={onBgColorChange} />
+                </div>
+              )}
+            </div>
+
+            {/* 테마 강조색 행 */}
+            <div>
+              <button
+                onClick={() => setOpenColorRow((v) => v === 'theme' ? null : 'theme')}
+                style={{
+                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '7px 10px', borderRadius: 8, border: '1px solid transparent',
+                  background: openColorRow === 'theme' ? 'var(--canvas-subtle)' : 'transparent',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>테마 강조</span>
+                  {recommendedThemeKey && (
+                    <span style={{ fontSize: 8, fontWeight: 700, background: '#16A34A', color: '#fff', padding: '1px 5px', borderRadius: 10 }}>
                       AI
                     </span>
                   )}
-                </button>
-              )
-            })}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 3, background: currentThemePrimary ?? '#2563EB', border: '1px solid rgba(255,255,255,0.2)' }} />
+                  <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'monospace' }}>{currentThemePrimary ?? '#2563EB'}</span>
+                  <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>{openColorRow === 'theme' ? '▴' : '▾'}</span>
+                </div>
+              </button>
+              {openColorRow === 'theme' && (
+                <div style={{ padding: '8px 10px 10px' }}>
+                  <ColorPicker
+                    value={currentThemePrimary ?? '#2563EB'}
+                    onChange={(hex) => {
+                      const [h, s, v] = hexToHsv(hex)
+                      const dark = hsvToHex(h, s, v * 0.65)
+                      onThemeChange({ primary: hex, dark })
+                    }}
+                    presets={THEME_PRIMARY_PRESETS}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
