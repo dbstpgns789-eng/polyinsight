@@ -13,12 +13,13 @@ const CARD_SIZE = 1080
 
 interface CardFrameProps {
   theme: CardTheme
+  bgColor?: string
   scale?: number              // 1 = 1080px 원본, 0.5 = 540px 표시
   children: ReactNode
   className?: string
 }
 
-export default function CardFrame({ theme, scale = 1, children, className }: CardFrameProps) {
+export default function CardFrame({ theme, bgColor = '#111111', scale = 1, children, className }: CardFrameProps) {
   // Wrapper는 시각적 크기 (scaled). overflow:hidden으로 inner의 layout overflow를 클립.
   const wrapperStyle: CSSProperties = {
     width: CARD_SIZE * scale,
@@ -31,11 +32,12 @@ export default function CardFrame({ theme, scale = 1, children, className }: Car
   const innerStyle: CSSProperties = {
     '--theme-primary': theme.primary,
     '--theme-dark': theme.dark,
+    '--theme-bg': bgColor,
     width: CARD_SIZE,
     height: CARD_SIZE,
     position: 'relative',
     overflow: 'hidden',
-    background: '#FFFFFF',
+    background: 'var(--theme-bg)',
     fontFamily: "'Noto Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif",
     boxSizing: 'border-box',
     ...(scale === 1

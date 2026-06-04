@@ -11,14 +11,15 @@ import type { CardComponentProps } from './types'
 
 interface CardRendererProps extends CardComponentProps {
   scale?: number
+  bgColor?: string
 }
 
-export default function CardRenderer({ scale = 1, ...props }: CardRendererProps) {
+export default function CardRenderer({ scale = 1, bgColor, ...props }: CardRendererProps) {
   const { card, theme } = props
   const Component = CARD_COMPONENTS[card.template_type]
 
   return (
-    <CardFrame theme={theme} scale={scale}>
+    <CardFrame theme={theme} bgColor={bgColor} scale={scale}>
       {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
     </CardFrame>
   )
@@ -27,16 +28,11 @@ export default function CardRenderer({ scale = 1, ...props }: CardRendererProps)
 function UnimplementedTemplate({ templateType }: { templateType: string }) {
   return (
     <div style={{
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: '#fafafa',
-      color: '#666',
-      fontFamily: 'Noto Sans KR, sans-serif',
-      gap: 16,
+      width: '100%', height: '100%',
+      display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      background: 'var(--theme-bg, #111111)',
+      color: '#666', fontFamily: 'Noto Sans KR, sans-serif', gap: 16,
     }}>
       <div style={{ fontSize: 80 }}>🚧</div>
       <div style={{ fontSize: 40, fontWeight: 700 }}>{templateType}</div>
