@@ -116,6 +116,7 @@ class CardEditorData(BaseModel):
     cards: List[CardSlot]                      # 가변 길이 (S6가 결정)
     theme: CardTheme = Field(default_factory=CardTheme)
     recommended_theme_key: str | None = None
+    bg_color: str = "#111111"                  # 전체 카드 배경색 (테마와 독립)
 
 
 # ---------------------------------------------------------------------------

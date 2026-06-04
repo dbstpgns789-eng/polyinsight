@@ -295,3 +295,31 @@ async def test_card_image_returns_png(client, dummy_pdf):
     resp = await client.get(f"/api/cards/{job_id}/image/1")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "image/png"
+
+
+# ── CardEditorData bg_color 필드 ──────────────────────────────────────────
+
+def test_card_editor_data_bg_color_default():
+    from backend.core.models import CardEditorData, CardMeta, FieldValue, FieldSource, MatchQuality, ClaimType, RiskLevel
+    fv = FieldValue(
+        value="test", confidence="high",
+        match_quality=MatchQuality.EXACT, claim_type=ClaimType.QUALITATIVE,
+        source=FieldSource(section="test", page=1), risk_level=RiskLevel.LOW,
+    )
+    meta = CardMeta(
+        org=fv, dept=fv, researcher=fv, month=fv, edition_number=fv,
+    )
+    data = CardEditorData(meta=meta, cards=[])
+    assert data.bg_color == "#111111"
+
+
+def test_card_editor_data_bg_color_custom():
+    from backend.core.models import CardEditorData, CardMeta, FieldValue, FieldSource, MatchQuality, ClaimType, RiskLevel
+    fv = FieldValue(
+        value="test", confidence="high",
+        match_quality=MatchQuality.EXACT, claim_type=ClaimType.QUALITATIVE,
+        source=FieldSource(section="test", page=1), risk_level=RiskLevel.LOW,
+    )
+    meta = CardMeta(org=fv, dept=fv, researcher=fv, month=fv, edition_number=fv)
+    data = CardEditorData(meta=meta, cards=[], bg_color="#0A0F1E")
+    assert data.bg_color == "#0A0F1E"
