@@ -165,6 +165,21 @@ export const MOCK_EDITOR_DATA: ApiResponse = {
           footer_text: { value: 'PolyInsight · KITECH Research Note' },
         },
       },
+
+      // 13 — bigstat_compare (딥틸 세트 첫 카드, 셀룰로스-COF 미세구슬)
+      {
+        card_num: 13,
+        template_type: 'bigstat_compare',
+        fields: {
+          eyebrow: { value: '성능 검증' },
+          headline: { value: '기존 플라스틱보다 *더 단단*하다', confidence: 'high' },
+          stat_value: { value: '238', confidence: 'high', source: { section: 'Results', page: 7 } },
+          stat_unit: { value: 'MPa' },
+          stat_caption: { value: '셀룰로스–COF 복합 미세구슬의 압축 강도', confidence: 'high' },
+          bars: { value: '우리 복합 구슬:238:1|폴리프로필렌(PP):199:0|무보강 셀룰로스:142:0', confidence: 'high', source: { section: 'Results · Table 1', page: 7 } },
+          source_ref: { value: '출처: Cellulose (2024) · Results', source: { section: 'Results', page: 7 } },
+        },
+      },
     ],
   },
 }
