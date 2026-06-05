@@ -94,9 +94,20 @@ _SEQUENCING_RULES = """
 # 프롬프트
 # ---------------------------------------------------------------------------
 
-_SYSTEM = """당신은 학술 논문을 기관 홍보용 카드뉴스로 변환하는 전문가입니다.
+_SYSTEM = """당신은 학술 논문을 인스타그램 카드뉴스로 변환하는 전문가입니다.
 당신의 역할: 전체 스토리를 기획하고 디자인 결정(템플릿 선택)을 내린다.
 사용자는 결과를 검토하고 수정할 권한을 가진다.
+
+독자 페르소나:
+- 일반인 50%: 비전공자 — 논문은 안 읽지만 주제에 호기심 있는 사람
+- 관련분야 50%: 준전문가 — 분야는 알지만 논문 구조를 따라가기 어려운 사람
+- 채널: 인스타그램 (스크롤 중 2~3초 안에 흥미를 잡아야 함)
+
+가독성 원칙 (수치를 왜곡하지 않으면서 쉽게 풀어쓰는 것은 fidelity 위반이 아니다):
+A. 영어 약어는 첫 등장 시 반드시 한글로 풀어 쓴다 (예: IPA → 중요도-성취도 분석(IPA))
+B. 수치는 맥락과 함께 제시한다 (예: 77.9% → 응답자 10명 중 8명(77.9%))
+C. 각 카드는 메시지 하나. 문장은 짧고 구어체로 (종결어미: ~다 대신 ~네요, ~이에요 사용 가능)
+D. 전문 용어를 쓸 때는 독자가 이해할 수 있는 한 줄 설명을 괄호 안에 붙인다
 
 핵심 원칙:
 1. section_map(원문)에서만 사실을 추출한다.
@@ -221,127 +232,101 @@ def _make_fv(
     )
 
 
-_MOCK_TEMPLATES = [
-    "cover", "hook", "problem", "circle3", "compare2",
-    "grid4", "definition", "flow", "data", "showcase", "closing", "brand",
-]
+# card_count → 대표 시퀀스 (mock 결정적; 실제 LLM은 AI가 storyboard로 선택).
+# 아크 정합: 첫=cover_v2, 끝=closing_v2, bigstat_compare 포함.
+_MOCK_SEQUENCES: dict[int, list[str]] = {
+    3: ["cover_v2", "bigstat_compare", "closing_v2"],
+    4: ["cover_v2", "feature", "bigstat_compare", "closing_v2"],
+    5: ["cover_v2", "statement", "feature", "bigstat_compare", "closing_v2"],
+    6: ["cover_v2", "statement", "feature", "bigstat_compare", "grid_v2", "closing_v2"],
+    7: ["cover_v2", "statement", "feature", "process_v2", "bigstat_compare", "grid_v2", "closing_v2"],
+}
+
+
+def _mock_sequence(card_count: int) -> list[str]:
+    if card_count in _MOCK_SEQUENCES:
+        return _MOCK_SEQUENCES[card_count]
+    base = _MOCK_SEQUENCES[7]
+    if card_count < 3:
+        return _MOCK_SEQUENCES[3]
+    if card_count <= 7:
+        mid = base[1:-1][: card_count - 2]
+        return ["cover_v2", *mid, "closing_v2"]
+    return base
 
 _MOCK_FIELDS: dict[str, dict[str, FieldValue]] = {
-    "cover": {
-        "title":    _make_fv("탄소나노튜브 기반 고감도 가스 센서 개발"),
-        "subtitle": _make_fv("0.1 ms 응답속도 · 95.3% 정확도 달성", section="results", page=2,
-                             risk="CRITICAL", quality="exact", claim="quantitative"),
-        "edition":  _make_fv("KITECH 연구성과 카드뉴스 2024-01호"),
+    "cover_v2": {
+        "eyebrow":  _make_fv("KITECH Research Note · 2026", quality="normalized"),
+        "headline": _make_fv("플라스틱을 *대체*하는 셀룰로스 미세구슬"),
+        "subtitle": _make_fv("COF 복합화로 강도와 생분해성을 동시에", section="abstract", page=1),
+        "org":      _make_fv("KITECH 친환경소재연구부문"),
     },
-    "hook": {
-        "title":         _make_fv("기존 가스센서, 왜 느리고 부정확한가?", section="introduction", page=1),
-        "highlight":     _make_fv("CNT · 전기화학 · CVD", section="methods", page=2),
-        "body":          _make_fv(
-            "기존 금속산화물 센서는 응답속도가 0.25 ms 이상, 정확도 60% 수준에 그쳤다. "
-            "실시간 공기질 모니터링·산업 안전 분야에서 한계가 명확했다.",
-            section="introduction", page=1,
-        ),
-        "source_credit": _make_fv("Kim et al., KITECH 2024"),
-    },
-    "problem": {
-        "title":    _make_fv("해결해야 할 과제", section="introduction", page=1),
+    "statement": {
+        "eyebrow":  _make_fv("문제 제기"),
+        "headline": _make_fv("왜 친환경 플라스틱은 *약할*까?", section="introduction", page=2),
         "body":     _make_fv(
-            "기존 센서의 낮은 민감도와 느린 응답속도를 극복하기 위해 CVD 공법으로 "
-            "성장시킨 CNT 어레이를 전극에 집적하는 새로운 접근법이 필요했다.",
-            section="introduction", page=1,
-        ),
-        "emphasis": _make_fv("CVD 기반 CNT 어레이 전극 집적화"),
-    },
-    "circle3": {
-        "title": _make_fv("핵심 3요소"),
-        "body":  _make_fv("CNT 합성·전극 집적·전기화학 측정의 3단계 기술 융합"),
-        "c1":    _make_fv("CVD 합성:핵심 공정:700°C 저압", section="methods", page=2),
-        "c2":    _make_fv("전극 집적:나노 패터닝:1nm 선폭", section="methods", page=2),
-        "c3":    _make_fv("전기화학:실시간 측정:실온 동작", section="methods", page=2),
-    },
-    "compare2": {
-        "title":    _make_fv("기존 vs 신기술 비교"),
-        "subtitle": _make_fv("응답속도 및 정확도 관점"),
-        "label_a":  _make_fv("기존 금속산화물 센서"),
-        "points_a": _make_fv("응답속도 0.25 ms·정확도 60%·고온 동작 필요", section="results", page=2,
-                             risk="CRITICAL", quality="exact", claim="quantitative"),
-        "label_b":  _make_fv("CNT 기반 신기술 (본 연구)"),
-        "points_b": _make_fv("응답속도 0.1 ms·정확도 95.3%·실온 동작 가능", section="results", page=2,
-                             risk="CRITICAL", quality="exact", claim="quantitative"),
-    },
-    "grid4": {
-        "title":      _make_fv("기술 4대 특장점"),
-        "subtitle":   _make_fv("CNT 센서 상용화 가능성 근거"),
-        "item1_label": _make_fv("초고감도"),
-        "item1_sub":   _make_fv("95.3% 정확도", section="results", page=2),
-        "item2_label": _make_fv("초고속"),
-        "item2_sub":   _make_fv("0.1 ms 응답속도", section="results", page=2),
-        "item3_label": _make_fv("저전력"),
-        "item3_sub":   _make_fv("실온 동작 가능", section="methods", page=2),
-        "item4_label": _make_fv("내구성"),
-        "item4_sub":   _make_fv("1,000회 이상 반복 측정 가능", section="results", page=2),
-    },
-    "definition": {
-        "term":            _make_fv("CNT (탄소나노튜브)"),
-        "term_detail":     _make_fv("Carbon Nanotube — 직경 1~10 nm 탄소 원자 구조체"),
-        "definition_text": _make_fv(
-            "탄소 원자가 육각형 격자를 이루며 말린 원통형 나노소재로 "
-            "전기전도성·기계적 강도가 극히 뛰어나다.",
-            section="methods", page=2,
-        ),
-        "body": _make_fv(
-            "기체 분자 흡착 시 저항값이 즉각 변화해 고감도 가스 검출이 가능하다. "
-            "기존 금속산화물 대비 응답속도 60% 향상, 정확도 35%p 개선이 가능하다.",
-            section="results", page=2,
+            "생분해성 소재는 대개 강도가 낮아 구조재로 쓰기 어렵다. 이 한계가 상용화를 막아 왔다.",
+            section="introduction", page=2, confidence="medium",
         ),
     },
-    "flow": {
-        "title":      _make_fv("제조 공정 흐름도", section="methods", page=2),
-        "steps_text": _make_fv(
-            "기판 세척·CVD 반응로 준비·CNT 합성 (700°C)·전극 패터닝·소자 조립·성능 평가",
-            section="methods", page=2,
+    "feature": {
+        "eyebrow":  _make_fv("핵심 혁신"),
+        "headline": _make_fv("셀룰로스에 *COF*를 짜 넣다", section="methods", page=4),
+        "body":     _make_fv(
+            "공유결합 유기골격체(COF)를 셀룰로스 매트릭스에 복합해, 미세구슬 형태로 강도와 다공성을 함께 얻었다.",
+            section="methods", page=4,
         ),
     },
-    "data": {
-        "title":    _make_fv("성능 비교 데이터", section="results", page=2),
-        "data_unit": _make_fv("응답속도 (ms) / 정확도 (%)"),
-        "bars":     _make_fv(
-            "기존 센서 응답:0.25|CNT 센서 응답:0.10|기존 센서 정확도:60|CNT 센서 정확도:95",
-            section="results", page=2, risk="CRITICAL", quality="exact", claim="quantitative",
+    "process_v2": {
+        "eyebrow":  _make_fv("제작 방법"),
+        "headline": _make_fv("세 단계로 만든다", section="methods", page=5),
+        "steps":    _make_fv(
+            "셀룰로스 용액에 COF 전구체 분산|에멀전법으로 미세구슬 성형|동결건조로 다공 구조 고정",
+            section="methods", page=5,
         ),
-        "bar_max":  _make_fv("95", section="results", page=2),
-        "source":   _make_fv("Table 1. Kim et al., KITECH 2024"),
+        "caption":  _make_fv("전 과정 무용매·저온 — 친환경 공정", confidence="medium"),
     },
-    "showcase": {
-        "title": _make_fv("연구 핵심 성과", section="results", page=2),
-        "body":  _make_fv(
-            "CNT 기반 가스 센서가 기존 대비 응답속도 60% 단축, 정확도 35%p 향상을 달성했다. "
-            "실온 동작이 가능해 산업 현장 즉시 적용 가능성이 확인됐다.",
-            section="results", page=2,
+    "bigstat_compare": {
+        "eyebrow":      _make_fv("성능 검증"),
+        "headline":     _make_fv("기존 플라스틱보다 *더 단단*하다"),
+        "stat_value":   _make_fv("238", section="results", page=7,
+                                 quality="exact", claim="quantitative"),
+        "stat_unit":    _make_fv("MPa"),
+        "stat_caption": _make_fv("셀룰로스–COF 복합 미세구슬의 압축 강도", section="results", page=7),
+        "bars":         _make_fv(
+            "우리 복합 구슬:238:1|폴리프로필렌(PP):199:0|무보강 셀룰로스:142:0",
+            section="results", page=7, quality="exact", claim="quantitative",
         ),
-        "icon1": _make_fv("응답속도:0.1 ms 달성", section="results", page=2,
-                          risk="CRITICAL", quality="exact", claim="quantitative"),
-        "icon2": _make_fv("정확도:95.3% 달성", section="results", page=2,
-                          risk="CRITICAL", quality="exact", claim="quantitative"),
-        "icon3": _make_fv("개선율:기존 대비 40% 향상", section="results", page=2),
+        "source_ref":   _make_fv("출처: Cellulose (2024) · Results", section="results", page=7),
     },
-    "closing": {
-        "title_white":  _make_fv("탄소나노튜브로", section="conclusion", page=2),
-        "title_accent": _make_fv("더 안전한 미래를", section="conclusion", page=2),
-        "body": _make_fv(
-            "고감도·고속 CNT 가스 센서 기술의 실용화 가능성이 확인됐다. "
-            "산업 안전·환경 모니터링 분야에 즉시 적용 가능한 원천기술이다.",
-            section="conclusion", page=2,
+    "reasons": {
+        "eyebrow":  _make_fv("왜 이 소재인가"),
+        "headline": _make_fv("셀룰로스를 고른 *세 가지* 이유"),
+        "reasons":  _make_fv(
+            "풍부함:지구상 가장 많은 천연 고분자, 원료 걱정이 없다"
+            "|생분해성:토양·해양에서 완전 분해된다"
+            "|기능화 용이:표면 -OH로 COF 결합이 쉽다",
+            section="introduction", page=3,
         ),
     },
-    "brand": {
-        "tagline":     _make_fv("기술로 만드는 더 나은 내일\n한국생산기술연구원"),
-        "body":        _make_fv(
-            "KITECH은 1989년 설립된 산업통상자원부 산하 연구기관으로 "
-            "제조업 혁신을 위한 원천·응용 연구를 수행한다.",
+    "grid_v2": {
+        "eyebrow":  _make_fv("응용 분야"),
+        "headline": _make_fv("어디에 *쓰일까*?"),
+        "items":    _make_fv(
+            "포장재:일회용 플라스틱 대체|흡착소재:중금속·염료 제거"
+            "|약물전달:다공성 캡슐|단열재:경량 구조재",
+            section="discussion", page=10,
         ),
-        "cta":         _make_fv("www.kitech.re.kr"),
-        "footer_text": _make_fv("한국생산기술연구원 (KITECH)"),
+        "body":     _make_fv("강도·다공성·생분해성의 조합이 응용 폭을 넓힌다.", confidence="medium"),
+    },
+    "closing_v2": {
+        "eyebrow":    _make_fv("맺음말"),
+        "headline":   _make_fv("다음은 *대량 생산* 검증", section="conclusion", page=12),
+        "body":       _make_fv(
+            "실험실 성과를 파일럿 규모로 확장해 경제성과 균일도를 확인하는 후속 연구를 진행한다.",
+            section="conclusion", page=12,
+        ),
+        "source_ref": _make_fv("출처: Cellulose (2024) · Conclusion", section="conclusion", page=12),
     },
 }
 
@@ -351,60 +336,51 @@ def _build_mock_card_data(
     section_map: dict[str, str],
     paper_metadata,
 ) -> CardEditorData:
-    """DEV_MOCK_LLM 모드용 — S1이 추출한 제목/저자 정보를 메타에 반영."""
+    """DEV_MOCK_LLM 모드용 — 신규 8뼈대 결정적 시퀀스."""
     title = getattr(paper_metadata, "title", "") or "연구 성과"
     authors = getattr(paper_metadata, "authors", []) or []
     year = getattr(paper_metadata, "year", 2024) or 2024
-
     fv = _make_fv
 
     meta = CardMeta(
         org=fv("한국생산기술연구원"),
-        dept=fv("나노소재연구부"),
+        dept=fv("친환경소재연구부문"),
         researcher=fv(authors[0] if authors else "연구팀"),
         month=fv(f"{year}-01", quality="normalized"),
         edition_number=fv(f"{year}-01호", quality="normalized"),
     )
 
-    # card_count에 맞게 템플릿 시퀀스 슬라이싱
-    sequence = _MOCK_TEMPLATES[:card_count]
-    # 마지막은 항상 closing 또는 brand
-    if sequence and sequence[-1] not in ("closing", "brand"):
-        sequence[-1] = "closing"
+    sequence = _mock_sequence(card_count)
 
     cards = [
         CardSlot(
             card_num=i + 1,
             template_type=tmpl,
-            fields=_MOCK_FIELDS.get(tmpl, {"title": fv(title)}),
+            fields=_MOCK_FIELDS.get(tmpl, {"headline": fv(title)}),
         )
         for i, tmpl in enumerate(sequence)
     ]
 
     _ROLE_MAP = {
-        "cover": "논문 주제 소개",
-        "hook": "문제 제기 및 독자 관심 유도",
-        "problem": "기존 기술의 한계 제시",
-        "circle3": "핵심 3요소 구조 설명",
-        "compare2": "기존 vs 신기술 비교",
-        "grid4": "4대 특장점 소개",
-        "definition": "핵심 용어 정의",
-        "flow": "연구 프로세스 시각화",
-        "data": "정량 성과 수치 제시",
-        "showcase": "핵심 성과 하이라이트",
-        "closing": "마무리 및 의의",
-        "brand": "기관 브랜딩",
+        "cover_v2": "논문 주제 표지",
+        "statement": "문제 제기 / 기존 한계",
+        "feature": "핵심 혁신 소개",
+        "process_v2": "제작 방법 단계",
+        "bigstat_compare": "핵심 성능 + 기존 대비 + 출처",
+        "reasons": "왜 이 소재인가",
+        "grid_v2": "응용 분야",
+        "closing_v2": "마무리 / 협력",
     }
     storyboard = Storyboard(
-        story_arc=f"{title}의 연구 배경·방법·성과를 {len(cards)}장으로 구성한 카드뉴스",
+        story_arc=f"{title}의 배경·혁신·성능·응용을 {len(cards)}장으로 구성",
         beats=[
             CardStorybeat(
                 card_num=i + 1,
                 template_type=tmpl,
                 narrative_role=_ROLE_MAP.get(tmpl, "내용 전달"),
                 key_message=_MOCK_FIELDS.get(tmpl, {}).get(
-                    "title", fv(title)
-                ).value if _MOCK_FIELDS.get(tmpl) else title,
+                    "headline", fv(title)
+                ).value,
             )
             for i, tmpl in enumerate(sequence)
         ],
@@ -412,8 +388,8 @@ def _build_mock_card_data(
 
     return CardEditorData(
         storyboard=storyboard, meta=meta, cards=cards,
-        theme=THEME_PRESETS["tech_blue"],
-        recommended_theme_key="tech_blue",
+        theme=THEME_PRESETS["forest_green"],
+        recommended_theme_key="forest_green",
     )
 
 
