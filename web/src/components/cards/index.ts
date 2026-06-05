@@ -20,6 +20,13 @@ import Compare2Card from './templates/Compare2Card'
 import Grid4Card from './templates/Grid4Card'
 import Circle3Card from './templates/Circle3Card'
 import BigStatCompare from './skeletons/BigStatCompare'
+import Cover from './skeletons/Cover'
+import Statement from './skeletons/Statement'
+import Feature from './skeletons/Feature'
+import Process from './skeletons/Process'
+import Reasons from './skeletons/Reasons'
+import Grid from './skeletons/Grid'
+import Closing from './skeletons/Closing'
 
 export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> = {
   brand:      BrandCard,
@@ -35,6 +42,13 @@ export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> 
   grid4:      Grid4Card,
   circle3:    Circle3Card,
   bigstat_compare: BigStatCompare,
+  cover_v2:      Cover,
+  statement:     Statement,
+  feature:       Feature,
+  process_v2:    Process,
+  reasons:       Reasons,
+  grid_v2:       Grid,
+  closing_v2:    Closing,
 }
 
 export { default as CardRenderer } from './CardRenderer'
