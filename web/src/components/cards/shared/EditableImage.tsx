@@ -21,6 +21,7 @@ interface EditableImageProps {
   className?: string
   style?: CSSProperties
   objectFit?: 'cover' | 'contain'
+  objectPosition?: string   // focal point (예: '30% 70%'). 기본 center.
   onImageRequest?: (slotKey: string) => void
 }
 
@@ -32,6 +33,7 @@ export default function EditableImage({
   className,
   style,
   objectFit = 'cover',
+  objectPosition = 'center',
   onImageRequest,
 }: EditableImageProps) {
   const [hovered, setHovered] = useState(false)
@@ -52,7 +54,7 @@ export default function EditableImage({
             width: '100%',
             height: '100%',
             objectFit,
-            objectPosition: 'center',
+            objectPosition,
             display: 'block',
           }}
         />
