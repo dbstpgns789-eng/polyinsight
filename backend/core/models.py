@@ -52,9 +52,13 @@ class FieldValue(BaseModel):
 # ---------------------------------------------------------------------------
 
 VALID_TEMPLATE_TYPES = {
+    # 구 12 섬 템플릿 (섬 철거 슬라이스 전까지 공존)
     "cover", "hook", "problem", "circle3", "compare2",
     "grid4", "definition", "flow", "data", "showcase",
     "closing", "brand",
+    # 신규 8 뼈대 (디자인 시스템)
+    "cover_v2", "statement", "feature", "process_v2",
+    "reasons", "grid_v2", "closing_v2", "bigstat_compare",
 }
 
 
