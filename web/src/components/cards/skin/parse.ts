@@ -35,3 +35,24 @@ export function parseCompareRows(raw: string | undefined): CompareRow[] {
 export function rowsToRaw(rows: CompareRow[]): string {
   return rows.map((r) => `${r.label}:${r.value}:${r.primary ? '1' : '0'}`).join('|')
 }
+
+export interface Pair {
+  a: string
+  b: string
+}
+
+/** "a:b|a:b" → Pair[] (b 선택). a 비면 버림. */
+export function parsePairs(raw: string | undefined): Pair[] {
+  if (!raw) return []
+  return raw.split('|').map((seg) => {
+    const idx = seg.indexOf(':')
+    const a = (idx < 0 ? seg : seg.slice(0, idx)).trim()
+    const b = (idx < 0 ? '' : seg.slice(idx + 1)).trim()
+    return { a, b }
+  }).filter((p) => p.a.length > 0)
+}
+
+/** Pair[] → "a:b|a:b". parsePairs의 역. */
+export function pairsToRaw(pairs: Pair[]): string {
+  return pairs.map((p) => (p.b ? `${p.a}:${p.b}` : p.a)).join('|')
+}

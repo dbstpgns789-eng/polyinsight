@@ -43,3 +43,29 @@ describe('rowsToRaw ↔ parseCompareRows 라운드트립', () => {
     expect(parseCompareRows(rowsToRaw(rows))).toEqual(rows)
   })
 })
+
+import { parsePairs, pairsToRaw, type Pair } from './parse'
+
+describe('parsePairs / pairsToRaw', () => {
+  it('a:b 쌍 목록 파싱', () => {
+    expect(parsePairs('온도:±0.4|습도:2%')).toEqual([
+      { a: '온도', b: '±0.4' },
+      { a: '습도', b: '2%' },
+    ])
+  })
+  it('b 없으면 빈 문자열', () => {
+    expect(parsePairs('수집|정제|보정')).toEqual([
+      { a: '수집', b: '' }, { a: '정제', b: '' }, { a: '보정', b: '' },
+    ])
+  })
+  it('빈 입력은 빈 배열', () => {
+    expect(parsePairs(undefined)).toEqual([])
+  })
+  it('a 없는 항목은 버림', () => {
+    expect(parsePairs(':x|좋음:1')).toEqual([{ a: '좋음', b: '1' }])
+  })
+  it('라운드트립 보존', () => {
+    const ps: Pair[] = [{ a: '제목', b: '본문' }, { a: '단독', b: '' }]
+    expect(parsePairs(pairsToRaw(ps))).toEqual(ps)
+  })
+})
