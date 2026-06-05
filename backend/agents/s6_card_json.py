@@ -23,54 +23,44 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _TEMPLATE_SPEC = """
-[cover]       표지
-  필드: title(논문 핵심 주제 2~4줄), subtitle(한 줄 부제), edition(발행 시리즈/권호)
+[cover_v2]    표지 (첫 카드)
+  필드: eyebrow(시리즈/권호 한 줄), headline(핵심 주제, 강조어를 *별표*로 감쌈),
+        subtitle(한 줄 부제), org(기관명)
 
-[hook]        문제 제기
-  필드: title(독자를 끌어당기는 질문형 제목), highlight(핵심 키워드 2~4단어),
-        body(문제 상황 2~3문장), source_credit(출처 기관·연도)
+[statement]   문제 제기 / 기존 한계
+  필드: eyebrow(섹션 라벨), headline(독자를 끄는 큰 질문, *별표* 강조),
+        body(문제·한계 2~3문장)
 
-[problem]     연구 과제
-  필드: title(해결해야 할 과제명), body(기존 기술의 한계 2~3문장),
-        emphasis(연구팀이 선택한 돌파구 한 문장)
+[feature]     핵심 혁신
+  필드: eyebrow, headline(혁신 한 줄, *별표* 강조), body(혁신 설명 2~3문장)
 
-[circle3]     3요소 구조
-  필드: title(전체 제목), body(3요소 통합 설명 2문장),
-        c1·c2·c3 각각 "제목:라벨:서브" 형식 (예: "CVD 공정:핵심 기술:온도 700°C")
+[process_v2]  제작 방법
+  필드: eyebrow, headline(공정 제목),
+        steps("단계1|단계2|단계3" — |로 구분, 3~5단계), caption(보조 한 줄)
 
-[compare2]    비교 분석
-  필드: title(비교 제목), subtitle(비교 관점),
-        label_a(기존 방식 명칭), points_a("항목1·항목2·항목3" — ·로 구분, 3~4개),
-        label_b(신기술 명칭), points_b(동일 형식)
+[bigstat_compare]  핵심 성능 + 기존 대비 + 출처
+  필드: eyebrow, headline(*별표* 강조),
+        stat_value(대표 수치 숫자만), stat_unit(단위), stat_caption(수치 맥락 한 줄),
+        bars("라벨:값:강조" — |로 항목 구분, :로 쌍 구분, 강조는 1(우리/최고) 또는 0; 2~4행),
+        source_ref(출처 — "출처: 저널(연도) · 섹션")
 
-[grid4]       4분할 소개
-  필드: title, subtitle,
-        item1_label~item4_label(각 항목 제목), item1_sub~item4_sub(각 항목 설명 한 줄)
+[reasons]     왜 이 소재인가
+  필드: eyebrow, headline(*별표* 강조),
+        reasons("제목:본문|제목:본문" — |로 항목, :로 제목·본문 구분; 2~4개)
 
-[definition]  용어 정의
-  필드: term(핵심 용어), term_detail(영문명·풀네임 등),
-        definition_text(정의 한 문장), body(의미·중요성 2~3문장)
+[grid_v2]     응용 분야
+  필드: eyebrow, headline(*별표* 강조),
+        items("라벨:서브|라벨:서브" — |로 항목, :로 라벨·서브 구분; 2~4개),
+        body(선택 요약 한 줄)
 
-[flow]        프로세스 순서
-  필드: title(공정/단계 제목),
-        steps_text("단계1·단계2·단계3" — ·로 구분, 4~6단계)
+[closing_v2]  마무리 / 협력 (마지막 카드)
+  필드: eyebrow, headline(*별표* 강조), body(마무리 2~3문장), source_ref(선택)
 
-[data]        수치 시각화
-  필드: title(차트 제목), data_unit(단위 설명),
-        bars("레이블1:값1|레이블2:값2" — |로 구분, 4~6개),
-        bar_max(bars 중 최대값, 숫자만), source(출처)
-
-[showcase]    성과 하이라이트
-  필드: title(성과 제목), body(성과 요약 2~3문장),
-        icon1·icon2·icon3 각각 "제목:서브" 형식 (예: "정확도:95.3% 달성")
-
-[closing]     마무리
-  필드: title_white(흰색 제목 텍스트), title_accent(강조색 제목 텍스트),
-        body(마무리 메시지 2~3문장)
-
-[brand]       기관 브랜딩 (마지막 카드로만 사용)
-  필드: tagline(기관 슬로건 2줄), body(기관 소개 2~3문장),
-        cta(연락처·URL), footer_text(기관명)
+[포맷 규칙 — 엄수]
+- headline 강조: 핵심어를 *별표*로 감싼다 (예: 기존보다 *더 단단*하다). 1곳 권장.
+- 다항목 필드: 항목 구분 |, 쌍 구분 :. 라벨/값 내부에 |·: 사용 금지.
+- bars 3번째 토큰은 1(강조행, 보통 최댓값/우리 방식) 또는 0.
+- 수치(stat_value·bars)는 원문에서만, source 필수.
 """
 
 # ---------------------------------------------------------------------------
