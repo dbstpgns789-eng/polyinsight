@@ -97,6 +97,25 @@ export default function EditorPage() {
     })
   }, [activeCardIdx, apiData, debouncedSave])
 
+  const handleReorderCard = useCallback((idx: number, dir: -1 | 1) => {
+    const target = idx + dir
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      if (target < 0 || target >= base.cards.length) return prev
+      const next = [...base.cards]
+      const tmp = next[idx]; next[idx] = next[target]; next[target] = tmp
+      const renumbered = next.map((c, i) => ({ ...c, card_num: i + 1 }))
+      const updated = { ...base, cards: renumbered }
+      debouncedSave(updated)
+      return updated
+    })
+    setActiveCardIdx((cur) => {
+      if (target < 0 || target >= cards.length) return cur
+      return target
+    })
+  }, [apiData, debouncedSave, cards.length])
+
   const handleThemeChange = useCallback((theme: CardTheme) => {
     setLocalData((prev) => {
       const base = prev ?? apiData?.cardData
@@ -157,6 +176,7 @@ export default function EditorPage() {
           cards={cards}
           activeCardIdx={activeCardIdx}
           onSelectCard={setActiveCardIdx}
+          onReorderCard={handleReorderCard}
           theme={cardData?.theme}
           bgColor={cardData?.bg_color ?? '#111111'}
         />

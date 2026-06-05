@@ -36,12 +36,13 @@ interface Props {
   cards: Card[]
   activeCardIdx: number
   onSelectCard: (idx: number) => void
+  onReorderCard?: (idx: number, dir: -1 | 1) => void
   theme?: CardTheme
   bgColor?: string
 }
 
 // ── 메인 ─────────────────────────────────────────────────────────────────
-export default function LeftPanel({ cards, activeCardIdx, onSelectCard, theme, bgColor }: Props) {
+export default function LeftPanel({ cards, activeCardIdx, onSelectCard, onReorderCard, theme, bgColor }: Props) {
   const effectiveTheme = theme ?? DEFAULT_THEME
   const total = cards.length
   const criticalCount = cards.filter((c) => getCardRiskStatus(c) === 'crit').length
@@ -82,8 +83,10 @@ export default function LeftPanel({ cards, activeCardIdx, onSelectCard, theme, b
             theme={effectiveTheme}
             bgColor={bgColor}
             idx={idx}
+            total={total}
             isActive={idx === activeCardIdx}
             onClick={() => onSelectCard(idx)}
+            onReorderCard={onReorderCard}
           />
         ))}
       </div>
@@ -132,14 +135,16 @@ export default function LeftPanel({ cards, activeCardIdx, onSelectCard, theme, b
 
 // ── 썸네일 아이템 ─────────────────────────────────────────────────────────
 const ThumbItem = memo(function ThumbItem({
-  card, theme, bgColor, idx, isActive, onClick,
+  card, theme, bgColor, idx, total, isActive, onClick, onReorderCard,
 }: {
   card: Card
   theme: CardTheme
   bgColor?: string
   idx: number
+  total: number
   isActive: boolean
   onClick: () => void
+  onReorderCard?: (idx: number, dir: -1 | 1) => void
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const riskStatus = getCardRiskStatus(card)
@@ -156,19 +161,15 @@ const ThumbItem = memo(function ThumbItem({
 
   return (
     <div ref={wrapRef} style={{ flexShrink: 0, contain: 'layout style paint' }}>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onClick}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } }}
         aria-label={`카드 ${idx + 1}`}
         style={{
-          width: '100%',
-          padding: 0,
-          background: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 6,
+          width: '100%', padding: 0, background: 'transparent', border: 'none',
+          cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6,
         }}
       >
         {/* 썸네일 박스 */}
@@ -215,6 +216,40 @@ const ThumbItem = memo(function ThumbItem({
           }}>
             {pad(card.card_num)}
           </div>
+          {onReorderCard && (
+            <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <button
+                type="button"
+                aria-label="위로 이동"
+                disabled={idx === 0}
+                onClick={(e) => { e.stopPropagation(); onReorderCard(idx, -1) }}
+                style={{
+                  width: 22, height: 22, borderRadius: 6, border: 'none',
+                  background: 'rgba(255,255,255,0.92)', color: 'var(--ink)',
+                  cursor: idx === 0 ? 'not-allowed' : 'pointer', opacity: idx === 0 ? 0.35 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>keyboard_arrow_up</span>
+              </button>
+              <button
+                type="button"
+                aria-label="아래로 이동"
+                disabled={idx === total - 1}
+                onClick={(e) => { e.stopPropagation(); onReorderCard(idx, 1) }}
+                style={{
+                  width: 22, height: 22, borderRadius: 6, border: 'none',
+                  background: 'rgba(255,255,255,0.92)', color: 'var(--ink)',
+                  cursor: idx === total - 1 ? 'not-allowed' : 'pointer', opacity: idx === total - 1 ? 0.35 : 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>keyboard_arrow_down</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 라벨 */}
@@ -225,7 +260,7 @@ const ThumbItem = memo(function ThumbItem({
         }}>
           {TEMPLATE_LABELS[card.template_type] ?? card.template_type}
         </div>
-      </button>
+      </div>
     </div>
   )
 })
