@@ -19,6 +19,7 @@ import FlowCard from './templates/FlowCard'
 import Compare2Card from './templates/Compare2Card'
 import Grid4Card from './templates/Grid4Card'
 import Circle3Card from './templates/Circle3Card'
+import BigStatCompare from './skeletons/BigStatCompare'
 
 export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> = {
   brand:      BrandCard,
@@ -33,6 +34,7 @@ export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> 
   compare2:   Compare2Card,
   grid4:      Grid4Card,
   circle3:    Circle3Card,
+  bigstat_compare: BigStatCompare,
 }
 
 export { default as CardRenderer } from './CardRenderer'
