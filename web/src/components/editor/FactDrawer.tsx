@@ -41,7 +41,8 @@ function collectRiskItems(cards: Card[]): RiskItem[] {
   cards.forEach((card, cardIdx) => {
     if (!card.fields) return
     Object.entries(card.fields).forEach(([fieldKey, fv]) => {
-      if (!fv.risk_level) return
+      // 검토 드로어는 위험 항목만 — LOW(검증 통과)는 제외.
+      if (!fv.risk_level || fv.risk_level === 'LOW') return
       items.push({
         cardIdx,
         cardNum: card.card_num,
@@ -190,11 +191,13 @@ function RiskRow({
   onItemClick: () => void
   onConfirm?: () => void
 }) {
-  const riskColors = {
+  const RISK_STYLE: Record<string, { fg: string; bg: string; dot: string }> = {
     CRITICAL: { fg: '#991B1B', bg: '#FEE2E2', dot: '#DC2626' },
     HIGH:     { fg: '#9A3412', bg: '#FED7AA', dot: '#EA580C' },
     MEDIUM:   { fg: '#854D0E', bg: '#FEF3C7', dot: '#D97706' },
-  }[item.riskLevel]
+  }
+  // LOW는 collectRiskItems에서 제외되지만, 알 수 없는 값이 와도 안전하게 폴백.
+  const riskColors = RISK_STYLE[item.riskLevel] ?? RISK_STYLE.MEDIUM
 
   return (
     <li style={{

@@ -1,4 +1,4 @@
-export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM'
+export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
 export interface FieldValue {
   value?: string
