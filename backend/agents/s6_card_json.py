@@ -509,12 +509,17 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
         """verified 강제 False + risk_level 규칙 재판정."""
         for fv in _iter_field_values(card_data):
             fv.verified = False
-            if (fv.claim_type == ClaimType.QUANTITATIVE
-                    and fv.match_quality == MatchQuality.FAILED):
+            # 위험 신호는 수치(정량)가 진다. 정성/인과 의역은 MEDIUM 상한.
+            is_quant = fv.claim_type == ClaimType.QUANTITATIVE
+            mq = fv.match_quality
+            if is_quant and mq == MatchQuality.FAILED:
                 fv.risk_level = RiskLevel.CRITICAL
-            elif fv.match_quality in (MatchQuality.FUZZY, MatchQuality.SEMANTIC):
+            elif is_quant and mq in (MatchQuality.FUZZY, MatchQuality.SEMANTIC):
                 fv.risk_level = RiskLevel.HIGH
-            elif fv.match_quality == MatchQuality.NORMALIZED:
+            elif is_quant and mq == MatchQuality.NORMALIZED:
+                fv.risk_level = RiskLevel.MEDIUM
+            elif mq in (MatchQuality.FAILED, MatchQuality.FUZZY, MatchQuality.SEMANTIC):
+                # 정성/인과: 의역·미매칭은 검토 권장(MEDIUM)이지 위험(HIGH) 아님
                 fv.risk_level = RiskLevel.MEDIUM
             else:
                 fv.risk_level = RiskLevel.LOW

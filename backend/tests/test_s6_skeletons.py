@@ -9,7 +9,11 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).parents[2]))
 
 from backend.core import config
-from backend.core.models import S6Input, PaperMetadata, VALID_TEMPLATE_TYPES
+from backend.core.models import (
+    S6Input, PaperMetadata, VALID_TEMPLATE_TYPES,
+    FieldValue, FieldSource, MatchQuality, ClaimType, RiskLevel,
+    CardEditorData, CardMeta, CardSlot,
+)
 from backend.agents.s6_card_json import s6_agent
 
 NEW_SKELETONS = {
@@ -83,3 +87,36 @@ async def test_grounding_preserved():
     for c in out.card_data.cards:
         for fv in c.fields.values():
             assert fv.verified is False
+
+
+def _fv(claim: ClaimType, mq: MatchQuality) -> FieldValue:
+    return FieldValue(
+        value="x", confidence="high", match_quality=mq, claim_type=claim,
+        source=FieldSource(section="s", page=1), risk_level=RiskLevel.LOW,
+    )
+
+
+def test_risk_taxonomy_post_process():
+    """위험은 수치(정량)가 진다. 정성/인과 의역은 MEDIUM 상한."""
+    Q, QL, C = ClaimType.QUANTITATIVE, ClaimType.QUALITATIVE, ClaimType.CAUSAL
+    MQ = MatchQuality
+    cases = {
+        "q_failed":   (_fv(Q, MQ.FAILED),     RiskLevel.CRITICAL),
+        "q_semantic": (_fv(Q, MQ.SEMANTIC),   RiskLevel.HIGH),
+        "q_fuzzy":    (_fv(Q, MQ.FUZZY),      RiskLevel.HIGH),
+        "q_norm":     (_fv(Q, MQ.NORMALIZED), RiskLevel.MEDIUM),
+        "q_exact":    (_fv(Q, MQ.EXACT),      RiskLevel.LOW),
+        "ql_semantic":(_fv(QL, MQ.SEMANTIC),  RiskLevel.MEDIUM),  # 의역 ≠ HIGH
+        "ql_failed":  (_fv(QL, MQ.FAILED),    RiskLevel.MEDIUM),
+        "ql_exact":   (_fv(QL, MQ.EXACT),     RiskLevel.LOW),
+        "causal_fuzzy":(_fv(C, MQ.FUZZY),     RiskLevel.MEDIUM),  # 인과도 상한 MEDIUM
+    }
+    fields = {k: v for k, (v, _) in cases.items()}
+    meta = CardMeta(
+        org=_fv(QL, MQ.EXACT), dept=_fv(QL, MQ.EXACT), researcher=_fv(QL, MQ.EXACT),
+        month=_fv(QL, MQ.EXACT), edition_number=_fv(QL, MQ.EXACT),
+    )
+    cd = CardEditorData(meta=meta, cards=[CardSlot(card_num=1, template_type="statement", fields=fields)])
+    s6_agent._post_process(cd)
+    for k, (fv, expected) in cases.items():
+        assert fv.risk_level == expected, f"{k}: {fv.risk_level} != {expected}"
