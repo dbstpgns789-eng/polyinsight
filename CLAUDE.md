@@ -70,6 +70,16 @@ Each field in S6 JSON output must carry:
 
 CRITICAL = quantitative + match_quality failed → always flag for human review.
 
+**Risk escalates only on NUMBERS (claim_type = quantitative).** Qualitative/causal
+paraphrase caps at MEDIUM — rewriting prose for readability is not a fidelity risk.
+```
+quantitative + failed              → CRITICAL
+quantitative + (fuzzy|semantic)    → HIGH
+quantitative + normalized          → MEDIUM
+qualitative|causal + (failed|fuzzy|semantic) → MEDIUM  (cap)
+else (exact, qualitative normalized)         → LOW
+```
+
 ---
 
 ## 4. Architecture Invariants
@@ -137,7 +147,9 @@ export modal        Export & download overlay (no separate route)
 
 Key frontend rules:
 - Upload and Export are **modals** (React Portal), not pages
-- Card editor ActionBar CTA is **disabled** when CRITICAL/HIGH count > 0
+- Export preflight **warns** on unreviewed/CRITICAL items but does **not** hard-block —
+  user has final judgment ("최종 판단은 사용자가"). (Earlier "CTA disabled on CRITICAL/HIGH"
+  was never implemented and is retired by decision 2026-06-06.)
 - Image slots are **optional** — export is allowed without images
 - Auto-save every 5 seconds idle
 
@@ -210,6 +222,7 @@ docs 변경 → 코드 변경 순서를 지킨다.
 
 | Date       | Version | Change Summary                                              |
 |------------|---------|-------------------------------------------------------------|
+| 2026-06-06 | v2.3    | risk 분류 정직화 (정량만 HIGH/CRITICAL, 정성 의역 MEDIUM 상한) + export는 경고-후-진행(하드 차단 폐기). docs/superpowers/specs/2026-06-06-risk-taxonomy-design.md |
 | 2026-05-19 | v2.2    | frontend/, landing/ 삭제 (deprecated 프로토타입), web/ 단독 프론트엔드로 확정, PRODUCT.md/DESIGN.md 루트로 이동 |
 | 2026-05-19 | v2.1    | Monorepo 통합 (landing/, web/ 추가), CSS 이식 실패 회고 → web/CLAUDE.md 규칙 추가 |
 | 2025-05-05 | v2.0    | S3/S4 removed (absorbed into S6), S5 removed, Playwright, SQLite, S6 rewrite |
