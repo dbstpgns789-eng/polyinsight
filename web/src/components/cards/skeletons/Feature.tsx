@@ -6,6 +6,7 @@ import { fieldValue } from '../types'
 
 export default function Feature(props: CardComponentProps) {
   const { card, mode, onFieldChange, onFieldFocus, focusedField, onImageRequest } = props
+  const showImage = !!card.image_url || mode === 'edit'
   return (
     <CardSurface>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -21,9 +22,11 @@ export default function Feature(props: CardComponentProps) {
           <Body value={fieldValue(card, 'body')} fieldKey="body" mode={mode}
             onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'body'} />
         </div>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <VisualZone imageUrl={card.image_url} slotKey="feature" mode={mode} onImageRequest={onImageRequest} />
-        </div>
+        {showImage && (
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <VisualZone imageUrl={card.image_url} slotKey="feature" mode={mode} onImageRequest={onImageRequest} />
+          </div>
+        )}
       </div>
     </CardSurface>
   )

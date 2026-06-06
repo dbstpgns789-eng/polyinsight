@@ -6,6 +6,7 @@ import { fieldValue } from '../types'
 
 export default function Cover(props: CardComponentProps) {
   const { card, mode, onFieldChange, onFieldFocus, focusedField, onImageRequest } = props
+  const showImage = !!card.image_url || mode === 'edit'
   return (
     <CardSurface>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -19,9 +20,13 @@ export default function Cover(props: CardComponentProps) {
         <Subhead value={fieldValue(card, 'subtitle')} fieldKey="subtitle" mode={mode}
           onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'subtitle'} />
       </div>
-      <div style={{ flex: 1, minHeight: 0, marginTop: 32, marginBottom: 24 }}>
-        <VisualZone imageUrl={card.image_url} slotKey="cover" mode={mode} onImageRequest={onImageRequest} />
-      </div>
+      {showImage ? (
+        <div style={{ flex: 1, minHeight: 0, marginTop: 32, marginBottom: 24 }}>
+          <VisualZone imageUrl={card.image_url} slotKey="cover" mode={mode} onImageRequest={onImageRequest} />
+        </div>
+      ) : (
+        <div style={{ flex: 1 }} />
+      )}
       <Caption value={fieldValue(card, 'org')} fieldKey="org" mode={mode}
         onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'org'} />
     </CardSurface>
