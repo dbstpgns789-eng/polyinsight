@@ -1,4 +1,4 @@
-export type SlotType = 'bg' | 'inset_top' | 'inset_right' | 'inner' | 'none'
+export type SlotType = 'bg' | 'inset_top' | 'inset_right' | 'inner' | 'zone' | 'none'
 
 export interface SlotMeta {
   type: SlotType
@@ -18,6 +18,8 @@ export const IMAGE_SLOT_TYPES: Record<string, SlotType> = {
   showcase:   'inset_top',
   definition: 'inset_right',
   closing:    'inner',
+  cover_v2:   'zone',
+  feature:    'zone',
   data:       'none',
   brand:      'none',
 }
@@ -42,6 +44,11 @@ export const SLOT_META: Record<SlotType, SlotMeta> = {
     type:        'inner',
     label:       '카드 내부 이미지',
     description: '흰 카드 안에 삽입됩니다',
+  },
+  zone: {
+    type:        'zone',
+    label:       '이미지 영역',
+    description: '카드의 지정된 이미지 자리에 표시됩니다 (없으면 텍스트가 채웁니다)',
   },
   none: {
     type:        'none',

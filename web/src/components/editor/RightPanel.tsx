@@ -68,6 +68,16 @@ function SlotDiagram({ type }: { type: SlotType }) {
       <div style={{ flex: 1, borderRadius: 4, background: 'var(--brand)', opacity: 0.35 }} />
     </div>
   )
+  if (type === 'zone') return (
+    <div style={{ ...base, display: 'flex', flexDirection: 'column', padding: 10, gap: 6 }}>
+      <div style={{ flex: 1, borderRadius: 4, background: 'var(--brand)', opacity: 0.35, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 14px' }}>
+          <div style={line('70%', 5)} />
+          <div style={line('50%')} />
+        </div>
+      </div>
+    </div>
+  )
   return null
 }
 

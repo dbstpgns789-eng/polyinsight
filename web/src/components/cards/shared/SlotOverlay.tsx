@@ -16,6 +16,7 @@ const SLOT_OVERLAY_POS: Record<SlotType, CSSProperties | null> = {
   inset_top:   { top: 0,    left: 0,      right: 0,    bottom: '60%' },
   inset_right: { top: 0,    left: '62%',  right: 0,    bottom: 0 },
   inner:       { top: '55%', left: '5%',  right: '5%', bottom: '12%' },
+  zone:        null,
   none:        null,
 }
 
