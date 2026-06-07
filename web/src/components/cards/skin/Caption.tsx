@@ -17,7 +17,7 @@ export default function Caption({ value, fieldKey, mode, onFieldChange, onFieldF
       onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focused}
       style={{
         display: 'block', fontFamily: 'var(--set-font)', fontSize: 'var(--set-caption)',
-        fontWeight: 500, lineHeight: 1.5, color: 'var(--set-ink-faint)',
+        fontWeight: 500, lineHeight: 1.5, letterSpacing: '-0.005em', color: 'var(--set-ink-faint)',
       }}
     />
   )

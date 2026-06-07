@@ -18,8 +18,8 @@ const headlineStyle = {
   fontFamily: 'var(--set-font)',
   fontSize: 'var(--set-headline)',
   fontWeight: 800,
-  lineHeight: 1.22,
-  letterSpacing: '-0.02em',
+  lineHeight: 1.16,
+  letterSpacing: '-0.025em',
   color: 'var(--set-ink-strong)',
   wordBreak: 'keep-all' as const,
 }

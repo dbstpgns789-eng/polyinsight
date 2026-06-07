@@ -17,7 +17,7 @@ export default function Body({ value, fieldKey, mode, onFieldChange, onFieldFocu
       onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focused}
       style={{
         display: 'block', fontFamily: 'var(--set-font)', fontSize: 'var(--set-body)',
-        fontWeight: 400, lineHeight: 1.6, color: 'var(--set-ink-muted)', wordBreak: 'keep-all',
+        fontWeight: 400, lineHeight: 1.62, letterSpacing: '-0.01em', color: 'var(--set-ink-muted)', wordBreak: 'keep-all',
       }}
     />
   )
