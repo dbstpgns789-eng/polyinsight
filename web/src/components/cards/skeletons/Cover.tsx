@@ -14,18 +14,26 @@ export default function Cover(props: CardComponentProps) {
           onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'eyebrow'} />
         <BrandMark />
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 40 }}>
-        <Headline value={fieldValue(card, 'headline')} fieldKey="headline" mode={mode}
-          onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'headline'} />
-        <Subhead value={fieldValue(card, 'subtitle')} fieldKey="subtitle" mode={mode}
-          onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'subtitle'} />
-      </div>
       {showImage ? (
-        <div style={{ flex: 1, minHeight: 0, marginTop: 32, marginBottom: 24 }}>
-          <VisualZone imageUrl={card.image_url} slotKey="cover" mode={mode} onImageRequest={onImageRequest} />
-        </div>
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 40 }}>
+            <Headline value={fieldValue(card, 'headline')} fieldKey="headline" mode={mode}
+              onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'headline'} />
+            <Subhead value={fieldValue(card, 'subtitle')} fieldKey="subtitle" mode={mode}
+              onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'subtitle'} />
+          </div>
+          <div style={{ flex: 1, minHeight: 0, marginTop: 32, marginBottom: 24 }}>
+            <VisualZone imageUrl={card.image_url} slotKey="cover" mode={mode} onImageRequest={onImageRequest} />
+          </div>
+        </>
       ) : (
-        <div style={{ flex: 1 }} />
+        // 이미지 없으면 죽은 spacer 대신 제목 블록을 세로 중앙 정렬(의도된 여백)
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 24 }}>
+          <Headline value={fieldValue(card, 'headline')} fieldKey="headline" mode={mode}
+            onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'headline'} />
+          <Subhead value={fieldValue(card, 'subtitle')} fieldKey="subtitle" mode={mode}
+            onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'subtitle'} />
+        </div>
       )}
       <Caption value={fieldValue(card, 'org')} fieldKey="org" mode={mode}
         onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'org'} />
