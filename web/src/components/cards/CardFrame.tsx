@@ -8,7 +8,7 @@
 import { type CSSProperties, type ReactNode } from 'react'
 import type { CardTheme } from '@/types/editor'
 import styles from './cards.module.css'
-import { DEEP_TEAL_SET, type CardSet } from './skin/sets'
+import { EDITORIAL_LIGHT_SET, type CardSet } from './skin/sets'
 
 const CARD_SIZE = 1080
 
@@ -21,7 +21,7 @@ interface CardFrameProps {
   className?: string
 }
 
-export default function CardFrame({ theme, bgColor = '#111111', scale = 1, set = DEEP_TEAL_SET, children, className }: CardFrameProps) {
+export default function CardFrame({ theme, bgColor = '#111111', scale = 1, set = EDITORIAL_LIGHT_SET, children, className }: CardFrameProps) {
   // Wrapper는 시각적 크기 (scaled). overflow:hidden으로 inner의 layout overflow를 클립.
   const wrapperStyle: CSSProperties = {
     width: CARD_SIZE * scale,

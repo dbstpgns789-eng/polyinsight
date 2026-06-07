@@ -17,7 +17,7 @@ export default function Subhead({ value, fieldKey, mode, onFieldChange, onFieldF
       onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focused}
       style={{
         display: 'block', fontFamily: 'var(--set-font)', fontSize: 'var(--set-subhead)',
-        fontWeight: 600, lineHeight: 1.4, color: 'var(--set-ink-muted)', wordBreak: 'keep-all',
+        fontWeight: 600, lineHeight: 1.4, letterSpacing: '-0.015em', color: 'var(--set-ink-muted)', wordBreak: 'keep-all',
       }}
     />
   )

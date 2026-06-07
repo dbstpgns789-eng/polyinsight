@@ -57,6 +57,9 @@ landing/.env
 skills-lock.json
 skills-lock.jso
 
+# Visual gate artifacts (세트 전문화 v1)
+backend/scripts/gate/
+
 # Debug artifacts
 debug_*.png
 debug_*.py

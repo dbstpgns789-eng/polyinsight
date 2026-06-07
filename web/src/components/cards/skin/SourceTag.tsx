@@ -19,8 +19,8 @@ export default function SourceTag({ value, fieldKey, mode, onFieldChange, onFiel
       alignSelf: 'flex-start',
       background: 'var(--set-surface)',
       border: '1px solid var(--set-surface-border)',
-      borderRadius: 'var(--set-radius-box)',
-      padding: '10px 18px',
+      borderRadius: 'var(--set-radius-pill)',
+      padding: '9px 18px',
       fontFamily: 'var(--set-font)',
     }}>
       <span aria-hidden style={{ fontSize: 'var(--set-caption)' }}>📄</span>
