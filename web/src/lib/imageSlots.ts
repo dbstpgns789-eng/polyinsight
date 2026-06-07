@@ -20,6 +20,8 @@ export const IMAGE_SLOT_TYPES: Record<string, SlotType> = {
   closing:    'inner',
   cover_v2:   'zone',
   feature:    'zone',
+  statement:  'zone',
+  closing_v2: 'zone',
   data:       'none',
   brand:      'none',
 }
