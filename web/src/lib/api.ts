@@ -36,16 +36,6 @@ export const getProjects = (params: Record<string, unknown> = {}) =>
 
 export const getStats = () => api.get('/projects/stats')
 
-/**
- * @deprecated 2026-06-01부터 사용 안 함. React 캔버스 마이그레이션으로 에디터는 iframe 미리보기 없이 직접 렌더링.
- * 백엔드 `/preview/{card_num}` 엔드포인트는 시각 회귀 테스트와 디버그용으로 유지.
- */
-export const getCardPreviewHtml = (jobId: string, cardNum: number) =>
-  api.get(`/cards/${jobId}/preview/${cardNum}`, {
-    headers: { Accept: 'text/html' },
-    responseType: 'text',
-  })
-
 export const getExportDownloadUrl = (exportId: string) =>
   `/api/export/${exportId}/download`
 
