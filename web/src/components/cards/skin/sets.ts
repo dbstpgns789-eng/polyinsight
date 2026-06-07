@@ -46,6 +46,37 @@ export const DEEP_TEAL_SET: CardSet = {
   },
 }
 
+// 정보카드 에디토리얼 — 밝은 종이 + 진한 포레스트 committed + 굵은 타이포.
+// 앱 'Academic Desk'(globals.css hue 152)와 통일. 색은 OKLCH(#000/#fff 금지).
+// 미감 방향 C — 2026-06-07 시각 스파이크로 확정(P1 세트 전문화 기본 세트).
+export const EDITORIAL_LIGHT_SET: CardSet = {
+  set_key: 'editorial_light',
+  seed: 'oklch(40% 0.15 152)',
+  tokens: {
+    '--set-font': "'Pretendard Variable', Pretendard, 'Noto Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif",
+    '--set-bg': 'oklch(98% 0.008 152)',
+    '--set-bg-grad': 'oklch(94% 0.02 152)',
+    '--set-bg-gradient': 'linear-gradient(168deg, oklch(99% 0.006 152) 0%, oklch(94.5% 0.022 152) 100%)',
+    '--set-accent': 'oklch(40% 0.15 152)',
+    '--set-accent-ink': 'oklch(99% 0.005 152)',
+    '--set-ink-strong': 'oklch(27% 0.07 152)',
+    '--set-ink-muted': 'oklch(44% 0.05 152)',
+    '--set-ink-faint': 'oklch(70% 0.03 152)',
+    '--set-surface': 'oklch(91% 0.035 152)',
+    '--set-surface-border': 'oklch(84% 0.05 152)',
+    '--set-display': '248px',
+    '--set-headline': '66px',
+    '--set-subhead': '33px',
+    '--set-body': '27px',
+    '--set-caption': '20px',
+    '--set-eyebrow': '19px',
+    '--set-pad': '80px',
+    '--set-gap': '26px',
+    '--set-radius-box': '14px',
+    '--set-radius-pill': '100px',
+  },
+}
+
 /** CardFrame이 토큰을 inline style로 주입할 때 쓰는 헬퍼(타입 캐스트 일원화). */
 export function setTokenStyle(set: CardSet): CSSProperties {
   return set.tokens as CSSProperties
