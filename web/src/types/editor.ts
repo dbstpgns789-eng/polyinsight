@@ -11,6 +11,8 @@ export interface Card {
   card_num: number
   template_type: string
   image_url?: string
+  focal?: { x: number; y: number }
+  image_fit?: 'cover' | 'contain'
   fields?: Record<string, FieldValue>
 }
 
