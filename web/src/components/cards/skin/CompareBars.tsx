@@ -16,12 +16,12 @@ export default function CompareBars({ rows, mode, onRowChange, onFieldFocus, foc
   const max = rows.reduce((m, r) => Math.max(m, Number(r.value) || 0), 0) || 1
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: 'var(--set-font)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, fontFamily: 'var(--set-font)' }}>
       {rows.map((r, i) => {
         const pct = Math.max(4, (Number(r.value) || 0) / max * 100)
         return (
           <div key={i}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
               <EditableText
                 fieldKey={`bar_label_${i}`}
                 value={r.label}
@@ -49,9 +49,9 @@ export default function CompareBars({ rows, mode, onRowChange, onFieldFocus, foc
                 }}
               />
             </div>
-            <div style={{ height: 18, borderRadius: 9, background: 'var(--set-surface)', overflow: 'hidden' }}>
+            <div style={{ height: 24, borderRadius: 999, background: 'var(--set-surface)', overflow: 'hidden' }}>
               <div style={{
-                width: `${pct}%`, height: '100%', borderRadius: 9,
+                width: `${pct}%`, height: '100%', borderRadius: 999,
                 background: r.primary ? 'var(--set-accent)' : 'var(--set-ink-faint)',
               }} />
             </div>
