@@ -97,6 +97,20 @@ export default function EditorPage() {
     })
   }, [activeCardIdx, apiData, debouncedSave])
 
+  const handleFocalUpdate = useCallback((focal: { x: number; y: number }) => {
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      const updatedCards = base.cards.map((card, idx) => {
+        if (idx !== activeCardIdx) return card
+        return { ...card, focal }
+      })
+      const updated = { ...base, cards: updatedCards }
+      debouncedSave(updated)
+      return updated
+    })
+  }, [activeCardIdx, apiData, debouncedSave])
+
   const handleReorderCard = useCallback((idx: number, dir: -1 | 1) => {
     const target = idx + dir
     setLocalData((prev) => {
@@ -193,6 +207,7 @@ export default function EditorPage() {
           onFieldFocus={(field) => setFocusedField(field)}
           onFieldChange={handleFieldChange}
           onImageUploadRequest={() => setImageUploadRequested(true)}
+          onFocalChange={handleFocalUpdate}
         />
 
         <RightPanel
