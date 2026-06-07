@@ -1,24 +1,22 @@
-// BgMotif — 배경 장식(좌상단 동심원 + 우하단 광원). faint, 콘텐츠 뒤.
-// 색/투명도는 피부 토큰에서. 뼈대는 이 컴포넌트를 놓기만 한다.
+// BgMotif — 배경 장식. 미니멀 프리미엄(라이트 에디토리얼): 동심원 대신 소프트 악센트 워시.
+// 종이에 스민 듯한 미세 입체감만, 클러터 없이. 색/투명도는 피부 토큰에서.
 
 export default function BgMotif() {
   return (
     <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-      <svg
-        width={460} height={460}
-        viewBox="0 0 200 200" fill="none"
-        stroke="var(--set-ink-strong)" strokeWidth={1.2}
-        style={{ position: 'absolute', top: -90, left: -90, opacity: 0.10 }}
-      >
-        <circle cx={100} cy={100} r={40} />
-        <circle cx={100} cy={100} r={62} />
-        <circle cx={100} cy={100} r={84} />
-      </svg>
+      {/* 우하단 — 소프트 악센트 글로우(미세 입체감) */}
       <div style={{
-        position: 'absolute', bottom: 120, right: -70,
-        width: 280, height: 280, borderRadius: '50%',
+        position: 'absolute', bottom: -170, right: -130,
+        width: 540, height: 540, borderRadius: '50%',
+        background: 'radial-gradient(circle, var(--set-accent) 0%, transparent 68%)',
+        opacity: 0.07,
+      }} />
+      {/* 좌상단 — 페인트 워시(종이 질감) */}
+      <div style={{
+        position: 'absolute', top: -210, left: -190,
+        width: 560, height: 560, borderRadius: '50%',
         background: 'radial-gradient(circle, var(--set-accent) 0%, transparent 70%)',
-        opacity: 0.14,
+        opacity: 0.04,
       }} />
     </div>
   )
