@@ -25,6 +25,7 @@ interface EditableImageProps {
   focal?: Focal
   onImageRequest?: (slotKey: string) => void
   onFocalChange?: (focal: Focal) => void
+  onFitChange?: (fit: 'cover' | 'contain') => void
 }
 
 export default function EditableImage({
@@ -38,14 +39,15 @@ export default function EditableImage({
   focal,
   onImageRequest,
   onFocalChange,
+  onFitChange,
 }: EditableImageProps) {
   const [hovered, setHovered] = useState(false)
   const isEditable = mode === 'edit'
-  const objectPosition = focalToObjectPosition(focal)
+  const objectPosition = objectFit === 'cover' ? focalToObjectPosition(focal) : 'center'
 
   if (imageUrl) {
     const handleFocalClick = (e: MouseEvent<HTMLDivElement>) => {
-      if (!isEditable || !onFocalChange) return
+      if (!isEditable || !onFocalChange || objectFit !== 'cover') return
       const rect = e.currentTarget.getBoundingClientRect()
       onFocalChange(clickToFocal(e.clientX, e.clientY, rect))
     }
@@ -73,20 +75,22 @@ export default function EditableImage({
         {isEditable && (
           <>
             {/* 현재 초점 십자 표식 (클릭 통과) */}
-            <div
-              style={{
-                position: 'absolute',
-                left: `${(focal?.x ?? 0.5) * 100}%`,
-                top: `${(focal?.y ?? 0.5) * 100}%`,
-                transform: 'translate(-50%, -50%)',
-                width: 26,
-                height: 26,
-                borderRadius: '50%',
-                border: '2px solid rgba(255, 255, 255, 0.95)',
-                boxShadow: '0 0 0 2px rgba(0, 0, 0, 0.45)',
-                pointerEvents: 'none',
-              }}
-            />
+            {objectFit === 'cover' && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${(focal?.x ?? 0.5) * 100}%`,
+                  top: `${(focal?.y ?? 0.5) * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  border: '2px solid rgba(255, 255, 255, 0.95)',
+                  boxShadow: '0 0 0 2px rgba(0, 0, 0, 0.45)',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
             {/* 우상단 교체 버튼 (stopPropagation으로 초점과 분리) */}
             <button
               type="button"
@@ -115,6 +119,30 @@ export default function EditableImage({
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
               </svg>
             </button>
+            {onFitChange && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onFitChange(objectFit === 'cover' ? 'contain' : 'cover') }}
+                aria-label="이미지 맞춤 전환"
+                style={{
+                  position: 'absolute',
+                  top: 10,
+                  left: 10,
+                  height: 36,
+                  padding: '0 12px',
+                  borderRadius: 8,
+                  background: hovered ? 'rgba(0, 0, 0, 0.65)' : 'rgba(0, 0, 0, 0.45)',
+                  color: '#fff',
+                  border: 'none',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  transition: 'background 150ms ease',
+                }}
+              >
+                {objectFit === 'cover' ? '채움' : '전체'}
+              </button>
+            )}
           </>
         )}
       </div>

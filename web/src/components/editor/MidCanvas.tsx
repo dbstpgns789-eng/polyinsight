@@ -36,12 +36,13 @@ interface Props {
   onFieldChange?: (fieldKey: string, value: string) => void
   onImageUploadRequest?: () => void
   onFocalChange?: (focal: { x: number; y: number }) => void
+  onFitChange?: (fit: 'cover' | 'contain') => void
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────
 export default function MidCanvas({
   cards, activeCardIdx, onSelectCard, theme, bgColor, focusedField,
-  onFieldFocus, onFieldChange, onImageUploadRequest, onFocalChange,
+  onFieldFocus, onFieldChange, onImageUploadRequest, onFocalChange, onFitChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(0.5)
@@ -105,6 +106,7 @@ export default function MidCanvas({
             onFieldChange={onFieldChange}
             onImageRequest={onImageUploadRequest ? () => onImageUploadRequest() : undefined}
             onFocalChange={onFocalChange}
+            onFitChange={onFitChange}
           />
         </div>
 

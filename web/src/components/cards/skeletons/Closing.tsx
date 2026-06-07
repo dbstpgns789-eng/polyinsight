@@ -5,7 +5,7 @@ import type { CardComponentProps } from '../types'
 import { fieldValue } from '../types'
 
 export default function Closing(props: CardComponentProps) {
-  const { card, mode, onFieldChange, onFieldFocus, focusedField, onImageRequest, onFocalChange } = props
+  const { card, mode, onFieldChange, onFieldFocus, focusedField, onImageRequest, onFocalChange, onFitChange } = props
   const showImage = !!card.image_url || mode === 'edit'
   return (
     <CardSurface>
@@ -20,8 +20,8 @@ export default function Closing(props: CardComponentProps) {
           onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'body'} />
         {showImage && (
           <div style={{ width: '100%', maxWidth: 620, alignSelf: 'center', aspectRatio: '16 / 7', marginTop: 8 }}>
-            <VisualZone imageUrl={card.image_url} slotKey="closing_v2" mode={mode} focal={card.focal}
-              onImageRequest={onImageRequest} onFocalChange={onFocalChange} />
+            <VisualZone imageUrl={card.image_url} slotKey="closing_v2" mode={mode} focal={card.focal} fit={card.image_fit}
+              onImageRequest={onImageRequest} onFocalChange={onFocalChange} onFitChange={onFitChange} />
           </div>
         )}
       </div>
