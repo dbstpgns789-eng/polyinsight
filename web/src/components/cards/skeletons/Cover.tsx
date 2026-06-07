@@ -5,7 +5,7 @@ import type { CardComponentProps } from '../types'
 import { fieldValue } from '../types'
 
 export default function Cover(props: CardComponentProps) {
-  const { card, mode, onFieldChange, onFieldFocus, focusedField, onImageRequest } = props
+  const { card, mode, onFieldChange, onFieldFocus, focusedField, onImageRequest, onFocalChange } = props
   const showImage = !!card.image_url || mode === 'edit'
   return (
     <CardSurface>
@@ -23,7 +23,7 @@ export default function Cover(props: CardComponentProps) {
               onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focusedField === 'subtitle'} />
           </div>
           <div style={{ flex: 1, minHeight: 0, marginTop: 32, marginBottom: 24 }}>
-            <VisualZone imageUrl={card.image_url} slotKey="cover" mode={mode} onImageRequest={onImageRequest} />
+            <VisualZone imageUrl={card.image_url} slotKey="cover" mode={mode} focal={card.focal} onImageRequest={onImageRequest} onFocalChange={onFocalChange} />
           </div>
         </>
       ) : (
