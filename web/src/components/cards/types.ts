@@ -10,6 +10,7 @@ export interface CardComponentProps {
   mode: CardMode
   onFieldChange?: (fieldKey: string, value: string) => void
   onImageRequest?: (slotKey: string) => void
+  onFocalChange?: (focal: { x: number; y: number }) => void
   onFieldFocus?: (fieldKey: string) => void
   focusedField?: string | null
 }
