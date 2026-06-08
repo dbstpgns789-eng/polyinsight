@@ -10,7 +10,7 @@ import MidCanvas from '@/components/editor/MidCanvas'
 import RightPanel from '@/components/editor/RightPanel'
 import FactDrawer from '@/components/editor/FactDrawer'
 import ExportModal from '@/components/export/ExportModal'
-import type { CardDataPayload, ApiResponse, CardTheme, FieldStyle } from '@/types/editor'
+import type { CardDataPayload, ApiResponse, FieldStyle } from '@/types/editor'
 import { MOCK_EDITOR_DATA } from '@/lib/mockData'
 import { renameJob, downloadCard } from '@/lib/api'
 
@@ -147,11 +147,11 @@ export default function EditorPage() {
     })
   }, [apiData, debouncedSave, cards.length])
 
-  const handleThemeChange = useCallback((theme: CardTheme) => {
+  const handleAccentColorChange = useCallback((hex: string) => {
     setLocalData((prev) => {
       const base = prev ?? apiData?.cardData
       if (!base) return prev
-      const updated = { ...base, theme }
+      const updated = { ...base, accent_color: hex }
       saveNow(updated)
       return updated
     })
@@ -260,7 +260,8 @@ export default function EditorPage() {
           onSelectCard={setActiveCardIdx}
           onReorderCard={handleReorderCard}
           theme={cardData?.theme}
-          bgColor={cardData?.bg_color ?? '#111111'}
+          bgColor={cardData?.bg_color}
+          accentColor={cardData?.accent_color}
         />
 
         <MidCanvas
@@ -269,7 +270,8 @@ export default function EditorPage() {
           activeCardIdx={activeCardIdx}
           onSelectCard={setActiveCardIdx}
           theme={cardData?.theme}
-          bgColor={cardData?.bg_color ?? '#111111'}
+          bgColor={cardData?.bg_color}
+          accentColor={cardData?.accent_color}
           isDemo={isDemo}
           focusedField={focusedField}
           onFieldFocus={(field) => setFocusedField(field)}
@@ -286,10 +288,10 @@ export default function EditorPage() {
           onImageUpdate={handleImageUpdate}
           imageUploadRequested={imageUploadRequested}
           onImageUploadHandled={() => setImageUploadRequested(false)}
-          currentThemePrimary={cardData?.theme?.primary}
+          currentAccent={cardData?.accent_color}
           recommendedThemeKey={cardData?.recommended_theme_key}
-          onThemeChange={handleThemeChange}
-          bgColor={cardData?.bg_color ?? '#111111'}
+          onAccentColorChange={handleAccentColorChange}
+          bgColor={cardData?.bg_color}
           onBgColorChange={handleBgColorChange}
           focusedField={focusedField}
           activeFieldStyle={focusedField ? cards[activeCardIdx]?.field_styles?.[focusedField] : undefined}

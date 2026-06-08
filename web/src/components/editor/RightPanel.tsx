@@ -3,8 +3,8 @@
 import { useRef, useEffect, useState } from 'react'
 import { getSlotMeta } from '@/lib/imageSlots'
 import type { SlotType } from '@/lib/imageSlots'
-import type { Card, CardTheme, FieldStyle } from '@/types/editor'
-import ColorPicker, { hexToHsv, hsvToHex } from '@/components/ui/ColorPicker'
+import type { Card, FieldStyle } from '@/types/editor'
+import ColorPicker from '@/components/ui/ColorPicker'
 import ElementStyleControls from './ElementStyleControls'
 
 interface Props {
@@ -12,10 +12,10 @@ interface Props {
   onImageUpdate: (imageUrl: string | null) => void
   imageUploadRequested?: boolean
   onImageUploadHandled?: () => void
-  currentThemePrimary?: string
+  currentAccent?: string
   recommendedThemeKey?: string
-  onThemeChange: (theme: CardTheme) => void
-  bgColor: string
+  onAccentColorChange: (hex: string) => void
+  bgColor?: string
   onBgColorChange: (hex: string) => void
   focusedField?: string | null
   activeFieldStyle?: FieldStyle
@@ -87,6 +87,9 @@ function SlotDiagram({ type }: { type: SlotType }) {
 
 const THEME_PRIMARY_PRESETS = ['#2563EB', '#16A34A', '#EA580C', '#7C3AED', '#D97706', '#475569']
 
+const SET_BG_DISPLAY = '#f5f8f6'      // 에디토리얼 라이트 --set-bg 근사(미설정 시 피커 표시용)
+const SET_ACCENT_DISPLAY = '#1f6e47'  // --set-accent 근사(표시용)
+
 const FIELD_LABELS: Record<string, string> = {
   eyebrow: '키커', headline: '제목', subtitle: '부제', subhead: '부제',
   body: '본문', org: '출처', caption: '캡션', source: '출처', source_ref: '출처',
@@ -111,7 +114,7 @@ type Section = 'element' | 'font' | 'color' | 'image' | null
 // ── 컴포넌트 ──────────────────────────────────────────────────────────────
 export default function RightPanel({
   activeCard, onImageUpdate, imageUploadRequested, onImageUploadHandled,
-  currentThemePrimary, recommendedThemeKey, onThemeChange,
+  currentAccent, recommendedThemeKey, onAccentColorChange,
   bgColor, onBgColorChange,
   focusedField, activeFieldStyle, onFieldStyleChange, onFieldStyleReset,
 }: Props) {
@@ -237,14 +240,14 @@ export default function RightPanel({
                 >
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink)' }}>배경</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 16, height: 16, borderRadius: 3, background: bgColor, border: '1px solid rgba(255,255,255,0.2)' }} />
-                    <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'monospace' }}>{bgColor}</span>
+                    <div style={{ width: 16, height: 16, borderRadius: 3, background: bgColor ?? SET_BG_DISPLAY, border: '1px solid rgba(255,255,255,0.2)' }} />
+                    <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'monospace' }}>{bgColor ?? SET_BG_DISPLAY}</span>
                     <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>{openColorRow === 'bg' ? '▴' : '▾'}</span>
                   </div>
                 </button>
                 {openColorRow === 'bg' && (
                   <div style={{ padding: '8px 10px 10px' }}>
-                    <ColorPicker value={bgColor} onChange={onBgColorChange} />
+                    <ColorPicker value={bgColor ?? SET_BG_DISPLAY} onChange={onBgColorChange} />
                   </div>
                 )}
               </div>
@@ -266,20 +269,16 @@ export default function RightPanel({
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 16, height: 16, borderRadius: 3, background: currentThemePrimary ?? '#2563EB', border: '1px solid rgba(255,255,255,0.2)' }} />
-                    <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'monospace' }}>{currentThemePrimary ?? '#2563EB'}</span>
+                    <div style={{ width: 16, height: 16, borderRadius: 3, background: currentAccent ?? SET_ACCENT_DISPLAY, border: '1px solid rgba(255,255,255,0.2)' }} />
+                    <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'monospace' }}>{currentAccent ?? SET_ACCENT_DISPLAY}</span>
                     <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>{openColorRow === 'theme' ? '▴' : '▾'}</span>
                   </div>
                 </button>
                 {openColorRow === 'theme' && (
                   <div style={{ padding: '8px 10px 10px' }}>
                     <ColorPicker
-                      value={currentThemePrimary ?? '#2563EB'}
-                      onChange={(hex) => {
-                        const [h, s, v] = hexToHsv(hex)
-                        const dark = hsvToHex(h, s, v * 0.65)
-                        onThemeChange({ primary: hex, dark })
-                      }}
+                      value={currentAccent ?? SET_ACCENT_DISPLAY}
+                      onChange={(hex) => onAccentColorChange(hex)}
                       presets={THEME_PRIMARY_PRESETS}
                     />
                   </div>

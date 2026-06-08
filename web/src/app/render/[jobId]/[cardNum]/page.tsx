@@ -66,7 +66,7 @@ export default function RenderPage() {
 
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: 1080, height: 1080, overflow: 'hidden', background: '#fff' }}>
-      <CardRenderer card={card} theme={theme} bgColor={cardData?.bg_color ?? '#111111'} mode="render" scale={1} />
+      <CardRenderer card={card} theme={theme} bgColor={cardData?.bg_color} accentColor={cardData?.accent_color} mode="render" scale={1} />
     </div>
   )
 }

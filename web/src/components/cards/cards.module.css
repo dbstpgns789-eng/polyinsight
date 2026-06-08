@@ -37,9 +37,7 @@
   --space-lg:  40px;
   --space-xl:  60px;
 
-  /* Theme: CardFrame이 inline style로 덮어쓰므로 fallback 역할 */
-  --theme-primary: #2563EB;
-  --theme-dark:    #1A4C96;
+  /* --theme-* 은퇴: 카드는 --set-* 만 사용 (덱 오버라이드는 CardFrame). 구 island 클래스 잔재는 후속 정리 */
 
   font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
   -webkit-font-smoothing: antialiased;

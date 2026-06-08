@@ -13,15 +13,16 @@ import type { CardComponentProps } from './types'
 interface CardRendererProps extends CardComponentProps {
   scale?: number
   bgColor?: string
+  accentColor?: string
 }
 
-export default function CardRenderer({ scale = 1, bgColor, ...props }: CardRendererProps) {
-  const { card, theme } = props
+export default function CardRenderer({ scale = 1, bgColor, accentColor, ...props }: CardRendererProps) {
+  const { card } = props
   const Component = CARD_COMPONENTS[card.template_type]
 
   return (
     <FieldStylesProvider value={card.field_styles ?? {}}>
-      <CardFrame theme={theme} bgColor={bgColor} scale={scale}>
+      <CardFrame bgColor={bgColor} accentColor={accentColor} scale={scale}>
         {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
       </CardFrame>
     </FieldStylesProvider>
@@ -34,7 +35,7 @@ function UnimplementedTemplate({ templateType }: { templateType: string }) {
       width: '100%', height: '100%',
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      background: 'var(--theme-bg, #111111)',
+      background: 'var(--set-bg, #111111)',
       color: '#666', fontFamily: 'Noto Sans KR, sans-serif', gap: 16,
     }}>
       <div style={{ fontSize: 80 }}>🚧</div>
