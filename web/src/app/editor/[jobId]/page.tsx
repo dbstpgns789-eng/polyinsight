@@ -10,7 +10,7 @@ import MidCanvas from '@/components/editor/MidCanvas'
 import RightPanel from '@/components/editor/RightPanel'
 import FactDrawer from '@/components/editor/FactDrawer'
 import ExportModal from '@/components/export/ExportModal'
-import type { CardDataPayload, ApiResponse, CardTheme } from '@/types/editor'
+import type { CardDataPayload, ApiResponse, CardTheme, FieldStyle } from '@/types/editor'
 import { MOCK_EDITOR_DATA } from '@/lib/mockData'
 import { renameJob, downloadCard } from '@/lib/api'
 
@@ -167,6 +167,56 @@ export default function EditorPage() {
     })
   }, [apiData, saveNow])
 
+  const handleFieldStyleChange = useCallback((fieldKey: string, patch: Partial<FieldStyle>) => {
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      const updatedCards = base.cards.map((card, idx) => {
+        if (idx !== activeCardIdx) return card
+        const current = card.field_styles?.[fieldKey] ?? {}
+        return { ...card, field_styles: { ...card.field_styles, [fieldKey]: { ...current, ...patch } } }
+      })
+      const updated = { ...base, cards: updatedCards }
+      debouncedSave(updated)
+      return updated
+    })
+  }, [activeCardIdx, apiData, debouncedSave])
+
+  const handleFieldStyleReset = useCallback((fieldKey: string) => {
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      const updatedCards = base.cards.map((card, idx) => {
+        if (idx !== activeCardIdx) return card
+        if (!card.field_styles?.[fieldKey]) return card
+        const rest = { ...card.field_styles }
+        delete rest[fieldKey]
+        return { ...card, field_styles: rest }
+      })
+      const updated = { ...base, cards: updatedCards }
+      debouncedSave(updated)
+      return updated
+    })
+  }, [activeCardIdx, apiData, debouncedSave])
+
+  const handleRename = useCallback((title: string) => {
+    setLocalFilename(title)           // 낙관적 반영
+    if (isDemo) return
+    renameJob(jobId, title).catch(() => setLocalFilename(null))  // 실패 시 서버값 복원
+  }, [isDemo, jobId])
+
+  const handleDownloadCard = useCallback(async (cardNum: number) => {
+    if (isDemo) return
+    setDownloadingCardNum(cardNum)
+    try {
+      await downloadCard(jobId, cardNum)
+    } catch {
+      alert('카드 다운로드에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setDownloadingCardNum(null)
+    }
+  }, [isDemo, jobId])
+
   const handleSaveNow = () => {
     if (localData) saveNow(localData)
   }
@@ -188,24 +238,6 @@ export default function EditorPage() {
       </div>
     </div>
   )
-
-  const handleRename = useCallback((title: string) => {
-    setLocalFilename(title)           // 낙관적 반영
-    if (isDemo) return
-    renameJob(jobId, title).catch(() => setLocalFilename(null))  // 실패 시 서버값 복원
-  }, [isDemo, jobId])
-
-  const handleDownloadCard = useCallback(async (cardNum: number) => {
-    if (isDemo) return
-    setDownloadingCardNum(cardNum)
-    try {
-      await downloadCard(jobId, cardNum)
-    } catch {
-      alert('카드 다운로드에 실패했습니다. 잠시 후 다시 시도해 주세요.')
-    } finally {
-      setDownloadingCardNum(null)
-    }
-  }, [isDemo, jobId])
 
   return (
     // h-screen + overflow-hidden → 뷰포트 핏 (DESIGN_3.md §1)
@@ -260,6 +292,10 @@ export default function EditorPage() {
           onThemeChange={handleThemeChange}
           bgColor={cardData?.bg_color ?? '#111111'}
           onBgColorChange={handleBgColorChange}
+          focusedField={focusedField}
+          activeFieldStyle={focusedField ? cards[activeCardIdx]?.field_styles?.[focusedField] : undefined}
+          onFieldStyleChange={handleFieldStyleChange}
+          onFieldStyleReset={handleFieldStyleReset}
         />
       </div>
 
