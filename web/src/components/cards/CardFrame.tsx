@@ -16,7 +16,7 @@ interface CardFrameProps {
   theme: CardTheme
   bgColor?: string
   scale?: number              // 1 = 1080px 원본, 0.5 = 540px 표시
-  set?: CardSet               // 피부 토큰(--set-*) 주입. 기본 딥틸.
+  set?: CardSet               // 피부 토큰(--set-*) 주입. 기본 에디토리얼 라이트.
   children: ReactNode
   className?: string
 }
