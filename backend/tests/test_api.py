@@ -328,6 +328,15 @@ def test_card_editor_data_bg_color_custom():
 # ── 파일명 변경 / 삭제 / 단일 카드 다운로드 ──────────────────────────────────
 
 @pytest.mark.asyncio
+async def test_get_cards_includes_filename(client):
+    await _db.create_job("j1", "paper.pdf")
+    await _db.save_card_data("j1", json.dumps({"cards": []}))
+    resp = await client.get("/api/cards/j1")
+    assert resp.status_code == 200
+    assert resp.json()["filename"] == "paper.pdf"
+
+
+@pytest.mark.asyncio
 async def test_rename_job(client):
     await _db.create_job("j1", "old.pdf")
     resp = await client.patch("/api/jobs/j1", json={"title": "새 이름.pdf"})

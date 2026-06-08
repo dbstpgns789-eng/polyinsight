@@ -78,6 +78,7 @@ async def get_cards(job_id: str):
 
     return {
         "jobId": job_id,
+        "filename": job["title"],
         "cardData": json.loads(raw),
         "updatedAt": job["updated_at"],
     }
