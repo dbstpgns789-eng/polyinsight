@@ -7,6 +7,14 @@ export interface FieldValue {
   source?: { section: string; page: number }
 }
 
+export interface FieldStyle {
+  size?: 'S' | 'M' | 'L' | 'XL'
+  tracking?: number
+  weight?: 'regular' | 'bold'
+  align?: 'left' | 'center' | 'right'
+  color?: 'ink-strong' | 'ink-muted' | 'accent'
+}
+
 export interface Card {
   card_num: number
   template_type: string
@@ -14,6 +22,7 @@ export interface Card {
   focal?: { x: number; y: number }
   image_fit?: 'cover' | 'contain'
   fields?: Record<string, FieldValue>
+  field_styles?: Record<string, FieldStyle>
 }
 
 export interface CardTheme {
