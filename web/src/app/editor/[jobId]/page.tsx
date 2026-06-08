@@ -282,7 +282,6 @@ export default function EditorPage() {
         />
 
         <RightPanel
-          jobId={jobId}
           activeCard={cards[activeCardIdx]}
           onImageUpdate={handleImageUpdate}
           imageUploadRequested={imageUploadRequested}

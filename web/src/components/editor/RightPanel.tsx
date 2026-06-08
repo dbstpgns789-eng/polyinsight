@@ -8,7 +8,6 @@ import ColorPicker, { hexToHsv, hsvToHex } from '@/components/ui/ColorPicker'
 import ElementStyleControls from './ElementStyleControls'
 
 interface Props {
-  jobId: string
   activeCard?: Card
   onImageUpdate: (imageUrl: string | null) => void
   imageUploadRequested?: boolean
@@ -86,20 +85,11 @@ function SlotDiagram({ type }: { type: SlotType }) {
   return null
 }
 
-const THEME_PRESETS = [
-  { key: 'tech_blue',     label: '테크 블루',    primary: '#2563EB', dark: '#1A4C96' },
-  { key: 'forest_green',  label: '포레스트 그린', primary: '#16A34A', dark: '#166534' },
-  { key: 'sunset_orange', label: '썬셋 오렌지',  primary: '#EA580C', dark: '#9A3412' },
-  { key: 'royal_violet',  label: '로열 바이올렛',primary: '#7C3AED', dark: '#4C1D95' },
-  { key: 'golden_yellow', label: '골든 옐로',    primary: '#D97706', dark: '#92400E' },
-  { key: 'slate',         label: '슬레이트',     primary: '#475569', dark: '#1E293B' },
-] as const
-
-const THEME_PRIMARY_PRESETS = THEME_PRESETS.map((t) => t.primary)
+const THEME_PRIMARY_PRESETS = ['#2563EB', '#16A34A', '#EA580C', '#7C3AED', '#D97706', '#475569']
 
 const FIELD_LABELS: Record<string, string> = {
   eyebrow: '키커', headline: '제목', subtitle: '부제', subhead: '부제',
-  body: '본문', org: '출처', caption: '캡션', source: '출처',
+  body: '본문', org: '출처', caption: '캡션', source: '출처', source_ref: '출처',
 }
 const fieldLabel = (k: string) => FIELD_LABELS[k] ?? k
 
