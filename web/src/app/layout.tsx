@@ -28,6 +28,11 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
         />
+        {/* 덱 글꼴 페어링(--set-font 오버라이드)용 — Noto Serif KR(명조), Gothic A1(기하학 고딕) */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700;900&family=Gothic+A1:wght@400;700;800;900&display=swap"
+        />
       </head>
       <body><Providers>{children}</Providers></body>
     </html>

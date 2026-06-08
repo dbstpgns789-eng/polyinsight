@@ -14,15 +14,16 @@ interface CardRendererProps extends CardComponentProps {
   scale?: number
   bgColor?: string
   accentColor?: string
+  fontPairing?: string
 }
 
-export default function CardRenderer({ scale = 1, bgColor, accentColor, ...props }: CardRendererProps) {
+export default function CardRenderer({ scale = 1, bgColor, accentColor, fontPairing, ...props }: CardRendererProps) {
   const { card } = props
   const Component = CARD_COMPONENTS[card.template_type]
 
   return (
     <FieldStylesProvider value={card.field_styles ?? {}}>
-      <CardFrame bgColor={bgColor} accentColor={accentColor} scale={scale}>
+      <CardFrame bgColor={bgColor} accentColor={accentColor} fontPairing={fontPairing} scale={scale}>
         {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
       </CardFrame>
     </FieldStylesProvider>

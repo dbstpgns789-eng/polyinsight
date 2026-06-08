@@ -6,6 +6,7 @@ import type { SlotType } from '@/lib/imageSlots'
 import type { Card, FieldStyle } from '@/types/editor'
 import ColorPicker from '@/components/ui/ColorPicker'
 import ElementStyleControls from './ElementStyleControls'
+import { FONT_OPTIONS } from '@/components/cards/fontPairings'
 
 interface Props {
   activeCard?: Card
@@ -17,6 +18,8 @@ interface Props {
   onAccentColorChange: (hex: string) => void
   bgColor?: string
   onBgColorChange: (hex: string) => void
+  currentFontPairing?: string
+  onFontPairingChange: (key: string) => void
   focusedField?: string | null
   activeFieldStyle?: FieldStyle
   onFieldStyleChange: (fieldKey: string, patch: Partial<FieldStyle>) => void
@@ -116,6 +119,7 @@ export default function RightPanel({
   activeCard, onImageUpdate, imageUploadRequested, onImageUploadHandled,
   currentAccent, recommendedThemeKey, onAccentColorChange,
   bgColor, onBgColorChange,
+  currentFontPairing, onFontPairingChange,
   focusedField, activeFieldStyle, onFieldStyleChange, onFieldStyleReset,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -210,13 +214,33 @@ export default function RightPanel({
 
         {divider}
 
-        {/* §1 — 글꼴 (덱 단위, P2 placeholder) */}
+        {/* §1 — 글꼴 (덱 단위) */}
         <section>
           <AccordionHead label="글꼴" open={openSection === 'font'} onToggle={() => toggle('font')} />
           {openSection === 'font' && (
-            <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 10, border: '1px dashed var(--border-soft)', background: 'var(--canvas-subtle)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 18, color: 'var(--ink-3)' }}>lock</span>
-              <p style={{ fontSize: 11, color: 'var(--ink-3)', lineHeight: 1.5 }}>글꼴 페어링(덱 단위)은 곧 제공됩니다.</p>
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {FONT_OPTIONS.map((opt) => {
+                const active = (currentFontPairing ?? 'pretendard') === opt.key
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => onFontPairingChange(opt.key)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                      padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                      border: active ? '1.5px solid var(--brand)' : '1px solid var(--border-subtle)',
+                      background: active ? 'var(--brand-soft)' : 'var(--canvas)',
+                    }}
+                  >
+                    <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontFamily: opt.family, fontSize: 15, fontWeight: 700, color: 'var(--ink)' }}>{opt.label}</span>
+                      <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>{opt.sub}</span>
+                    </span>
+                    <span aria-hidden style={{ fontFamily: opt.family, fontSize: 20, fontWeight: 800, color: active ? 'var(--brand)' : 'var(--ink-3)' }}>가</span>
+                  </button>
+                )
+              })}
             </div>
           )}
         </section>

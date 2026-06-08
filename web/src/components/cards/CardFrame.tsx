@@ -8,19 +8,21 @@
 import { type CSSProperties, type ReactNode } from 'react'
 import styles from './cards.module.css'
 import { EDITORIAL_LIGHT_SET, type CardSet } from './skin/sets'
+import { FONT_PAIRINGS } from './fontPairings'
 
 const CARD_SIZE = 1080
 
 interface CardFrameProps {
   bgColor?: string            // 덱 배경 오버라이드. 미설정 시 세트 기본(--set-bg-gradient)
   accentColor?: string        // 덱 강조 오버라이드. 미설정 시 세트 기본(--set-accent)
+  fontPairing?: string        // 덱 글꼴 오버라이드(레지스트리 키). 미설정 시 세트 기본(--set-font)
   scale?: number              // 1 = 1080px 원본, 0.5 = 540px 표시
   set?: CardSet               // 피부 토큰(--set-*) 주입. 기본 에디토리얼 라이트.
   children: ReactNode
   className?: string
 }
 
-export default function CardFrame({ bgColor, accentColor, scale = 1, set = EDITORIAL_LIGHT_SET, children, className }: CardFrameProps) {
+export default function CardFrame({ bgColor, accentColor, fontPairing, scale = 1, set = EDITORIAL_LIGHT_SET, children, className }: CardFrameProps) {
   // Wrapper는 시각적 크기 (scaled). overflow:hidden으로 inner의 layout overflow를 클립.
   const wrapperStyle: CSSProperties = {
     width: CARD_SIZE * scale,
@@ -34,6 +36,7 @@ export default function CardFrame({ bgColor, accentColor, scale = 1, set = EDITO
     ...set.tokens,                 // --set-* 피부 토큰 주입
     ...(bgColor ? { '--set-bg': bgColor, '--set-bg-gradient': bgColor } : {}),
     ...(accentColor ? { '--set-accent': accentColor } : {}),
+    ...(fontPairing && FONT_PAIRINGS[fontPairing] ? { '--set-font': FONT_PAIRINGS[fontPairing] } : {}),
     width: CARD_SIZE,
     height: CARD_SIZE,
     position: 'relative',

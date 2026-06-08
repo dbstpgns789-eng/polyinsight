@@ -36,6 +36,7 @@ export interface CardDataPayload {
   recommended_theme_key?: string
   bg_color?: string
   accent_color?: string
+  font_pairing?: string
 }
 
 export interface ApiResponse {
