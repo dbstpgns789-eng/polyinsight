@@ -365,6 +365,10 @@ interface CardThemeId = 'forest-light' | 'deep-dark' | 'academic-gray' | 'ivory-
 interface CardEditorData {
   recommended_theme: CardThemeId   // S6가 도메인 분석 후 결정. 변경 불가 (읽기 전용)
   user_theme: CardThemeId | null   // 사용자가 RightPanel에서 선택한 값. null이면 recommended_theme 사용
+  // 덱 색상 오버라이드 (선택적). 미설정=세트(--set-*) 기본값 사용.
+  // 레거시 theme/recommended_theme_key는 스키마 유지하나 신 카드 렌더는 사용하지 않음 (--theme-* 은퇴).
+  bg_color?: string       // 덱 배경 오버라이드(선택). --set-bg / --set-bg-gradient를 덮음.
+  accent_color?: string   // 덱 강조 오버라이드(선택). --set-accent를 덮음.
   meta: {
     org:            FieldValue
     dept:           FieldValue
@@ -404,6 +408,9 @@ interface FieldStyle {
 - `fields[*].verified` — 확인 완료 버튼으로 true 변경 가능
 - `image_url` — 이미지 존 보유 뼈대(cover_v2·feature·statement·closing_v2)에 업로드
 - `focal` / `image_fit` — 이미지 초점(클릭)·맞춤(채움/전체) 조정
+- `bg_color?: string` — 덱 배경 오버라이드(선택). 미설정=세트 기본. `--set-bg`/`--set-bg-gradient`를 덮음.
+- `accent_color?: string` — 덱 강조 오버라이드(선택). 미설정=세트 기본. `--set-accent`를 덮음.
+- (레거시 `theme`/`recommended_theme_key`는 스키마 유지하나 신 카드 렌더는 사용하지 않음 — `--theme-*` 은퇴.)
 - `field_styles?: { [fieldKey]: FieldStyle }` — 요소별 미세조정(선택적).
   `FieldStyle = { size?: 'S'|'M'|'L'|'XL'; tracking?: number; weight?: 'regular'|'bold';
   align?: 'left'|'center'|'right'; color?: 'ink-strong'|'ink-muted'|'accent' }`.
@@ -511,6 +518,7 @@ interface ExportStatus {
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-06-08 | v2.4 | CardEditorData에 `bg_color?`/`accent_color?` 덱 오버라이드 추가. `--theme-*` 은퇴 명시. 상세: `docs/18_card_design_system.md §3 덱 단위 오버라이드`. |
 | 2026-06-03 | v2.3 | card_count 상한 15→7 (Haiku 출력 한계 안전권). S6 LLM 출력에서 risk_level·verified 제외 (코드 자동 판정). LLMTruncationError 도입 — 출력 천장 도달 시 ERR-S6-002 즉시 반환. |
 | 2026-06-01 | v2.2 | CardEditorData에 `recommended_theme` / `user_theme` 추가. AI 테마 추천 + 사용자 오버라이드 설계 확정. |
 | 2026-05-18 | v2.1 | POST /api/upload에 card_count 추가. CardEditorData → CardSlot 가변 구조. layout_variants 제거. 라우터 구현 완료. |

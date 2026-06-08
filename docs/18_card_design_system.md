@@ -51,6 +51,15 @@
 > 규율: `@theme`/토큰에 hex 직접 금지는 앱-크롬 규칙(`web/CLAUDE.md §6`). `--set-*`는
 > 카드 전용 독립 네임스페이스라 세트 정의 파일에서 OKLCH/hex 리터럴을 직접 가진다(여기가 단일 출처).
 
+### 덱 단위 오버라이드 (--set-* 위에)
+사용자 덱 컨트롤은 세트 기본값(--set-*)을 **선택적으로** 덮는다. 미설정(undefined)=세트 기본.
+- `CardDataPayload.bg_color?`  → `--set-bg` + `--set-bg-gradient`
+- `CardDataPayload.accent_color?` → `--set-accent`
+- (`font_pairing?` → `--set-font`, P2)
+
+주입 지점: `CardFrame`. 레거시 `--theme-*`는 **은퇴**(라이브 렌더 미사용). `theme`/`recommended_theme_key`는
+스키마에 잔존하나 신 카드 렌더는 읽지 않는다. 기본값을 그대로 덮으면 전 카드가 회귀하므로 오버라이드는 반드시 선택적.
+
 ## 4. 8 뼈대 — `skeletons/`
 
 서사 아키타입(실험형 9 beat)을 생김새로 압축한 8개. 5장=압축, 7장=표준으로 부분집합 사용.
