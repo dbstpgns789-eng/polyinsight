@@ -109,6 +109,33 @@ async def patch_cards(job_id: str, body: PatchCardBody):
     return {"autoSaveStatus": "saved", "updatedAt": row["updated_at"]}
 
 
+# ── 파일명 변경 / 프로젝트 삭제 ────────────────────────────────────────────
+
+class RenameJobBody(BaseModel):
+    title: str
+
+
+@router.patch("/jobs/{job_id}")
+async def rename_job(job_id: str, body: RenameJobBody):
+    """프로젝트 표시명(파일명) 변경."""
+    title = body.title.strip()
+    if not title:
+        raise HTTPException(400, detail={"code": "ERR-VAL-002", "message": "이름은 비울 수 없습니다."})
+    ok = await db.update_job_title(job_id, title)
+    if not ok:
+        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+    return {"ok": True, "title": title}
+
+
+@router.delete("/jobs/{job_id}", status_code=204)
+async def delete_job_endpoint(job_id: str):
+    """프로젝트와 연관 데이터(card_data·card_images·exports) 일괄 삭제."""
+    ok = await db.delete_job(job_id)
+    if not ok:
+        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+    return None
+
+
 # ── 내보내기 트리거 ───────────────────────────────────────────────────────
 
 @router.post("/cards/{job_id}/export")

@@ -323,3 +323,64 @@ def test_card_editor_data_bg_color_custom():
     meta = CardMeta(org=fv, dept=fv, researcher=fv, month=fv, edition_number=fv)
     data = CardEditorData(meta=meta, cards=[], bg_color="#0A0F1E")
     assert data.bg_color == "#0A0F1E"
+
+
+# ── 파일명 변경 / 삭제 / 단일 카드 다운로드 ──────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_rename_job(client):
+    await _db.create_job("j1", "old.pdf")
+    resp = await client.patch("/api/jobs/j1", json={"title": "새 이름.pdf"})
+    assert resp.status_code == 200
+    assert resp.json()["title"] == "새 이름.pdf"
+    job = await _db.get_job("j1")
+    assert job["title"] == "새 이름.pdf"
+
+
+@pytest.mark.asyncio
+async def test_rename_empty_rejected(client):
+    await _db.create_job("j1", "old.pdf")
+    resp = await client.patch("/api/jobs/j1", json={"title": "   "})
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_rename_missing_job_404(client):
+    resp = await client.patch("/api/jobs/nope", json={"title": "x"})
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_job_cascade(client):
+    await _db.create_job("j1", "p.pdf")
+    await _db.save_card_data("j1", json.dumps({"cards": []}))
+    resp = await client.delete("/api/jobs/j1")
+    assert resp.status_code == 204
+    assert await _db.get_job("j1") is None
+    assert await _db.get_card_data("j1") is None
+    resp2 = await client.delete("/api/jobs/j1")
+    assert resp2.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_download_card_fresh_render(client):
+    await _db.create_job("j1", "paper.pdf")
+    await _db.save_card_data("j1", json.dumps({"cards": []}))
+    fake_png = b"\x89PNG fake-bytes"
+    with patch(
+        "backend.routers.export._playwright_render_via_url_sync",
+        return_value=([fake_png], []),
+    ):
+        resp = await client.get("/api/cards/j1/download/1")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    cd = resp.headers["content-disposition"]
+    assert "attachment" in cd and "paper_01.png" in cd
+    assert resp.content == fake_png
+
+
+@pytest.mark.asyncio
+async def test_download_missing_carddata_404(client):
+    await _db.create_job("j1", "p.pdf")
+    resp = await client.get("/api/cards/j1/download/1")
+    assert resp.status_code == 404
