@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 type SaveState = 'saving' | 'saved' | 'idle' | 'error'
@@ -9,6 +10,7 @@ interface Props {
   saveState?: SaveState
   onSaveNow?: () => void
   onExport?: () => void
+  onRename?: (title: string) => void
 }
 
 // ── 아이콘 ────────────────────────────────────────────────────────────────
@@ -76,9 +78,22 @@ function IconDownload() {
 }
 
 // ── 컴포넌트 ──────────────────────────────────────────────────────────────
-export default function Topbar({ filename, saveState, onSaveNow, onExport }: Props) {
+export default function Topbar({ filename, saveState, onSaveNow, onExport, onRename }: Props) {
   const router = useRouter()
   const docTitle = filename ?? 'Research Paper'
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  const startEdit = () => {
+    if (!onRename) return
+    setDraft(filename ?? '')
+    setEditing(true)
+  }
+  const commitEdit = () => {
+    setEditing(false)
+    const t = draft.trim()
+    if (t && t !== filename) onRename?.(t)
+  }
   const dotColor = saveState === 'saved' ? '#16A34A' : saveState === 'error' ? '#DC2626' : '#D97706'
   const dotPulse = saveState === 'saving'
 
@@ -130,24 +145,47 @@ export default function Topbar({ filename, saveState, onSaveNow, onExport }: Pro
             aria-hidden="true"
           />
 
-          <button
-            type="button"
-            aria-label="프로젝트 이름 편집"
-            className="inline-flex items-center min-w-0 transition-colors"
-            style={{ gap: 6, height: 32, paddingLeft: 10, paddingRight: 8, borderRadius: 6, background: 'transparent', border: 0, cursor: 'pointer' }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-subtle)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-          >
-            <span
-              className="whitespace-nowrap overflow-hidden text-ellipsis"
-              style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink-secondary)', lineHeight: 1, maxWidth: 'clamp(100px, 12vw, 220px)' }}
+          {editing ? (
+            <input
+              autoFocus
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={e => {
+                if (e.key === 'Enter') e.currentTarget.blur()
+                else if (e.key === 'Escape') setEditing(false)
+              }}
+              aria-label="프로젝트 이름"
+              style={{
+                fontSize: 14, fontWeight: 500, color: 'var(--ink)', lineHeight: 1,
+                height: 32, padding: '0 10px', borderRadius: 6,
+                border: '1px solid var(--brand-600)', outline: 'none',
+                background: 'var(--surface)', width: 'clamp(140px, 16vw, 280px)',
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              aria-label="프로젝트 이름 편집"
+              onClick={startEdit}
+              className="inline-flex items-center min-w-0 transition-colors"
+              style={{ gap: 6, height: 32, paddingLeft: 10, paddingRight: 8, borderRadius: 6, background: 'transparent', border: 0, cursor: onRename ? 'pointer' : 'default' }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-subtle)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
-              {docTitle}
-            </span>
-            <span style={{ color: 'var(--ink-muted)', display: 'inline-flex', transition: 'color 120ms ease' }} aria-hidden="true">
-              <IconEdit />
-            </span>
-          </button>
+              <span
+                className="whitespace-nowrap overflow-hidden text-ellipsis"
+                style={{ fontSize: 14, fontWeight: 500, color: 'var(--ink-secondary)', lineHeight: 1, maxWidth: 'clamp(100px, 12vw, 220px)' }}
+              >
+                {docTitle}
+              </span>
+              {onRename && (
+                <span style={{ color: 'var(--ink-muted)', display: 'inline-flex', transition: 'color 120ms ease' }} aria-hidden="true">
+                  <IconEdit />
+                </span>
+              )}
+            </button>
+          )}
         </div>
 
         {/* ── CENTER — breadcrumb ── */}

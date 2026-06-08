@@ -34,12 +34,15 @@ interface Props {
   onImageUploadRequest?: () => void
   onFocalChange?: (focal: { x: number; y: number }) => void
   onFitChange?: (fit: 'cover' | 'contain') => void
+  onDownloadCard?: (cardNum: number) => void
+  downloadingCardNum?: number | null
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────
 export default function MidCanvas({
   cards, activeCardIdx, onSelectCard, theme, bgColor, focusedField,
   onFieldFocus, onFieldChange, onImageUploadRequest, onFocalChange, onFitChange,
+  onDownloadCard, downloadingCardNum,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [scale, setScale] = useState(0.5)
@@ -133,7 +136,18 @@ export default function MidCanvas({
 
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 4, boxShadow: '0 2px 8px rgba(15,27,22,.07), 0 1px 2px rgba(15,27,22,.04)' }}>
             <button type="button" className="bb-action" aria-label="편집"><IconEdit /></button>
-            <button type="button" className="bb-action" aria-label="다운로드"><IconDownload /></button>
+            <button
+              type="button"
+              className="bb-action"
+              aria-label="이 카드 PNG 다운로드"
+              aria-busy={downloadingCardNum === activeCard.card_num}
+              title={onDownloadCard ? '이 카드 PNG 다운로드' : '데모에서는 사용할 수 없습니다'}
+              disabled={!onDownloadCard || downloadingCardNum != null}
+              onClick={() => onDownloadCard?.(activeCard.card_num)}
+              style={(!onDownloadCard || downloadingCardNum != null) ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+            >
+              <IconDownload />
+            </button>
             <button type="button" className="bb-action" aria-label="복사"><IconCopy /></button>
             <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 3px' }} />
             <button type="button" className="bb-action danger" aria-label="삭제"><IconTrash /></button>

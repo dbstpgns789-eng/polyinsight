@@ -12,6 +12,7 @@ import FactDrawer from '@/components/editor/FactDrawer'
 import ExportModal from '@/components/export/ExportModal'
 import type { CardDataPayload, ApiResponse, CardTheme } from '@/types/editor'
 import { MOCK_EDITOR_DATA } from '@/lib/mockData'
+import { renameJob, downloadCard } from '@/lib/api'
 
 export default function EditorPage() {
   const params = useParams()
@@ -29,11 +30,13 @@ export default function EditorPage() {
   const [focusedField, setFocusedField] = useState<string | null>(null)
   const [imageUploadRequested, setImageUploadRequested] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [localFilename, setLocalFilename] = useState<string | null>(null)
+  const [downloadingCardNum, setDownloadingCardNum] = useState<number | null>(null)
 
   const apiData = isDemo ? MOCK_EDITOR_DATA : (data as ApiResponse | undefined)
   const cardData = localData ?? apiData?.cardData
   const cards = cardData?.cards ?? []
-  const filename = apiData?.filename
+  const filename = localFilename ?? apiData?.filename
 
   useEffect(() => {
     if (isSaveSuccess) setLocalData(null)
@@ -186,6 +189,24 @@ export default function EditorPage() {
     </div>
   )
 
+  const handleRename = useCallback((title: string) => {
+    setLocalFilename(title)           // 낙관적 반영
+    if (isDemo) return
+    renameJob(jobId, title).catch(() => setLocalFilename(null))  // 실패 시 서버값 복원
+  }, [isDemo, jobId])
+
+  const handleDownloadCard = useCallback(async (cardNum: number) => {
+    if (isDemo) return
+    setDownloadingCardNum(cardNum)
+    try {
+      await downloadCard(jobId, cardNum)
+    } catch {
+      alert('카드 다운로드에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setDownloadingCardNum(null)
+    }
+  }, [isDemo, jobId])
+
   return (
     // h-screen + overflow-hidden → 뷰포트 핏 (DESIGN_3.md §1)
     <div className="flex flex-col h-screen overflow-hidden bg-canvas-subtle" style={{ wordBreak: 'keep-all' }}>
@@ -196,6 +217,7 @@ export default function EditorPage() {
         saveState={saveState}
         onSaveNow={handleSaveNow}
         onExport={isDemo ? undefined : () => openExportModal(jobId)}
+        onRename={handleRename}
       />
 
       {/* 3단 워크플로우 */}
@@ -223,6 +245,8 @@ export default function EditorPage() {
           onImageUploadRequest={() => setImageUploadRequested(true)}
           onFocalChange={handleFocalUpdate}
           onFitChange={handleFitUpdate}
+          onDownloadCard={isDemo ? undefined : handleDownloadCard}
+          downloadingCardNum={downloadingCardNum}
         />
 
         <RightPanel

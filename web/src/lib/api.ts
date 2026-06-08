@@ -36,6 +36,37 @@ export const getProjects = (params: Record<string, unknown> = {}) =>
 
 export const getStats = () => api.get('/projects/stats')
 
+export const renameJob = (jobId: string, title: string) =>
+  api.patch(`/jobs/${jobId}`, { title })
+
+export const deleteJob = (jobId: string) => api.delete(`/jobs/${jobId}`)
+
+function parseFilename(cd?: string): string | null {
+  if (!cd) return null
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(cd)
+  if (star) return decodeURIComponent(star[1])
+  const plain = /filename="?([^";]+)"?/i.exec(cd)
+  return plain ? plain[1] : null
+}
+
+/** 단일 카드를 즉석 렌더한 PNG를 받아 브라우저 다운로드 트리거. */
+export const downloadCard = async (jobId: string, cardNum: number) => {
+  const res = await api.get(`/cards/${jobId}/download/${cardNum}`, {
+    responseType: 'blob',
+    timeout: 60000,
+  })
+  const cd = res.headers['content-disposition'] as string | undefined
+  const fname = parseFilename(cd) ?? `card_${String(cardNum).padStart(2, '0')}.png`
+  const url = URL.createObjectURL(res.data as Blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fname
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export const getExportDownloadUrl = (exportId: string) =>
   `/api/export/${exportId}/download`
 

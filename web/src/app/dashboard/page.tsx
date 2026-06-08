@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import useUiStore from '@/store/uiStore';
-import { getProjects } from '@/lib/api';
+import { getProjects, deleteJob } from '@/lib/api';
 import {
   IconEdit, IconDownload, IconRefresh, IconWarning,
   IconTrash, IconSearch,
@@ -245,9 +245,13 @@ function ProjectCard({ project, onDeleted }: { project: Project; onDeleted: () =
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function handleDelete() {
-    // TODO: DELETE /api/jobs/:id 엔드포인트 추가 후 연결
-    setConfirmDelete(false);
-    onDeleted();
+    try {
+      await deleteJob(project.id);
+      setConfirmDelete(false);
+      onDeleted();
+    } catch {
+      alert('삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+    }
   }
 
   return (
