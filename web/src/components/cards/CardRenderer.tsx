@@ -7,6 +7,7 @@
 
 import CardFrame from './CardFrame'
 import { CARD_COMPONENTS } from './index'
+import { FieldStylesProvider } from './skin/fieldStyleContext'
 import type { CardComponentProps } from './types'
 
 interface CardRendererProps extends CardComponentProps {
@@ -19,9 +20,11 @@ export default function CardRenderer({ scale = 1, bgColor, ...props }: CardRende
   const Component = CARD_COMPONENTS[card.template_type]
 
   return (
-    <CardFrame theme={theme} bgColor={bgColor} scale={scale}>
-      {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
-    </CardFrame>
+    <FieldStylesProvider value={card.field_styles ?? {}}>
+      <CardFrame theme={theme} bgColor={bgColor} scale={scale}>
+        {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
+      </CardFrame>
+    </FieldStylesProvider>
   )
 }
 
