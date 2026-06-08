@@ -21,9 +21,9 @@ except Exception:
 
 BASE = "http://localhost:3000"
 OUT_DIR = "backend/scripts/gate"
-# 8뼈대 대표 demo 카드: bigstat(13) cover(14) statement(15) feature(16)
-# process(17) reasons(18) grid(19) closing(20)
-CARDS = [14, 15, 16, 17, 13, 18, 19, 20]
+# 8뼈대 demo 카드(서사 순서): cover(1) statement(2) feature(3) process(4)
+# bigstat(5) reasons(6) grid(7) closing(8)
+CARDS = [1, 2, 3, 4, 5, 6, 7, 8]
 
 
 async def run() -> None:

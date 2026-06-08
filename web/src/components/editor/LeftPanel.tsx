@@ -10,9 +10,6 @@ import CardRenderer from '@/components/cards/CardRenderer'
 import type { Card, CardTheme, RiskLevel } from '@/types/editor'
 
 const TEMPLATE_LABELS: Record<string, string> = {
-  cover: '표지', hook: '훅', problem: '문제', circle3: '3P',
-  compare2: '비교', grid4: '4분', definition: '정의', flow: '흐름',
-  data: '수치', showcase: '성과', closing: '마무리', brand: '브랜드',
   cover_v2: '표지', statement: '진술', feature: '혁신', process_v2: '과정',
   bigstat_compare: '성능', reasons: '근거', grid_v2: '응용', closing_v2: '마무리',
 }

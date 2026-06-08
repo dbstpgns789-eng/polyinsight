@@ -1,24 +1,9 @@
-// 카드 컴포넌트 레지스트리.
-// Phase 2에서 12개 템플릿 컴포넌트가 등록될 예정. 현재는 비어 있음.
-//
-// 등록 후 사용:
+// 카드 컴포넌트 레지스트리. card.template_type → React 컴포넌트(skin/skeleton 디자인 시스템 8뼈대).
 //   import { CARD_COMPONENTS } from '@/components/cards'
 //   const Comp = CARD_COMPONENTS[card.template_type]
 
 import type { ComponentType } from 'react'
 import type { CardComponentProps } from './types'
-import BrandCard from './templates/BrandCard'
-import ClosingCard from './templates/ClosingCard'
-import ProblemCard from './templates/ProblemCard'
-import CoverCard from './templates/CoverCard'
-import HookCard from './templates/HookCard'
-import ShowcaseCard from './templates/ShowcaseCard'
-import DefinitionCard from './templates/DefinitionCard'
-import DataCard from './templates/DataCard'
-import FlowCard from './templates/FlowCard'
-import Compare2Card from './templates/Compare2Card'
-import Grid4Card from './templates/Grid4Card'
-import Circle3Card from './templates/Circle3Card'
 import BigStatCompare from './skeletons/BigStatCompare'
 import Cover from './skeletons/Cover'
 import Statement from './skeletons/Statement'
@@ -29,26 +14,14 @@ import Grid from './skeletons/Grid'
 import Closing from './skeletons/Closing'
 
 export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> = {
-  brand:      BrandCard,
-  closing:    ClosingCard,
-  problem:    ProblemCard,
-  cover:      CoverCard,
-  hook:       HookCard,
-  showcase:   ShowcaseCard,
-  definition: DefinitionCard,
-  data:       DataCard,
-  flow:       FlowCard,
-  compare2:   Compare2Card,
-  grid4:      Grid4Card,
-  circle3:    Circle3Card,
+  cover_v2:        Cover,
+  statement:       Statement,
+  feature:         Feature,
+  process_v2:      Process,
   bigstat_compare: BigStatCompare,
-  cover_v2:      Cover,
-  statement:     Statement,
-  feature:       Feature,
-  process_v2:    Process,
-  reasons:       Reasons,
-  grid_v2:       Grid,
-  closing_v2:    Closing,
+  reasons:         Reasons,
+  grid_v2:         Grid,
+  closing_v2:      Closing,
 }
 
 export { default as CardRenderer } from './CardRenderer'
