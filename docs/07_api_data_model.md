@@ -369,6 +369,7 @@ interface CardEditorData {
   // 레거시 theme/recommended_theme_key는 스키마 유지하나 신 카드 렌더는 사용하지 않음 (--theme-* 은퇴).
   bg_color?: string       // 덱 배경 오버라이드(선택). --set-bg / --set-bg-gradient를 덮음.
   accent_color?: string   // 덱 강조 오버라이드(선택). --set-accent를 덮음.
+  font_pairing?: string   // 덱 글꼴 오버라이드(선택). --set-font를 덮음(레지스트리 키).
   meta: {
     org:            FieldValue
     dept:           FieldValue
@@ -410,6 +411,7 @@ interface FieldStyle {
 - `focal` / `image_fit` — 이미지 초점(클릭)·맞춤(채움/전체) 조정
 - `bg_color?: string` — 덱 배경 오버라이드(선택). 미설정=세트 기본. `--set-bg`/`--set-bg-gradient`를 덮음.
 - `accent_color?: string` — 덱 강조 오버라이드(선택). 미설정=세트 기본. `--set-accent`를 덮음.
+- `font_pairing?: string` — 덱 글꼴 오버라이드(선택). 미설정=세트 기본. `--set-font`를 덮음. 레지스트리 키(`pretendard`·`serif`·`gothic_a1`).
 - (레거시 `theme`/`recommended_theme_key`는 스키마 유지하나 신 카드 렌더는 사용하지 않음 — `--theme-*` 은퇴.)
 - `field_styles?: { [fieldKey]: FieldStyle }` — 요소별 미세조정(선택적).
   `FieldStyle = { size?: 'S'|'M'|'L'|'XL'; tracking?: number; weight?: 'regular'|'bold';

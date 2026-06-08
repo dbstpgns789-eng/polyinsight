@@ -55,7 +55,7 @@
 사용자 덱 컨트롤은 세트 기본값(--set-*)을 **선택적으로** 덮는다. 미설정(undefined)=세트 기본.
 - `CardDataPayload.bg_color?`  → `--set-bg` + `--set-bg-gradient`
 - `CardDataPayload.accent_color?` → `--set-accent`
-- (`font_pairing?` → `--set-font`, P2)
+- `CardDataPayload.font_pairing?` → `--set-font` (큐레이트 폰트 3종: 프리텐다드·본명조·Gothic A1)
 
 주입 지점: `CardFrame`. 레거시 `--theme-*`는 **은퇴**(라이브 렌더 미사용). `theme`/`recommended_theme_key`는
 스키마에 잔존하나 신 카드 렌더는 읽지 않는다. 기본값을 그대로 덮으면 전 카드가 회귀하므로 오버라이드는 반드시 선택적.
