@@ -546,10 +546,10 @@ def _validate_grounding(self, card_data: CardEditorData) -> list[str]:
 | 의존성 | `playwright.async_api`, `web/src/app/render/[jobId]/[cardNum]/page.tsx` (Next.js render 라우트, `settings.WEB_BASE_URL`) |
 | 사전조건 | **card_data가 DB에 저장돼 있어야 함** — render 라우트가 `GET /api/cards/{job}`로 DB를 읽기 때문. orchestrator는 S7 직전에 저장, export 엔드포인트는 이미 저장된 데이터로 호출 |
 
-> **2026-06-02 (v2.x) — 렌더 소스 React 전환 (Phase A)**
-> S7은 PNG의 HTML 소스를 **Jinja2 → React 컴포넌트로 전환**했다. 에디터(`web/src/components/cards/templates/*Card.tsx`)와 export PNG가 **단일 소스**에서 나온다. 이중 구현(Jinja 정답지 ↔ React 미러) drift 부채를 제거하는 것이 목적.
-> - **Phase A (현재)**: 동작 경로를 React로 전환. 기존 Jinja 코드(`_build_card_context`, `render_slot_html`, `_playwright_render_async`, `LAYOUT_TEMPLATES`, `backend/templates/*.html`)는 fallback으로 **보존**.
-> - **Phase B (예정, 별도 커밋)**: 실데이터 검증 통과 후 Jinja 코드·`/preview` 엔드포인트·`web/src/app/compare/` 삭제.
+> **렌더 소스 React 전환 (Phase A 2026-06-02 → Phase B 완료 2026-06-08)**
+> S7은 PNG의 HTML 소스를 **Jinja2 → React 컴포넌트로 전환**했다. 에디터(`web/src/components/cards/skeletons|skin/`)와 export PNG가 **단일 소스**에서 나온다. 이중 구현(Jinja ↔ React) drift 부채 제거가 목적.
+> - **Phase A (2026-06-02)**: 동작 경로를 React goto로 전환. Jinja 코드는 fallback으로 일시 보존.
+> - **Phase B (2026-06-08, 완료)**: Jinja 코드(`_build_card_context`·`render_slot_html`·`_playwright_render_async`·`LAYOUT_TEMPLATES`)·`backend/templates/*.html`·`/preview` 엔드포인트·`web/src/app/compare/`·Jinja2 의존성 **삭제 완료**. 이제 S7은 React goto 단일 경로.
 
 ### 6-2. 처리 흐름 (React goto 방식)
 
@@ -713,31 +713,22 @@ class LLMClient:
 
 ---
 
-## 10. S7 데이터 주입 방식 (Jinja2)
+## 10. S7 데이터 주입 방식 (React goto)
 
-계획 단계에서는 `html.replace("__CARD_DATA__", ...)` 문자열 치환 방식이었으나,
-**Jinja2 템플릿**으로 구현됐다.
+> 과거 Jinja2 문자열 주입(`html.replace` → `Environment.render` → `page.set_content`)은
+> Phase B(2026-06-08)에서 **제거**됐다. 현재 방식은 6-2 참조.
+
+S7은 HTML을 직접 생성하지 않는다. `card_data`를 DB에 저장한 뒤
+**Next.js render 라우트를 `page.goto`** 한다 — PNG 소스 = 에디터와 동일한 React
+카드 컴포넌트(`web/src/components/cards/skeletons|skin/`), 단일 소스.
 
 ```python
-# backend/agents/s7_renderer.py
-from jinja2 import Environment, FileSystemLoader
-
-_jinja = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=False)
-
-# 카드별 렌더링
-html = _jinja.get_template(tmpl_name).render(**ctx)
-await page.set_content(html, wait_until="networkidle")
+# backend/agents/s7_renderer.py — 요지
+urls = [f"{settings.WEB_BASE_URL}/render/{job_id}/{slot.card_num}" for slot in card_data.cards]
+await page.goto(url, wait_until="networkidle")
+await page.wait_for_selector("[data-render-ready]", state="attached")  # 폰트/데이터 로딩 신호
+png = await page.screenshot(clip={"x":0,"y":0,"width":1080,"height":1080})
 ```
-
-템플릿 파일명 (계획 대비 변경):
-
-| 슬롯 | 계획 | 실제 파일명 |
-|------|------|------------|
-| Card 1 | `card_cover.html` | `cover.html` |
-| Card 2 | `card_hook.html` | `hook.html` |
-| Card 3 | `card_grid.html` | `grid.html` |
-| Card 4 | `card_text.html` | `text.html` |
-| Card 5 | `card_closing.html` | `closing.html` |
 
 ---
 

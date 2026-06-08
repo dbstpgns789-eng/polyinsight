@@ -120,8 +120,7 @@ backend/
 │   ├── base.py              BaseAgent[InputT, OutputT] 추상 클래스
 │   ├── s1_extractor.py      pdfplumber / PyMuPDF 텍스트 추출
 │   ├── s6_card_json.py      카드뉴스 JSON 생성 (Gemini, 가변 카드)
-│   ├── s7_renderer.py       Playwright PNG 렌더링 (React render 라우트 goto, 2026-06-02~)
-│   │                        Jinja2 경로는 Phase B까지 fallback 보존
+│   ├── s7_renderer.py       Playwright PNG 렌더링 (React render 라우트 goto)
 │   └── s8_packaging.py      SQLite 저장 + ZIP 생성
 ├── routers/
 │   ├── jobs.py              POST /api/upload
@@ -133,25 +132,14 @@ backend/
 │   │                        GET  /api/activities
 │   └── export.py            GET  /api/export/:exportId/download
 │                            GET  /api/cards/:jobId/image/:cardNum
-├── core/
-│   ├── models.py            Pydantic 스키마 (CardSlot, CardEditorData, FieldValue 등)
-│   ├── db.py                SQLite 연결 및 마이그레이션
-│   ├── llm_client.py        Gemini API 클라이언트 (rate limit, retry)
-│   └── config.py            환경변수, 상수
-└── templates/               Jinja2 HTML 카드 템플릿 (12개)
-    ├── _shared.css          공통 CSS (bg-photo, image-zone 등)
-    ├── cover.html           표지
-    ├── hook.html            문제 제기
-    ├── problem.html         연구 과제
-    ├── circle3.html         3요소 원형
-    ├── compare2.html        비교 분석
-    ├── grid4.html           2×2 그리드
-    ├── definition.html      용어 정의
-    ├── flow.html            프로세스 순서
-    ├── data.html            바 차트
-    ├── showcase.html        성과 하이라이트
-    ├── closing.html         마무리
-    └── brand.html           기관 브랜딩
+└── core/
+    ├── models.py            Pydantic 스키마 (CardSlot, CardEditorData, FieldValue 등)
+    ├── db.py                SQLite 연결 및 마이그레이션
+    ├── llm_client.py        Gemini API 클라이언트 (rate limit, retry)
+    └── config.py            환경변수, 상수
+
+# S7 PNG의 HTML 소스는 web/ React 카드 컴포넌트(skin/skeleton)다. 백엔드 Jinja 템플릿은
+# React 전환(Phase B, 2026-06-08) 완료로 제거됨. → web/src/components/cards/skeletons|skin/
 ```
 
 ### 3-2. Frontend (4개 화면)
