@@ -6,7 +6,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parents[2]))
 
-from backend.core.models import CardSlot
+from backend.core.models import CardSlot, CardEditorData
 
 
 def test_cardslot_preserves_field_styles():
@@ -29,3 +29,23 @@ def test_cardslot_without_field_styles_defaults_none():
         "card_num": 1, "template_type": "cover_v2", "fields": {},
     })
     assert slot.field_styles is None
+
+
+def _meta():
+    fv = {"value": "x"}
+    return {"org": fv, "dept": fv, "researcher": fv, "month": fv, "edition_number": fv}
+
+
+def test_cardeditordata_accent_and_optional_bg():
+    data = CardEditorData.model_validate({
+        "meta": _meta(), "cards": [],
+        "bg_color": "#0E5E60", "accent_color": "#FFC94A",
+    })
+    assert data.bg_color == "#0E5E60"
+    assert data.accent_color == "#FFC94A"
+
+
+def test_cardeditordata_color_defaults_none():
+    d2 = CardEditorData.model_validate({"meta": _meta(), "cards": []})
+    assert d2.bg_color is None
+    assert d2.accent_color is None
