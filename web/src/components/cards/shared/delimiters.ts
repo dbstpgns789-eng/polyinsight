@@ -1,4 +1,4 @@
-// Jinja2 템플릿이 사용하는 구분자 파싱/조립 유틸.
+// 카드 필드 구분자 파싱/조립 유틸 (React 뼈대 parse.ts가 사용).
 // "label:sub" → {label, sub}, "a|b|c" → ['a','b','c']
 // CardEditorData 스키마는 그대로 유지되며 분리/조합은 모두 클라이언트 책임.
 

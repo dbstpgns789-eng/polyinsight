@@ -154,7 +154,7 @@ polyinsight/
 │   │   ├── s1_extractor.py    PDF 텍스트 추출. pdfplumber 우선, PyMuPDF 폴백.
 │   │   ├── s2_parser.py       섹션 분류. regex 우선, LLM 폴백.
 │   │   ├── s6_card_json.py    카드뉴스 JSON 생성. 원문 우선. FieldValue 스키마 출력.
-│   │   ├── s7_renderer.py     Playwright PNG 렌더링. Jinja2 주입. 카드당 최대 15초.
+│   │   ├── s7_renderer.py     Playwright PNG 렌더링. React render 라우트 goto. 카드당 최대 15초.
 │   │   └── s8_packaging.py    SQLite 저장, ZIP 생성, 최종 상태 업데이트.
 │   ├── api/
 │   │   └── routes/

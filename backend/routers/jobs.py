@@ -5,7 +5,6 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from ..agents.orchestrator import run_pipeline
@@ -108,25 +107,6 @@ async def patch_cards(job_id: str, body: PatchCardBody):
     await db.save_card_data(job_id, json.dumps(body.cardData))
     row = await db.get_job(job_id)
     return {"autoSaveStatus": "saved", "updatedAt": row["updated_at"]}
-
-
-# ── 카드 HTML 프리뷰 ──────────────────────────────────────────────────────
-
-@router.get("/cards/{job_id}/preview/{card_num}", response_class=HTMLResponse)
-async def get_card_preview(job_id: str, card_num: int):
-    """CardSlot 데이터 → Jinja2 렌더링 → HTML 반환 (iframe srcdoc용)."""
-    raw = await db.get_card_data(job_id)
-    if raw is None:
-        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "카드 데이터가 없습니다."})
-
-    card_data = CardEditorData.model_validate_json(raw)
-    slot = next((s for s in card_data.cards if s.card_num == card_num), None)
-    if slot is None:
-        raise HTTPException(404, detail={"code": "ERR-JOB-002", "message": f"카드 {card_num}번을 찾을 수 없습니다."})
-
-    renderer = S7Renderer()
-    html = renderer.render_slot_html(slot, card_data, theme=card_data.theme)
-    return HTMLResponse(content=html)
 
 
 # ── 내보내기 트리거 ───────────────────────────────────────────────────────

@@ -6,24 +6,12 @@ export interface SlotMeta {
   description: string
 }
 
-/** 백엔드 IMAGE_SLOT_TYPES 미러 */
+/** 이미지 존을 가진 뼈대만 매핑. 미등록 template_type은 getSlotType에서 'none'으로 폴백. */
 export const IMAGE_SLOT_TYPES: Record<string, SlotType> = {
-  cover:      'bg',
-  hook:       'bg',
-  problem:    'bg',
-  circle3:    'bg',
-  compare2:   'bg',
-  grid4:      'bg',
-  flow:       'bg',
-  showcase:   'inset_top',
-  definition: 'inset_right',
-  closing:    'inner',
   cover_v2:   'zone',
   feature:    'zone',
   statement:  'zone',
   closing_v2: 'zone',
-  data:       'none',
-  brand:      'none',
 }
 
 export const SLOT_META: Record<SlotType, SlotMeta> = {
