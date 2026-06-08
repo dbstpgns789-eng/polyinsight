@@ -201,7 +201,7 @@ polyinsight/
 | `MAX_PDF_SIZE_MB` | ❌ | `50` | 업로드 허용 최대 파일 크기 |
 | `LLM_MODEL` | ❌ | `claude-sonnet-4-5` | 사용할 Claude 모델 ID |
 | `LLM_MAX_RETRIES` | ❌ | `3` | LLM API 호출 최대 재시도 횟수 |
-| `FRONTEND_ORIGIN` | ❌ | `http://localhost:5173` | CORS 허용 오리진 (개발용) |
+| `WEB_BASE_URL` | ❌ | `http://localhost:3000` | S7 render 라우트 호스트 (Next.js). CORS는 현재 `allow_origins=["*"]` |
 | `LOG_LEVEL` | ❌ | `INFO` | 로그 레벨 (DEBUG/INFO/WARNING/ERROR) |
 
 > `.env.example` 파일을 레포에 포함. `.env`는 `.gitignore`에서 제외.
