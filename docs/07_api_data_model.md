@@ -382,12 +382,21 @@ interface CardSlot {
   image_url?:  string | null     // 이미지 존 보유 뼈대만. 에디터 업로드 시 채움
   focal?:      { x: number; y: number }  // 이미지 초점(0~1). cover 크롭 위치. 없으면 center
   image_fit?:  'cover' | 'contain'       // 존 안 이미지 맞춤. 기본 cover. contain=통째로(잘림0)
+  field_styles?: { [fieldKey: string]: FieldStyle }  // 요소별 미세조정(선택적)
 }
 
 // 신 8뼈대(skin/skeleton 디자인 시스템). 상세: docs/18_card_design_system.md
 type TemplateType =
   | 'cover_v2' | 'statement' | 'feature' | 'process_v2'
   | 'bigstat_compare' | 'reasons' | 'grid_v2' | 'closing_v2'
+
+interface FieldStyle {
+  size?:    'S' | 'M' | 'L' | 'XL'
+  tracking?: number                          // em 단위, [-0.05, +0.1] 클램프
+  weight?:  'regular' | 'bold'
+  align?:   'left' | 'center' | 'right'
+  color?:   'ink-strong' | 'ink-muted' | 'accent'
+}
 ```
 
 **에디터 편집 범위**:
@@ -395,6 +404,11 @@ type TemplateType =
 - `fields[*].verified` — 확인 완료 버튼으로 true 변경 가능
 - `image_url` — 이미지 존 보유 뼈대(cover_v2·feature·statement·closing_v2)에 업로드
 - `focal` / `image_fit` — 이미지 초점(클릭)·맞춤(채움/전체) 조정
+- `field_styles?: { [fieldKey]: FieldStyle }` — 요소별 미세조정(선택적).
+  `FieldStyle = { size?: 'S'|'M'|'L'|'XL'; tracking?: number; weight?: 'regular'|'bold';
+  align?: 'left'|'center'|'right'; color?: 'ink-strong'|'ink-muted'|'accent' }`.
+  전 필드 선택적. 백엔드는 `extra='ignore'`로 통과시키지만, export 메타데이터 보존을 위해
+  `CardSlot`에 정식 필드로도 보유한다.
 - `template_type` — **변경 불가** (LLM이 결정, 사용자 고정)
 
 ---

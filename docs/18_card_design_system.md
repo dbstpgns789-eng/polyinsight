@@ -86,6 +86,19 @@
 - `steps` (StepFlow): `|` 구분
 - `reasons` / `items`: `title:body`(또는 `label:sub`) 를 `|`로 나열
 
+## 5.5 요소 미세조정 (override 레이어)
+
+AI 제안값 위에 얹는 **토큰-바운드** 부분 스타일. 자유 CSS 아님.
+
+- 저장: `Card.field_styles[fieldKey]: FieldStyle` (선택적). 없으면 100% 세트 기본값.
+- 적용: **피부 텍스트 컴포넌트 5개(Eyebrow·Headline·Subhead·Body·Caption)에서만.**
+  뼈대는 `card.field_styles`를 모른다 — `CardRenderer`가 React Context로 주입하고
+  피부 컴포넌트가 `useFieldStyle(fieldKey)`로 읽는다(강제 규칙 §2 유지).
+- 어휘: 크기=역할 토큰×스텝배수(S·M·L·XL), 자간=em([-0.05,+0.1] 클램프),
+  굵기=regular·bold, 정렬=left·center·right, 색=`--set-ink-strong|--set-ink-muted|--set-accent` 택1.
+- 되돌리기: `field_styles[key]` 키 삭제 = AI 제안값 복귀.
+- 렌더 일치: 미리보기(edit)·S7(render)가 같은 피부 컴포넌트 → PNG 자동 반영.
+
 ## 6. 이미지 — 모델 A "디자인된 역할 고정"
 
 이미지는 뼈대 설계의 일부다. **고정된 존에만** 들어가고, 사용자는 "올릴까 말까"만 판단한다
