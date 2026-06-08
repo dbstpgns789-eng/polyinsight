@@ -605,9 +605,9 @@ screenshot_opts = {
 }
 ```
 
-- HTML 템플릿은 `backend/templates/card_{type}.html` 형태로 관리
-- CSS 변수 `--theme-primary`는 렌더링 시 `<style>:root{--theme-primary: #xxx;}</style>`로 주입
-- 폰트 파일(Pretendard)은 `frontend/public/fonts/`에서 `@font-face`로 로드
+- HTML 소스는 React 카드 컴포넌트(`web/src/components/cards/`) — render 라우트가 호스트
+- 디자인 토큰(`--set-*` 등)·테마는 `web/src/app/globals.css`와 CardFrame 주입으로 적용
+- 폰트(Pretendard Variable)는 `web/src/app/globals.css`에서 로드
 
 ---
 

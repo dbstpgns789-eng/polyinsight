@@ -142,42 +142,34 @@ backend/
 # React 전환(Phase B, 2026-06-08) 완료로 제거됨. → web/src/components/cards/skeletons|skin/
 ```
 
-### 3-2. Frontend (4개 화면)
+### 3-2. Frontend (`web/` — Next.js 15)
 
 ```
-frontend/src/
-├── pages/
-│   ├── DashboardPage.jsx    /dashboard — 프로젝트 목록, 통계, 활동 피드
-│   └── CardEditorPage.jsx   /editor/:jobId — 3패널 에디터
+web/src/                        Next.js 15 App Router + TypeScript (포트 3000)
+├── app/
+│   ├── page.tsx                / — 랜딩
+│   ├── dashboard/              /dashboard — 프로젝트 목록(그리드)·통계·활동
+│   ├── editor/[jobId]/         /editor/:jobId — 3패널 카드 에디터
+│   ├── render/[jobId]/[cardNum]/  S7 PNG 렌더 대상 (Playwright goto, mode="render")
+│   ├── login/ · signup/        인증 화면
+│   └── globals.css             디자인 토큰(:root) + Pretendard Variable
 ├── components/
-│   ├── dashboard/           대시보드 전용 컴포넌트
-│   │   ├── ProjectGrid.jsx
-│   │   ├── ProjectCard.jsx
-│   │   └── StatsBar.jsx
-│   ├── upload/              업로드 모달 (React Portal)
-│   │   ├── UploadModal.jsx
-│   │   ├── DropZone.jsx
-│   │   └── PipelineProgress.jsx
-│   ├── editor/              카드 에디터 3패널
-│   │   ├── EditorTopBar.jsx
-│   │   ├── ContentPanel.jsx
-│   │   ├── PreviewPanel.jsx
-│   │   ├── DesignPanel.jsx
-│   │   └── ActionBar.jsx
-│   └── export/              내보내기 모달 (React Portal)
-│       ├── ExportModal.jsx
-│       ├── PreflightView.jsx
-│       ├── RenderingView.jsx
-│       ├── DoneView.jsx
-│       └── ErrorView.jsx
-├── hooks/
-│   ├── useCardData.js       카드 데이터 fetch + 자동저장
-│   └── usePipelineStatus.js 파이프라인 상태 폴링
-├── api/
-│   └── client.js            axios 인스턴스 + API 함수 모음
-└── types/
-    └── cardData.d.ts        TypeScript 타입 정의 (선택)
+│   ├── editor/                 3패널: LeftPanel·MidCanvas·RightPanel·FactDrawer·Topbar
+│   ├── cards/                  카드 렌더 — skin/skeleton 디자인 시스템
+│   │   ├── CardRenderer.tsx    template_type → 컴포넌트 dispatch
+│   │   ├── index.ts            CARD_COMPONENTS 레지스트리 (8뼈대)
+│   │   ├── skeletons/          뼈대(레이아웃) 8: Cover·Statement·Feature·Process·BigStatCompare·Reasons·Grid·Closing
+│   │   ├── skin/               피부(토큰+컴포넌트): CardSurface·Eyebrow·Headline·BigStat·CompareBars·SourceTag·VisualZone …
+│   │   └── shared/             EditableText·EditableImage·delimiters
+│   ├── export/                 내보내기 모달 (React Portal)
+│   └── auth/ · ui/             인증 폼 · 공용 아이콘
+├── hooks/                      useCardData (fetch + 자동저장) 등
+├── lib/                        api.ts · focal.ts · imageSlots.ts · mockData.ts
+├── store/                      uiStore (zustand)
+└── types/                      editor.ts (Card · CardEditorData · FieldValue)
 ```
+
+> 디자인 시스템(skin/skeleton)·이미지(focal/image_fit) 상세는 `docs/18_card_design_system.md` 참조.
 
 **화면-모달 관계**:
 - 업로드 모달 / 내보내기 모달 → `createPortal(…, document.body)` 로 렌더링

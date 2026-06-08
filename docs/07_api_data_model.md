@@ -377,21 +377,24 @@ interface CardEditorData {
 
 interface CardSlot {
   card_num:      number          // 1, 2, 3, ...
-  template_type: TemplateType    // "cover" | "hook" | "flow" 등 — 에디터에서 변경 불가
-  fields: Record<string, FieldValue>  // 템플릿별 텍스트 필드 — 에디터에서 value 수정 가능
-  image_url: string | null       // 에디터에서 이미지 업로드 시 채움
+  template_type: TemplateType    // 뼈대 종류 — 에디터에서 변경 불가
+  fields: Record<string, FieldValue>  // 뼈대별 텍스트 필드 — 에디터에서 value 수정 가능
+  image_url?:  string | null     // 이미지 존 보유 뼈대만. 에디터 업로드 시 채움
+  focal?:      { x: number; y: number }  // 이미지 초점(0~1). cover 크롭 위치. 없으면 center
+  image_fit?:  'cover' | 'contain'       // 존 안 이미지 맞춤. 기본 cover. contain=통째로(잘림0)
 }
 
+// 신 8뼈대(skin/skeleton 디자인 시스템). 상세: docs/18_card_design_system.md
 type TemplateType =
-  | 'cover' | 'hook' | 'problem' | 'circle3' | 'compare2'
-  | 'grid4' | 'definition' | 'flow' | 'data' | 'showcase'
-  | 'closing' | 'brand'
+  | 'cover_v2' | 'statement' | 'feature' | 'process_v2'
+  | 'bigstat_compare' | 'reasons' | 'grid_v2' | 'closing_v2'
 ```
 
 **에디터 편집 범위**:
 - `fields[*].value` — 텍스트 내용 수정 가능
 - `fields[*].verified` — 확인 완료 버튼으로 true 변경 가능
-- `image_url` — 이미지 업로드로 채움
+- `image_url` — 이미지 존 보유 뼈대(cover_v2·feature·statement·closing_v2)에 업로드
+- `focal` / `image_fit` — 이미지 초점(클릭)·맞춤(채움/전체) 조정
 - `template_type` — **변경 불가** (LLM이 결정, 사용자 고정)
 
 ---

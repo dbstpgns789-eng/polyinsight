@@ -1,5 +1,6 @@
 # Tech Spec
 > PolyInsight v2.0 | 2026-05-13 (LLM 교체 반영)
+> ⚠️ 일부 절(렌더·프론트 빌드)은 계획 시점 기록. 현재 구현은 `docs/04·05·07·18` 참조.
 
 ---
 
@@ -176,27 +177,9 @@ polyinsight/
 │       ├── test_s6.py         그라운딩 규칙 검증 우선.
 │       └── test_export.py
 │
-├── frontend/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── DashboardPage.jsx   /dashboard
-│   │   │   └── CardEditorPage.jsx  /editor/:jobId
-│   │   ├── components/
-│   │   │   ├── dashboard/          프로젝트 그리드, 카드, 통계
-│   │   │   ├── upload/             업로드 모달 (React Portal)
-│   │   │   ├── editor/             3패널 + TopBar + ActionBar
-│   │   │   └── export/             내보내기 모달 (React Portal)
-│   │   ├── hooks/
-│   │   │   ├── useCardData.js      카드 데이터 fetch + 자동저장 (debounce 5s)
-│   │   │   └── usePipelineStatus.js TanStack Query 폴링 래퍼
-│   │   ├── api/
-│   │   │   └── client.js           axios 인스턴스 + API 함수 전체
-│   │   └── types/
-│   │       └── cardData.d.ts       CardEditorData, FieldValue TypeScript 타입
-│   ├── public/                     정적 자산 (폰트, 로고 등)
-│   ├── index.html
-│   ├── vite.config.js
-│   └── tailwind.config.js
+├── web/                            Next.js 15 프론트엔드 (포트 3000, App Router · TypeScript)
+│   └── src/                        app/ · components/(cards = skin/skeleton 디자인 시스템) · hooks/ · lib/ · store/ · types/
+│                                   상세 구조: docs/04_architecture.md §3-2 · 디자인 시스템: docs/18_card_design_system.md
 │
 ├── docs/                           설계 문서 (코드보다 docs가 우선)
 ├── .claude/                        Claude Code 훅 및 커스텀 명령
@@ -218,7 +201,7 @@ polyinsight/
 | `MAX_PDF_SIZE_MB` | ❌ | `50` | 업로드 허용 최대 파일 크기 |
 | `LLM_MODEL` | ❌ | `claude-sonnet-4-5` | 사용할 Claude 모델 ID |
 | `LLM_MAX_RETRIES` | ❌ | `3` | LLM API 호출 최대 재시도 횟수 |
-| `FRONTEND_ORIGIN` | ❌ | `http://localhost:5173` | CORS 허용 오리진 (개발용) |
+| `WEB_BASE_URL` | ❌ | `http://localhost:3000` | S7 render 라우트 호스트 (Next.js). CORS는 현재 `allow_origins=["*"]` |
 | `LOG_LEVEL` | ❌ | `INFO` | 로그 레벨 (DEBUG/INFO/WARNING/ERROR) |
 
 > `.env.example` 파일을 레포에 포함. `.env`는 `.gitignore`에서 제외.
@@ -253,16 +236,16 @@ uvicorn backend.main:app --reload --port 8000
 
 ```bash
 # 1. 의존성 설치
-cd frontend
+cd web
 npm install
 
-# 2. 개발 서버 실행 (Vite proxy → backend :8000)
+# 2. 개발 서버 실행 (Next.js, /api → backend :8000 프록시)
 npm run dev
-# → http://localhost:5173
+# → http://localhost:3000
 
 # 3. 프로덕션 빌드
 npm run build
-# → frontend/dist/ 생성 (FastAPI static mount 또는 nginx 서빙)
+# → .next/ 생성 (next start 또는 호스팅 플랫폼 배포)
 ```
 
 ### Docker (통합 실행)

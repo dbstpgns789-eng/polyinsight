@@ -163,6 +163,7 @@ Before changing code, always read:
 docs/04_architecture.md   Pipeline structure and component design
 docs/05_agent_design.md   Agent contracts and S6 prompt rules
 docs/07_api_data_model.md API endpoints and data schemas
+docs/18_card_design_system.md  Card skin/skeleton system, tokens, 8 skeletons, focal/image_fit
 ```
 
 If code conflicts with docs → treat docs as intended design.
@@ -211,7 +212,7 @@ polyinsight/
 |---|---|
 | 모든 Claude | 루트 `CLAUDE.md` |
 | Backend/Full-stack | `docs/04_architecture.md`, `docs/07_api_data_model.md` |
-| Web Claude | `web/CLAUDE.md`, `docs/10_screen_design.md`, `docs/12_card_editor_content.md` |
+| Web Claude | `web/CLAUDE.md`, `docs/10_screen_design.md`, `docs/12_card_editor_content.md`, `docs/18_card_design_system.md` |
 
 **docs/ 원칙**: 파일 하나, 위치 하나. 각 workspace에 복사본 생성 금지.
 docs 변경 → 코드 변경 순서를 지킨다.
