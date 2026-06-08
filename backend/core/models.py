@@ -47,6 +47,15 @@ class FieldValue(BaseModel):
     verified: bool = False
 
 
+class FieldStyle(BaseModel):
+    """요소별 토큰-바운드 미세조정. 전 필드 선택적."""
+    size: Literal["S", "M", "L", "XL"] | None = None
+    tracking: float | None = None
+    weight: Literal["regular", "bold"] | None = None
+    align: Literal["left", "center", "right"] | None = None
+    color: Literal["ink-strong", "ink-muted", "accent"] | None = None
+
+
 # ---------------------------------------------------------------------------
 # Card structure (v2 — variable card count)
 # ---------------------------------------------------------------------------
@@ -68,6 +77,7 @@ class CardSlot(BaseModel):
     template_type: str                         # VALID_TEMPLATE_TYPES 중 하나
     fields: Dict[str, FieldValue]              # 템플릿 변수명 → grounded 값
     image_url: str | None = None               # 에디터 전용 이미지 슬롯
+    field_styles: Dict[str, FieldStyle] | None = None   # 요소별 override(선택적)
 
 
 class CardMeta(BaseModel):
