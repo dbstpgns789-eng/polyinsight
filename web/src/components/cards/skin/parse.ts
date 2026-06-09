@@ -36,6 +36,14 @@ export function rowsToRaw(rows: CompareRow[]): string {
   return rows.map((r) => `${r.label}:${r.value}:${r.primary ? '1' : '0'}`).join('|')
 }
 
+/** bars 값 문자열에서 막대 너비용 숫자를 안전 추출.
+ *  "20.78%"→20.78, "11.1% 감소"→11.1, "1,234"→1234, "우수"·""→0.
+ *  (S6가 단위·텍스트를 섞어 출력해도 막대가 망가지지 않도록 — 견고성) */
+export function compareBarValue(value: string): number {
+  const n = parseFloat((value ?? '').replace(/[^0-9.\-]/g, ''))
+  return Number.isFinite(n) ? n : 0
+}
+
 export interface Pair {
   a: string
   b: string

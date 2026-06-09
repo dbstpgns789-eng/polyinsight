@@ -2,6 +2,7 @@
 // primary=true → accent 골드. CompareRow 타입·파싱은 ./parse.
 
 import EditableText from '../shared/EditableText'
+import { compareBarValue } from './parse'
 import type { CompareRow } from './parse'
 
 interface CompareBarsProps {
@@ -13,12 +14,12 @@ interface CompareBarsProps {
 }
 
 export default function CompareBars({ rows, mode, onRowChange, onFieldFocus, focusedField }: CompareBarsProps) {
-  const max = rows.reduce((m, r) => Math.max(m, Number(r.value) || 0), 0) || 1
+  const max = rows.reduce((m, r) => Math.max(m, compareBarValue(r.value)), 0) || 1
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, fontFamily: 'var(--set-font)' }}>
       {rows.map((r, i) => {
-        const pct = Math.max(4, (Number(r.value) || 0) / max * 100)
+        const pct = Math.max(4, compareBarValue(r.value) / max * 100)
         return (
           <div key={i}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>

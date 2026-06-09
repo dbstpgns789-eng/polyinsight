@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { parseEmphasis, parseCompareRows, rowsToRaw, type CompareRow } from './parse'
+import { parseEmphasis, parseCompareRows, rowsToRaw, compareBarValue, type CompareRow } from './parse'
+
+describe('compareBarValue', () => {
+  it('퍼센트 기호 제거', () => { expect(compareBarValue('20.78%')).toBe(20.78) })
+  it('텍스트 섞인 값에서 숫자 추출', () => { expect(compareBarValue('11.1% 감소')).toBe(11.1) })
+  it('순수 숫자', () => { expect(compareBarValue('8.44')).toBe(8.44) })
+  it('천단위 콤마 제거', () => { expect(compareBarValue('1,234')).toBe(1234) })
+  it('비수치는 0', () => { expect(compareBarValue('우수')).toBe(0) })
+  it('빈 값은 0', () => { expect(compareBarValue('')).toBe(0) })
+})
 
 describe('parseEmphasis', () => {
   it('별표 구간을 em=true로 분리', () => {
