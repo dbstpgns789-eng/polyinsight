@@ -25,7 +25,7 @@ export default function CardRenderer({ scale = 1, bgColor, accentColor, fontPair
 
   return (
     <FieldStylesProvider value={card.field_styles ?? {}}>
-      <CardFrame set={getSet(setKey)} bgColor={bgColor} accentColor={accentColor} fontPairing={fontPairing} scale={scale}>
+      <CardFrame set={getSet(setKey)} cardNum={card.card_num} bgColor={bgColor} accentColor={accentColor} fontPairing={fontPairing} scale={scale}>
         {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
       </CardFrame>
     </FieldStylesProvider>
