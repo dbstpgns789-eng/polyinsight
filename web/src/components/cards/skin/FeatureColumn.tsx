@@ -16,9 +16,16 @@ interface FeatureColumnProps {
 
 export default function FeatureColumn({ items, mode, onItemChange, onFieldFocus, focusedField }: FeatureColumnProps) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 28, fontFamily: 'var(--set-font)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, fontFamily: 'var(--set-font)' }}>
       {items.map((it, i) => (
-        <div key={i} style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+        <div key={i} style={{
+          display: 'flex', gap: 20, alignItems: 'flex-start',
+          background: 'var(--set-surface)',
+          borderLeft: '5px solid var(--set-accent)',
+          borderRadius: 'var(--set-radius-box)',
+          padding: '22px 26px',
+          boxShadow: '0 2px 12px rgba(15,27,22,0.05)',
+        }}>
           <div style={{
             fontSize: 'var(--set-subhead)', fontWeight: 900, color: 'var(--set-accent)',
             lineHeight: 1.1, flexShrink: 0, minWidth: 40,
