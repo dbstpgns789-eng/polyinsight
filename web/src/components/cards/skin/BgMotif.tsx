@@ -9,14 +9,14 @@ export default function BgMotif() {
         position: 'absolute', bottom: -170, right: -130,
         width: 540, height: 540, borderRadius: '50%',
         background: 'radial-gradient(circle, var(--set-accent) 0%, transparent 68%)',
-        opacity: 0.07,
+        opacity: 'var(--set-glow-opacity, 0.07)',
       }} />
       {/* 좌상단 — 페인트 워시(종이 질감) */}
       <div style={{
         position: 'absolute', top: -210, left: -190,
         width: 560, height: 560, borderRadius: '50%',
         background: 'radial-gradient(circle, var(--set-accent) 0%, transparent 70%)',
-        opacity: 0.04,
+        opacity: 'calc(var(--set-glow-opacity, 0.07) * 0.55)',
       }} />
     </div>
   )

@@ -125,6 +125,9 @@ export const DARK_TECH_SET: CardSet = {
     '--set-ink-faint': 'oklch(56% 0.03 290)',
     '--set-surface': 'rgba(255,255,255,0.06)',
     '--set-surface-border': 'rgba(255,255,255,0.14)',
+    // 네온 정성 — 강한 보라 글로우 + 네온 외곽선(다크 전용)
+    '--set-glow-opacity': '0.34',
+    '--set-card-glow': 'inset 0 0 0 1.5px rgba(170,130,255,0.32), inset 0 0 90px rgba(124,58,237,0.10)',
     '--set-display': '244px',
     '--set-headline': '70px',
     '--set-subhead': '32px',

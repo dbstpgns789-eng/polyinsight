@@ -18,6 +18,7 @@ export default function CardSurface({ children, motif = true }: CardSurfaceProps
       fontFamily: 'var(--set-font)',
       color: 'var(--set-ink-strong)',
       boxSizing: 'border-box',
+      boxShadow: 'var(--set-card-glow, none)',
     }}>
       {motif && <BgMotif />}
       <div style={{
