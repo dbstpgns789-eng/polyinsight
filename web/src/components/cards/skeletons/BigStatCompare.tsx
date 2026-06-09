@@ -48,7 +48,7 @@ export default function BigStatCompare(props: CardComponentProps) {
       </div>
 
       {/* 큰 수치 */}
-      <div style={{ marginTop: 40 }}>
+      <div style={{ marginTop: 28 }}>
         <BigStat
           value={fieldValue(card, 'stat_value')}
           unit={fieldValue(card, 'stat_unit')}
@@ -60,8 +60,8 @@ export default function BigStatCompare(props: CardComponentProps) {
         />
       </div>
 
-      {/* 비교 막대 — 남은 공간 차지, 출처 위로 밀착 */}
-      <div style={{ marginTop: 40, flex: 1 }}>
+      {/* 비교 막대 — 남은 공간 차지(축소 가능·내부 클립)로 출처박스 겹침 방지 */}
+      <div style={{ marginTop: 28, flex: 1, minHeight: 0, overflow: 'hidden' }}>
         <CompareBars
           rows={rows}
           mode={mode}
