@@ -177,6 +177,16 @@ export default function EditorPage() {
     })
   }, [apiData, saveNow])
 
+  const handleSetChange = useCallback((key: string) => {
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      const updated = { ...base, set_key: key }
+      saveNow(updated)
+      return updated
+    })
+  }, [apiData, saveNow])
+
   const handleFieldStyleChange = useCallback((fieldKey: string, patch: Partial<FieldStyle>) => {
     setLocalData((prev) => {
       const base = prev ?? apiData?.cardData
@@ -273,6 +283,7 @@ export default function EditorPage() {
           bgColor={cardData?.bg_color}
           accentColor={cardData?.accent_color}
           fontPairing={cardData?.font_pairing}
+          setKey={cardData?.set_key}
         />
 
         <MidCanvas
@@ -284,6 +295,7 @@ export default function EditorPage() {
           bgColor={cardData?.bg_color}
           accentColor={cardData?.accent_color}
           fontPairing={cardData?.font_pairing}
+          setKey={cardData?.set_key}
           isDemo={isDemo}
           focusedField={focusedField}
           onFieldFocus={(field) => setFocusedField(field)}
@@ -307,6 +319,8 @@ export default function EditorPage() {
           onBgColorChange={handleBgColorChange}
           currentFontPairing={cardData?.font_pairing}
           onFontPairingChange={handleFontPairingChange}
+          currentSetKey={cardData?.set_key}
+          onSetChange={handleSetChange}
           focusedField={focusedField}
           activeFieldStyle={focusedField ? cards[activeCardIdx]?.field_styles?.[focusedField] : undefined}
           onFieldStyleChange={handleFieldStyleChange}

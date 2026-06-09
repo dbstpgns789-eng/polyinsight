@@ -38,10 +38,11 @@ interface Props {
   bgColor?: string
   accentColor?: string
   fontPairing?: string
+  setKey?: string
 }
 
 // ── 메인 ─────────────────────────────────────────────────────────────────
-export default function LeftPanel({ cards, activeCardIdx, onSelectCard, onReorderCard, theme, bgColor, accentColor, fontPairing }: Props) {
+export default function LeftPanel({ cards, activeCardIdx, onSelectCard, onReorderCard, theme, bgColor, accentColor, fontPairing, setKey }: Props) {
   const effectiveTheme = theme ?? DEFAULT_THEME
   const total = cards.length
   const criticalCount = cards.filter((c) => getCardRiskStatus(c) === 'crit').length
@@ -83,6 +84,7 @@ export default function LeftPanel({ cards, activeCardIdx, onSelectCard, onReorde
             bgColor={bgColor}
             accentColor={accentColor}
             fontPairing={fontPairing}
+            setKey={setKey}
             idx={idx}
             total={total}
             isActive={idx === activeCardIdx}
@@ -136,13 +138,14 @@ export default function LeftPanel({ cards, activeCardIdx, onSelectCard, onReorde
 
 // ── 썸네일 아이템 ─────────────────────────────────────────────────────────
 const ThumbItem = memo(function ThumbItem({
-  card, theme, bgColor, accentColor, fontPairing, idx, total, isActive, onClick, onReorderCard,
+  card, theme, bgColor, accentColor, fontPairing, setKey, idx, total, isActive, onClick, onReorderCard,
 }: {
   card: Card
   theme: CardTheme
   bgColor?: string
   accentColor?: string
   fontPairing?: string
+  setKey?: string
   idx: number
   total: number
   isActive: boolean
@@ -196,6 +199,7 @@ const ThumbItem = memo(function ThumbItem({
             bgColor={bgColor}
             accentColor={accentColor}
             fontPairing={fontPairing}
+            setKey={setKey}
             mode="thumbnail"
             scale={scale}
           />

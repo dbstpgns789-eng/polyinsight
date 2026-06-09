@@ -8,6 +8,7 @@
 import CardFrame from './CardFrame'
 import { CARD_COMPONENTS } from './index'
 import { FieldStylesProvider } from './skin/fieldStyleContext'
+import { getSet } from './skin/sets'
 import type { CardComponentProps } from './types'
 
 interface CardRendererProps extends CardComponentProps {
@@ -15,15 +16,16 @@ interface CardRendererProps extends CardComponentProps {
   bgColor?: string
   accentColor?: string
   fontPairing?: string
+  setKey?: string
 }
 
-export default function CardRenderer({ scale = 1, bgColor, accentColor, fontPairing, ...props }: CardRendererProps) {
+export default function CardRenderer({ scale = 1, bgColor, accentColor, fontPairing, setKey, ...props }: CardRendererProps) {
   const { card } = props
   const Component = CARD_COMPONENTS[card.template_type]
 
   return (
     <FieldStylesProvider value={card.field_styles ?? {}}>
-      <CardFrame bgColor={bgColor} accentColor={accentColor} fontPairing={fontPairing} scale={scale}>
+      <CardFrame set={getSet(setKey)} bgColor={bgColor} accentColor={accentColor} fontPairing={fontPairing} scale={scale}>
         {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
       </CardFrame>
     </FieldStylesProvider>

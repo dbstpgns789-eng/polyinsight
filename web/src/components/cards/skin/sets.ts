@@ -109,6 +109,56 @@ export const REPORT_LIGHT_SET: CardSet = {
   },
 }
 
+// 다크 테크 — near-black + 네온 바이올렛. 참조 B(docs/22). KITECH AI·전자·기계·생산기술 핏. 세트 #2.
+export const DARK_TECH_SET: CardSet = {
+  set_key: 'dark_tech',
+  seed: 'oklch(64% 0.22 300)',
+  tokens: {
+    '--set-font': "'Pretendard Variable', Pretendard, 'Noto Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif",
+    '--set-bg': 'oklch(16% 0.02 290)',
+    '--set-bg-grad': 'oklch(22% 0.04 290)',
+    '--set-bg-gradient': 'linear-gradient(160deg, oklch(21% 0.035 290) 0%, oklch(13% 0.02 290) 100%)',
+    '--set-accent': 'oklch(64% 0.22 300)',
+    '--set-accent-ink': 'oklch(16% 0.03 300)',
+    '--set-ink-strong': 'oklch(98% 0.005 290)',
+    '--set-ink-muted': 'oklch(74% 0.03 290)',
+    '--set-ink-faint': 'oklch(56% 0.03 290)',
+    '--set-surface': 'rgba(255,255,255,0.06)',
+    '--set-surface-border': 'rgba(255,255,255,0.14)',
+    '--set-display': '244px',
+    '--set-headline': '70px',
+    '--set-subhead': '32px',
+    '--set-body': '26px',
+    '--set-caption': '20px',
+    '--set-eyebrow': '18px',
+    '--set-pad': '88px',
+    '--set-gap': '28px',
+    '--set-radius-box': '18px',
+    '--set-radius-pill': '100px',
+  },
+}
+
+// ── 세트 레지스트리 — 덱이 set_key로 선택. 미설정/미지 키 → 기본(REPORT_LIGHT) ──
+export const DEFAULT_SET = REPORT_LIGHT_SET
+
+export const CARD_SETS: Record<string, CardSet> = {
+  report_light: REPORT_LIGHT_SET,
+  dark_tech: DARK_TECH_SET,
+  editorial_light: EDITORIAL_LIGHT_SET,
+  deep_teal: DEEP_TEAL_SET,
+}
+
+export interface SetOption { key: string; label: string; sub: string }
+/** RightPanel 세트 선택 UI에 노출할 세트(준비된 것만). */
+export const SET_OPTIONS: SetOption[] = [
+  { key: 'report_light', label: '리포트 라이트', sub: '코퍼릿 · 연구/기관' },
+  { key: 'dark_tech',    label: '다크 테크',     sub: '네온 · AI/전자/기계' },
+]
+
+export function getSet(key?: string): CardSet {
+  return (key && CARD_SETS[key]) || DEFAULT_SET
+}
+
 /** CardFrame이 토큰을 inline style로 주입할 때 쓰는 헬퍼(타입 캐스트 일원화). */
 export function setTokenStyle(set: CardSet): CSSProperties {
   return set.tokens as CSSProperties

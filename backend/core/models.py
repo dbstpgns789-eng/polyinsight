@@ -133,6 +133,7 @@ class CardEditorData(BaseModel):
     bg_color: str | None = None                # 덱 배경 오버라이드(선택). None=세트 기본
     accent_color: str | None = None            # 덱 강조 오버라이드(선택). None=세트 기본
     font_pairing: str | None = None            # 덱 글꼴 오버라이드(선택). None=세트 기본(레지스트리 키)
+    set_key: str | None = None                 # 덱 스타일 세트 선택(선택). None=기본(report_light)
 
 
 # ---------------------------------------------------------------------------

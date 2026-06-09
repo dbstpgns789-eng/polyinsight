@@ -7,6 +7,7 @@ import type { Card, FieldStyle } from '@/types/editor'
 import ColorPicker from '@/components/ui/ColorPicker'
 import ElementStyleControls from './ElementStyleControls'
 import { FONT_OPTIONS } from '@/components/cards/fontPairings'
+import { SET_OPTIONS } from '@/components/cards/skin/sets'
 
 interface Props {
   activeCard?: Card
@@ -20,6 +21,8 @@ interface Props {
   onBgColorChange: (hex: string) => void
   currentFontPairing?: string
   onFontPairingChange: (key: string) => void
+  currentSetKey?: string
+  onSetChange: (key: string) => void
   focusedField?: string | null
   activeFieldStyle?: FieldStyle
   onFieldStyleChange: (fieldKey: string, patch: Partial<FieldStyle>) => void
@@ -112,7 +115,7 @@ function AccordionHead({ label, open, onToggle, badge }: { label: string; open: 
   )
 }
 
-type Section = 'element' | 'font' | 'color' | 'image' | null
+type Section = 'element' | 'set' | 'font' | 'color' | 'image' | null
 
 // ── 컴포넌트 ──────────────────────────────────────────────────────────────
 export default function RightPanel({
@@ -120,6 +123,7 @@ export default function RightPanel({
   currentAccent, recommendedThemeKey, onAccentColorChange,
   bgColor, onBgColorChange,
   currentFontPairing, onFontPairingChange,
+  currentSetKey, onSetChange,
   focusedField, activeFieldStyle, onFieldStyleChange, onFieldStyleReset,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -209,6 +213,39 @@ export default function RightPanel({
             <p style={{ fontSize: 11, color: 'var(--ink-3)', fontStyle: 'italic', lineHeight: 1.6 }}>
               캔버스에서 텍스트를 클릭하면<br />미세조정 손잡이가 여기 나타납니다.
             </p>
+          )}
+        </section>
+
+        {divider}
+
+        {/* §0.5 — 스타일 세트 (덱 단위) */}
+        <section>
+          <AccordionHead label="스타일 세트" open={openSection === 'set'} onToggle={() => toggle('set')} />
+          {openSection === 'set' && (
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {SET_OPTIONS.map((opt) => {
+                const active = (currentSetKey ?? 'report_light') === opt.key
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => onSetChange(opt.key)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                      padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                      border: active ? '1.5px solid var(--brand)' : '1px solid var(--border-subtle)',
+                      background: active ? 'var(--brand-soft)' : 'var(--canvas)',
+                    }}
+                  >
+                    <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>{opt.label}</span>
+                      <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>{opt.sub}</span>
+                    </span>
+                    {active && <span className="material-symbols-outlined" style={{ fontSize: 18, color: 'var(--brand)' }}>check</span>}
+                  </button>
+                )
+              })}
+            </div>
           )}
         </section>
 
