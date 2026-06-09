@@ -77,6 +77,38 @@ export const EDITORIAL_LIGHT_SET: CardSet = {
   },
 }
 
+// 코퍼릿/리포트 라이트 — 쿨 라이트 배경 + 네이비 잉크 + 블루 악센트 + 강한 타이포 위계 + 넉넉한 여백.
+// 참조 군집 A·C·E(라이트 프로) 합성. 연구·기관(KITECH) 핏. docs/22 §첫 세트. 색 OKLCH(#000/#fff 금지).
+export const REPORT_LIGHT_SET: CardSet = {
+  set_key: 'report_light',
+  seed: 'oklch(52% 0.15 255)',
+  tokens: {
+    '--set-font': "'Pretendard Variable', Pretendard, 'Noto Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif",
+    '--set-bg': 'oklch(97% 0.012 255)',
+    '--set-bg-grad': 'oklch(94% 0.022 255)',
+    '--set-bg-gradient': 'linear-gradient(168deg, oklch(98.5% 0.01 255) 0%, oklch(94% 0.024 255) 100%)',
+    '--set-accent': 'oklch(52% 0.15 255)',
+    '--set-accent-ink': 'oklch(99% 0.005 255)',
+    '--set-ink-strong': 'oklch(32% 0.09 262)',
+    '--set-ink-muted': 'oklch(48% 0.06 260)',
+    '--set-ink-faint': 'oklch(68% 0.035 258)',
+    '--set-surface': 'oklch(99.5% 0.003 255)',
+    '--set-surface-border': 'oklch(89% 0.02 255)',
+    // 타이포 — 위계 강화(헤드라인 ↑, 본문 약간 ↓로 대비)
+    '--set-display': '244px',
+    '--set-headline': '70px',
+    '--set-subhead': '32px',
+    '--set-body': '26px',
+    '--set-caption': '20px',
+    '--set-eyebrow': '18px',
+    // 여백 넉넉히
+    '--set-pad': '88px',
+    '--set-gap': '28px',
+    '--set-radius-box': '18px',
+    '--set-radius-pill': '100px',
+  },
+}
+
 /** CardFrame이 토큰을 inline style로 주입할 때 쓰는 헬퍼(타입 캐스트 일원화). */
 export function setTokenStyle(set: CardSet): CSSProperties {
   return set.tokens as CSSProperties
