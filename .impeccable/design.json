@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-19T00:00:00Z",
+  "title": "Design System: PolyInsight",
+  "extensions": {
+    "colorMeta": {
+      "forest-green":        { "role": "primary",   "displayName": "딥 포레스트 그린",  "canonical": "oklch(38% 0.14 152)",  "tonalRamp": ["oklch(15% 0.06 152)", "oklch(22% 0.10 152)", "oklch(32% 0.14 152)", "oklch(38% 0.14 152)", "oklch(52% 0.12 152)", "oklch(72% 0.08 152)", "oklch(85% 0.05 152)", "oklch(94% 0.035 152)"] },
+      "forest-green-deep":   { "role": "primary",   "displayName": "포레스트 딥",        "canonical": "oklch(32% 0.14 152)",  "tonalRamp": [] },
+      "forest-green-wash":   { "role": "primary",   "displayName": "포레스트 워시",      "canonical": "oklch(94% 0.035 152)", "tonalRamp": [] },
+      "forest-green-ghost":  { "role": "primary",   "displayName": "포레스트 고스트",    "canonical": "oklch(97% 0.018 152)", "tonalRamp": [] },
+      "canvas":              { "role": "neutral",   "displayName": "캔버스",             "canonical": "oklch(99.8% 0.002 152)", "tonalRamp": ["oklch(14% 0.04 152)", "oklch(19% 0.04 152)", "oklch(44% 0.012 152)", "oklch(63% 0.008 152)", "oklch(89% 0.012 152)", "oklch(93.5% 0.007 152)", "oklch(98% 0.005 152)", "oklch(99.8% 0.002 152)"] },
+      "canvas-warm":         { "role": "neutral",   "displayName": "캔버스 웜",          "canonical": "oklch(98% 0.005 152)", "tonalRamp": [] },
+      "canvas-subtle":       { "role": "neutral",   "displayName": "캔버스 서틀",        "canonical": "oklch(95.5% 0.009 152)", "tonalRamp": [] },
+      "ink-1":               { "role": "neutral",   "displayName": "잉크 1",             "canonical": "oklch(16% 0.008 152)", "tonalRamp": [] },
+      "ink-2":               { "role": "neutral",   "displayName": "잉크 2",             "canonical": "oklch(44% 0.012 152)", "tonalRamp": [] },
+      "ink-3":               { "role": "neutral",   "displayName": "잉크 3",             "canonical": "oklch(63% 0.008 152)", "tonalRamp": [] },
+      "risk-critical":       { "role": "semantic",  "displayName": "CRITICAL 레드",      "canonical": "oklch(40% 0.16 25)",   "tonalRamp": ["oklch(20% 0.10 25)", "oklch(30% 0.14 25)", "oklch(40% 0.16 25)", "oklch(52% 0.15 25)", "oklch(65% 0.12 25)", "oklch(78% 0.10 25)", "oklch(88% 0.06 25)", "oklch(97% 0.025 25)"] },
+      "risk-high":           { "role": "semantic",  "displayName": "HIGH 앰버",          "canonical": "oklch(42% 0.18 50)",   "tonalRamp": ["oklch(22% 0.10 50)", "oklch(32% 0.15 50)", "oklch(42% 0.18 50)", "oklch(55% 0.16 50)", "oklch(68% 0.12 50)", "oklch(80% 0.09 50)", "oklch(90% 0.05 50)", "oklch(97% 0.03 50)"] },
+      "risk-medium":         { "role": "semantic",  "displayName": "MEDIUM 옐로우",      "canonical": "oklch(45% 0.14 80)",   "tonalRamp": ["oklch(25% 0.08 80)", "oklch(35% 0.12 80)", "oklch(45% 0.14 80)", "oklch(57% 0.12 80)", "oklch(70% 0.09 80)", "oklch(82% 0.06 80)", "oklch(91% 0.04 80)", "oklch(98% 0.02 80)"] },
+      "status-ok":           { "role": "semantic",  "displayName": "검증 완료 그린",     "canonical": "oklch(34% 0.12 152)",  "tonalRamp": [] },
+      "dark-slate":          { "role": "neutral",   "displayName": "다크 슬레이트",      "canonical": "oklch(14% 0.04 152)",  "tonalRamp": [] }
+    },
+    "typographyMeta": {
+      "display":  { "displayName": "디스플레이",  "purpose": "랜딩 히어로 헤드라인 전용. 한 페이지에 하나." },
+      "headline": { "displayName": "헤드라인",    "purpose": "랜딩 섹션 제목. 카드 에디터에는 나타나지 않는다." },
+      "title":    { "displayName": "타이틀",      "purpose": "카드 제목, 모달 헤더, 패널 섹션 이름." },
+      "body":     { "displayName": "본문",        "purpose": "콘텐츠 패널 텍스트, 설명, 카피. 최대 줄 길이 65–75ch." },
+      "label":    { "displayName": "레이블",      "purpose": "섹션 레이블, 뱃지 텍스트, 버튼. uppercase 적용 시 ls +0.03em." }
+    },
+    "shadows": [
+      { "name": "shadow-sm",    "value": "0 2px 8px oklch(8% 0.01 152 / 0.07)",       "purpose": "카드 hover 상태. 기본 상태에는 그림자 없음." },
+      { "name": "shadow-md",    "value": "0 12px 32px oklch(8% 0.01 152 / 0.10)",      "purpose": "드롭다운, 툴팁, 선택된 카드." },
+      { "name": "shadow-lg",    "value": "0 16px 48px oklch(8% 0.01 152 / 0.18)",      "purpose": "업로드 모달." },
+      { "name": "shadow-modal", "value": "0 24px 64px -12px rgba(15,20,40,0.30)",       "purpose": "내보내기 모달. 배경 오버레이와 함께 사용." },
+      { "name": "topbar",       "value": "0 1px 0 0 oklch(89% 0.012 152)",             "purpose": "상단 바 하단 구분선. 그림자가 아닌 border-bottom 대체." }
+    ],
+    "motion": [
+      { "name": "ease-state",   "value": "cubic-bezier(0.4, 0, 0.6, 1)",  "purpose": "상태 전환 기본 easing. 버튼 색상, 카드 hover." },
+      { "name": "ease-enter",   "value": "cubic-bezier(0.0, 0, 0.2, 1)",  "purpose": "모달 진입, 드롭다운 열림. ease-out-quart 계열." },
+      { "name": "ease-exit",    "value": "cubic-bezier(0.4, 0, 1, 1)",    "purpose": "모달 퇴장, 닫힘." },
+      { "name": "dur-fast",     "value": "80ms",   "purpose": "버튼 active, 마이크로 피드백." },
+      { "name": "dur-standard", "value": "160ms",  "purpose": "색상 전환, hover 상태." },
+      { "name": "dur-modal",    "value": "240ms",  "purpose": "모달 진입/퇴장." }
+    ],
+    "breakpoints": [
+      { "name": "mobile-block", "value": "≤768px", "note": "에디터 3패널은 모바일 차단. 랜딩은 반응형." },
+      { "name": "panel-squeeze","value": "769–900px", "note": "중간 뷰포트에서 패널 압착 발생. 차단 범위 ≤900px 확장 권장." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "주 행동 요청. 내보내기 시작, 변환 시작, 확인 등 전환점 CTA.",
+      "html": "<button class=\"ds-btn-primary\">내보내기 시작</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 24px; background: oklch(38% 0.14 152); color: oklch(99.8% 0.002 152); font-family: 'Pretendard Variable', sans-serif; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; border: none; border-radius: 10px; cursor: pointer; transition: background 160ms cubic-bezier(0.4,0,0.6,1), transform 80ms cubic-bezier(0.4,0,0.6,1); } .ds-btn-primary:hover { background: oklch(32% 0.14 152); } .ds-btn-primary:focus-visible { outline: 2.5px solid oklch(38% 0.14 152); outline-offset: 3px; } .ds-btn-primary:active { transform: translateY(1px); } .ds-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "보조 액션. 취소, 다시 시도 등.",
+      "html": "<button class=\"ds-btn-ghost\">다시 시도</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 24px; background: transparent; color: oklch(38% 0.14 152); font-family: 'Pretendard Variable', sans-serif; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; border: 1px solid oklch(38% 0.14 152); border-radius: 10px; cursor: pointer; transition: background 160ms cubic-bezier(0.4,0,0.6,1); } .ds-btn-ghost:hover { background: oklch(94% 0.035 152); } .ds-btn-ghost:focus-visible { outline: 2.5px solid oklch(38% 0.14 152); outline-offset: 3px; } .ds-btn-ghost:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-default",
+      "description": "텍스트 입력 필드. 파일명, 검색, 기관명 등.",
+      "html": "<div class=\"ds-input-wrap\"><input class=\"ds-input\" type=\"text\" placeholder=\"입력하세요\"></div>",
+      "css": ".ds-input-wrap { position: relative; } .ds-input { display: block; width: 100%; height: 40px; padding: 0 14px; background: oklch(99.8% 0.002 152); color: oklch(16% 0.008 152); font-family: 'Pretendard Variable', sans-serif; font-size: 0.875rem; font-weight: 400; letter-spacing: -0.01em; border: 1px solid oklch(89% 0.012 152); border-radius: 6px; outline: none; transition: border-color 160ms cubic-bezier(0.4,0,0.6,1); } .ds-input::placeholder { color: oklch(63% 0.008 152); } .ds-input:hover { border-color: oklch(78% 0.02 152); } .ds-input:focus { border-color: oklch(38% 0.14 152); box-shadow: 0 0 0 3px oklch(94% 0.035 152); }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "콘텐츠 컨테이너. 기본 상태 그림자 없음, hover 시 shadow-sm.",
+      "html": "<div class=\"ds-card\"><p class=\"ds-card-body\">카드 콘텐츠</p></div>",
+      "css": ".ds-card { background: oklch(99.8% 0.002 152); border: 1px solid oklch(89% 0.012 152); border-radius: 16px; padding: 20px; transition: box-shadow 160ms cubic-bezier(0.4,0,0.6,1); } .ds-card:hover { box-shadow: 0 2px 8px oklch(8% 0.01 152 / 0.07); } .ds-card-body { font-family: 'Pretendard Variable', sans-serif; font-size: 1rem; font-weight: 400; line-height: 1.6; letter-spacing: -0.01em; color: oklch(16% 0.008 152); margin: 0; }"
+    },
+    {
+      "name": "CRITICAL Risk Badge",
+      "kind": "chip",
+      "refersTo": null,
+      "description": "원문 수치 불일치 경고. 내보내기를 차단한다. 필드 인라인과 ActionBar 양쪽에 등장.",
+      "html": "<span class=\"ds-risk-critical\">CRITICAL</span>",
+      "css": ".ds-risk-critical { display: inline-flex; align-items: center; padding: 2px 8px; background: oklch(97% 0.025 25); color: oklch(40% 0.16 25); border: 1px solid oklch(78% 0.10 25); border-radius: 6px; font-family: 'Pretendard Variable', sans-serif; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }"
+    },
+    {
+      "name": "OK / Verified Badge",
+      "kind": "chip",
+      "refersTo": null,
+      "description": "검증 완료 상태. 브랜드 그린과 동일 hue — 안전은 브랜드 색이다.",
+      "html": "<span class=\"ds-risk-ok\">검증 완료</span>",
+      "css": ".ds-risk-ok { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; background: oklch(93% 0.05 152); color: oklch(34% 0.12 152); border-radius: 6px; font-family: 'Pretendard Variable', sans-serif; font-size: 0.75rem; font-weight: 600; }"
+    },
+    {
+      "name": "Modal Container",
+      "kind": "custom",
+      "refersTo": "modal-container",
+      "description": "내보내기 / 업로드 모달. backdrop-filter + dim overlay와 함께 사용.",
+      "html": "<div class=\"ds-modal-overlay\"><div class=\"ds-modal\"><div class=\"ds-modal-header\"><h2 class=\"ds-modal-title\">카드뉴스 내보내기</h2></div><div class=\"ds-modal-body\"><p>내용</p></div></div></div>",
+      "css": ".ds-modal-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: oklch(14% 0.04 152 / 0.70); backdrop-filter: blur(8px) saturate(120%); } .ds-modal { background: oklch(99.8% 0.002 152); border-radius: 20px; box-shadow: 0 24px 64px -12px rgba(15,20,40,0.30); width: 100%; max-width: 440px; margin: 16px; overflow: hidden; } .ds-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid oklch(89% 0.012 152); } .ds-modal-title { margin: 0; font-family: 'Pretendard Variable', sans-serif; font-size: 0.875rem; font-weight: 700; letter-spacing: -0.025em; color: oklch(16% 0.008 152); } .ds-modal-body { padding: 20px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Academic Desk",
+    "overview": "PolyInsight는 연구자의 작업대다. 논문이 펼쳐져 있고, 형광펜이 그어져 있으며, 출처가 정확히 표기되어 있다. 이 시스템이 내리는 모든 시각적 결정은 하나의 질문으로 수렴한다: 이것이 연구자의 집중을 돕는가?\n\n색상은 차분하고 틴팅이 일관적이다. 딥 포레스트 그린은 전형적인 SaaS 블루/퍼플을 의도적으로 반사하며, 학술지와 연구 환경의 색조를 연상시킨다. 모든 중성색은 hue 152로 미세하게 틴팅되어 전체 인터페이스에 일관된 온도감을 준다.\n\n위험도 시스템(CRITICAL / HIGH / MEDIUM / OK)은 제품 철학 '수치가 신뢰다'의 시각적 구현이다. 빨강, 주황, 노랑, 초록의 신호등 체계는 장식이 아니라 책임의 표시다.",
+    "keyCharacteristics": [
+      "모든 색상은 OKLCH, hue 152로 일관 틴팅",
+      "그림자는 상태에만 반응 — 기본 상태 평평",
+      "타이포그래피 계층은 항상 음수 letter-spacing",
+      "위험도 색상(hue 25/50/80)은 브랜드 hue와 의도적 대비",
+      "인터페이스 언어는 한국어 전용"
+    ],
+    "rules": [
+      { "name": "The One Accent Rule",        "body": "포레스트 그린은 주어진 화면의 ≤10%를 차지한다. 그것의 희소성이 신뢰를 만든다.",                          "section": "colors" },
+      { "name": "The Tinted Neutrals Rule",   "body": "순수한 #000, #fff는 이 시스템에 존재하지 않는다. 모든 중성색은 hue 152로 틴팅된다.",                    "section": "colors" },
+      { "name": "The Negative-Kerning Rule",  "body": "제목의 letter-spacing은 항상 -0.025em. 본문은 -0.01em. 양수 자간은 uppercase label에서만 허용.",          "section": "typography" },
+      { "name": "The Korean-First Rule",      "body": "word-break: keep-all이 전역 적용된다. 이 규칙을 제거하면 좁은 화면에서 헤드라인이 깨진다.",               "section": "typography" },
+      { "name": "The State-Only Shadow Rule", "body": "카드는 기본 상태에서 border만 갖는다. hover 시 shadow-sm. 모달은 항상 shadow-modal. 이 세 단계 외는 없다.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do 모든 색상에 OKLCH를 사용한다. 중성색은 반드시 hue 152로 틴팅한다.",
+      "Do 그림자는 상태 변화(hover, modal 진입)에만 사용한다.",
+      "Do 타이포그래피 letter-spacing은 항상 음수(-0.01em ~ -0.025em).",
+      "Do word-break: keep-all을 전역 적용한다.",
+      "Do 위험도 색상을 인라인 필드와 ActionBar 카운터 양쪽에 이중 노출한다.",
+      "Do 처리 중 화면에서 기술 용어를 한국어 사용자 언어로 번역한다.",
+      "Do Primary 버튼 active에 transform: translateY(1px)를 적용한다.",
+      "Do color-mix() 배경에 항상 단색 fallback을 앞에 선언한다."
+    ],
+    "donts": [
+      "Don't 순수 #000 또는 #fff를 사용한다. 모든 검정/흰색은 hue 152로 틴팅.",
+      "Don't 포레스트 그린 액센트를 화면의 10% 이상에 사용한다.",
+      "Don't 기능 목록을 나열하는 AI 랜딩 페이지 구조를 쓴다 (Concept Over Flow).",
+      "Don't 전형적인 SaaS 크림·퍼플 배경을 쓴다 (Intercom, HubSpot 류).",
+      "Don't AI 스타트업 과장 스타일을 쓴다. 네온, 다크모드 기본, '혁신' 남발 금지.",
+      "Don't border-left를 1px 초과 컬러 액센트 스트라이프로 사용한다.",
+      "Don't 그라디언트 텍스트(background-clip: text)를 쓴다.",
+      "Don't CSS layout 속성(width, height)을 직접 트랜지션한다. transform과 opacity만.",
+      "Don't @theme 블록이나 CSS 변수에 hex/rgb 색상값을 직접 쓴다."
+    ]
+  }
+}

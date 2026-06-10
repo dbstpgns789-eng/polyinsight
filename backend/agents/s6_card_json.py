@@ -1,284 +1,306 @@
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
-import re
 
 from .base import BaseAgent
-from ..core.llm_client import llm_client
+from .s6._util import extract_json, format_section_map
+from .s6.architect import architect
+from .s6.writer import writer
+from .s6.mock import mock_storyboard, mock_cards
+from ..core.config import settings
+from ..core.llm_client import LLMTruncationError
 from ..core.models import (
-    CardEditorData, CardTheme, FieldValue, MatchQuality,
-    RiskLevel, ClaimType, FieldSource,
+    ArchitectInput, ArchitectOutput, WriterInput, WriterOutput,
+    CardEditorData, CardSlot, FieldValue,
+    MatchQuality, RiskLevel, ClaimType,
+    Storyboard,
     S6Input, S6Output,
+    THEME_PRESETS,
 )
 
 logger = logging.getLogger(__name__)
 
-# ── 프롬프트 ──────────────────────────────────────────────────────────────────
+# 프롬프트는 s6/prompts.py 로 분할 이관됨(설계팀/콘텐츠팀). 아래는 mock + 코디네이터.
 
-_SYSTEM = """당신은 학술 논문을 기관 홍보용 카드뉴스로 변환하는 전문가입니다.
-
-핵심 원칙:
-1. 아래 section_map(원문)에서만 사실을 추출한다.
-2. 수치(숫자, %, 배율)는 반드시 원문에서 찾아야 한다.
-3. 원문에 없는 내용은 절대 만들지 않는다.
-4. 찾을 수 없으면 value=""로 남기고 match_quality="failed"로 표기한다.
-5. verified는 항상 false다.
-6. 카드간 내용 중복을 최소화하여라.
-
-작성 순서 (CoT):
-1. SEARCH  — 원문에서 관련 구절 찾기 (<!-- PAGE N --> 마커로 페이지 특정)
-2. EXTRACT — 기여/성과/수치 목록 내부 작성 (카드뉴스 배분 계획)
-3. WRITE   — 각 카드 FieldValue 작성
-4. SCORE   — confidence/match_quality/risk_level 판정
-5. SIGNAL  — 각 카드 signals 객체 작성 (레이아웃 판정용 구조 신호)
-
-카드 구성:
-- Card1: 표지 (pretitle, title, mascot_bubble)
-- Card2: 문제/훅 (intro, keyword_line, footnote)
-- Card3: 핵심 성과 (problem, achievement, mascot_bubble, photo_caption)
-- Card4: 상세 분석 (before_label, after_label, description, result, mascot_bubble)
-- Card5: 마무리 (pre_title, main_title, cta, team_name)
-
-signals 작성 규칙:
-- card2.signals.is_hook: intro가 문제 제기/의문/한계 지적이면 true, 단순 소개면 false
-- card3.signals.stat_count: achievement+problem에서 수치(숫자, %, 배율, 비율) 개수
-- card3.signals.has_process_steps: 실험/제조 단계가 순서대로 서술되면 true
-- card3.signals.step_count: 단계 수 (has_process_steps=false면 0)
-- card4.signals.has_comparison: 기존 방식 vs 신기술 비교 구조가 명확하면 true
-
-테마 컬러 제안 (강제 아님):
-농업/식품: #3BAF6B | 환경/에너지: #0EA5BE | 로봇/제조: #F59E20
-의료/바이오: #6C5CE7 | 소재/화학: #7B5FFF | 센서/전자: #F5C430
-기본(미분류): primary="#2563EB" dark="#1B44A5"
-
-반환: JSON만. 설명 없음."""
-
-_USER = """## 논문 원문
-
-{section_map_text}
-
----
-제목: {title}
-저자: {authors}
-연도: {year}
-
----
-## 지시
-
-아래 JSON 스키마를 완성하라. 각 FieldValue는 규칙에 따라 채운다.
-
-FieldValue 구조:
-{{
-  "value": "텍스트",
-  "confidence": "high|medium|low",
-  "match_quality": "exact|normalized|fuzzy|semantic|failed",
-  "claim_type": "quantitative|qualitative|causal",
-  "source": {{"section": "섹션명", "page": 1}},
-  "risk_level": "CRITICAL|HIGH|MEDIUM|LOW",
-  "verified": false
-}}
-
-risk_level 규칙:
-- quantitative + failed → CRITICAL
-- fuzzy 또는 semantic  → HIGH
-- normalized           → MEDIUM
-- exact 또는 qualitative → LOW
-
-출력 JSON:
-{{
-  "meta": {{
-    "org":            <FieldValue>,
-    "dept":           <FieldValue>,
-    "researcher":     <FieldValue>,
-    "month":          <FieldValue>,
-    "edition_number": <FieldValue>
-  }},
-  "card1": {{
-    "pretitle":      <FieldValue>,
-    "title":         <FieldValue>,
-    "mascot_bubble": <FieldValue>
-  }},
-  "card2": {{
-    "intro":        <FieldValue>,
-    "keyword_line": <FieldValue>,
-    "footnote":     <FieldValue>,
-    "signals": {{
-      "is_hook": true|false
-    }}
-  }},
-  "card3": {{
-    "problem":       <FieldValue>,
-    "achievement":   <FieldValue>,
-    "mascot_bubble": <FieldValue>,
-    "photo_caption": <FieldValue>,
-    "signals": {{
-      "stat_count": 0,
-      "has_process_steps": true|false,
-      "step_count": 0
-    }}
-  }},
-  "card4": {{
-    "before_label":  <FieldValue>,
-    "after_label":   <FieldValue>,
-    "description":   <FieldValue>,
-    "result":        <FieldValue>,
-    "mascot_bubble": <FieldValue>,
-    "signals": {{
-      "has_comparison": true|false
-    }}
-  }},
-  "card5": {{
-    "pre_title":  <FieldValue>,
-    "main_title": <FieldValue>,
-    "cta":        <FieldValue>,
-    "team_name":  <FieldValue>
-  }}
-}}"""
-
+# ---------------------------------------------------------------------------
+# Mock (DEV_MOCK_LLM) + Agent
+# ---------------------------------------------------------------------------
 
 class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
-    """S6: section_map → CardEditorData (FieldValue 스키마)."""
+    """S6: section_map + card_count → CardEditorData (가변 CardSlot 리스트)."""
 
-    MAX_RETRIES = 3
-    SECTION_MAX_CHARS = 12000   # 토큰 절약: 섹션 합산 최대 길이
+    MAX_RETRIES = 5
+    SECTION_MAX_CHARS = 50000
+    # 503 서버 과부하 시 대기 시간 (초): 1차 30s, 2차 60s, 3차 120s ...
+    _503_BACKOFF = [30, 60, 120, 180]
+    # 발행급 밀도 상한 (docs/21 A4) — 측정용 경고 임계값. 고정 논문 시각 튜닝으로 조정 가능.
+    DENSITY_CAPS = {"headline": 30, "subtitle": 45, "body": 90}
 
     async def execute(self, input_data: S6Input) -> S6Output:
-        section_map_text = self._format_section_map(input_data.section_map)
-        meta = input_data.paper_metadata
+        if settings.DEV_MOCK_LLM:
+            logger.info("S6: DEV_MOCK_LLM=True — mock 설계팀/콘텐츠팀으로 동형 경로 실행")
+            arch_out = mock_storyboard(input_data.card_count, input_data.paper_metadata)
+            wr_out = mock_cards(arch_out.storyboard, input_data.paper_metadata)
+            card_data = self._assemble(arch_out.storyboard, arch_out.recommended_theme, wr_out)
+            card_data = self._post_process(card_data)
+            return S6Output(
+                card_data=card_data,
+                critical_count=self._count_risk(card_data, RiskLevel.CRITICAL),
+                high_count=self._count_risk(card_data, RiskLevel.HIGH),
+            )
 
-        user_prompt = _USER.format(
-            section_map_text=section_map_text,
-            title=meta.title or "unknown",
-            authors=", ".join(meta.authors) if meta.authors else "unknown",
-            year=meta.year or "unknown",
+        # ── 멀티에이전트: 설계팀(Architect, Sonnet) → 콘텐츠팀(Writer, Haiku) ──
+        arch_out: ArchitectOutput = await self._with_retries(
+            lambda: architect.run(ArchitectInput(
+                section_map=input_data.section_map,
+                paper_metadata=input_data.paper_metadata,
+                card_count=input_data.card_count,
+            )),
+            stage="Architect", truncation_is_card_overload=False,
         )
 
+        wr_out: WriterOutput = await self._with_retries(
+            lambda: self._run_writer(input_data, arch_out.storyboard),
+            stage="Writer", truncation_is_card_overload=True,
+            card_count=input_data.card_count,
+        )
+
+        storyboard = arch_out.storyboard
+        warnings: list[str] = []
+        # ── 피드백 루프 (1회 상한): 콘텐츠팀이 fit 불일치를 보고하면 설계팀이 지목 비트만 재설계 ──
+        if wr_out.mismatch_signals:
+            storyboard, wr_out, warnings = await self._resolve_mismatch(
+                input_data, arch_out, wr_out,
+            )
+
+        card_data = self._assemble(storyboard, arch_out.recommended_theme, wr_out)
+        card_data = self._post_process(card_data)
+        critical = self._count_risk(card_data, RiskLevel.CRITICAL)
+        high = self._count_risk(card_data, RiskLevel.HIGH)
+        density_warns = self._density_warnings(card_data)
+        if density_warns:
+            logger.warning("S6 발행급 밀도 경고(docs/21): %s", "; ".join(density_warns))
+        logger.info(
+            "S6: done. cards=%d CRITICAL=%d HIGH=%d warnings=%d",
+            len(card_data.cards), critical, high, len(warnings),
+        )
+        return S6Output(
+            card_data=card_data, critical_count=critical, high_count=high, warnings=warnings,
+        )
+
+    # ── 모듈 호출 래퍼 ────────────────────────────────────────────────────────
+
+    async def _run_writer(
+        self, input_data: S6Input, storyboard: Storyboard,
+        only_beats: list[int] | None = None,
+    ) -> WriterOutput:
+        """Writer 실행 + 커버리지 일관성 검증(불일치 시 재시도 유발). only_beats=부분 재작성."""
+        wr = await writer.run(WriterInput(
+            section_map=input_data.section_map,
+            paper_metadata=input_data.paper_metadata,
+            storyboard=storyboard,
+            only_beats=only_beats,
+        ))
+        expected = set(only_beats) if only_beats else {b.card_num for b in storyboard.beats}
+        card_nums = {c.card_num for c in wr.cards}
+        if card_nums != expected:
+            raise ValueError(
+                f"Writer 커버리지 불일치: expected={sorted(expected)} cards={sorted(card_nums)}"
+            )
+        return wr
+
+    # ── 피드백 루프 (1회 상한) ────────────────────────────────────────────────
+
+    async def _resolve_mismatch(
+        self, input_data: S6Input, arch_out: ArchitectOutput, wr_out: WriterOutput,
+    ) -> tuple[Storyboard, WriterOutput, list[str]]:
+        """Writer 불일치 신호 → 설계팀 지목 비트 재설계 → Writer 부분 재작성 → 병합/안전뼈대."""
+        signals = wr_out.mismatch_signals
+        bad = [s.card_num for s in signals]
+        logger.info("S6 피드백 루프: 불일치 카드 %s — 재설계 1회", bad)
+
+        arch2: ArchitectOutput = await self._with_retries(
+            lambda: architect.run(ArchitectInput(
+                section_map=input_data.section_map,
+                paper_metadata=input_data.paper_metadata,
+                card_count=input_data.card_count,
+                revise_beats=signals,
+                current_storyboard=arch_out.storyboard,
+            )),
+            stage="Architect-revise", truncation_is_card_overload=False,
+        )
+        wr2: WriterOutput = await self._with_retries(
+            lambda: self._run_writer(input_data, arch2.storyboard, only_beats=bad),
+            stage="Writer-revise", truncation_is_card_overload=True,
+            card_count=input_data.card_count,
+        )
+
+        merged_cards = self._merge_cards(wr_out.cards, wr2.cards)
+        storyboard = arch2.storyboard
+        warnings: list[str] = []
+
+        # 1회 후에도 잔여 불일치 → 억지로 끼우지 않고 안전 뼈대로 내려앉되 degraded로 표면화.
+        if wr2.mismatch_signals:
+            storyboard, merged_cards, warnings = self._safe_fallback(
+                storyboard, merged_cards, wr2.mismatch_signals,
+            )
+
+        return storyboard, WriterOutput(cards=merged_cards, meta=wr_out.meta), warnings
+
+    @staticmethod
+    def _merge_cards(orig: list[CardSlot], new: list[CardSlot]) -> list[CardSlot]:
+        by_num = {c.card_num: c for c in orig}
+        for c in new:
+            by_num[c.card_num] = c
+        return [by_num[k] for k in sorted(by_num)]
+
+    @staticmethod
+    def _safe_fallback(
+        storyboard: Storyboard, cards: list[CardSlot], signals: list,
+    ) -> tuple[Storyboard, list[CardSlot], list[str]]:
+        """잔여 불일치 비트를 안전 뼈대(callout)로 대체 — 기존 headline/body 재사용, degraded 경고."""
+        SAFE = "callout"
+        warns: list[str] = []
+        beat_by = {b.card_num: b for b in storyboard.beats}
+        card_by = {c.card_num: c for c in cards}
+        for s in signals:
+            n = s.card_num
+            if n not in card_by:
+                continue
+            old = card_by[n]
+            fields: dict[str, FieldValue] = {}
+            if "headline" in old.fields:
+                fields["headline"] = old.fields["headline"]
+            elif old.fields:
+                fields["headline"] = next(iter(old.fields.values()))
+            if "body" in old.fields:
+                fields["body"] = old.fields["body"]
+            card_by[n] = CardSlot(card_num=n, template_type=SAFE,
+                                  fields=fields or {"headline": FieldValue(value="")})
+            if n in beat_by:
+                beat_by[n].template_type = SAFE          # 스토리보드↔카드 동기화
+            warns.append(f"카드{n} 레이아웃 fit 미해결—안전 뼈대({SAFE}) 대체")
+        new_sb = Storyboard(story_arc=storyboard.story_arc,
+                            beats=[beat_by[b.card_num] for b in storyboard.beats])
+        new_cards = [card_by[c.card_num] for c in cards]
+        return new_sb, new_cards, warns
+
+    async def _with_retries(
+        self, factory, *, stage: str,
+        truncation_is_card_overload: bool, card_count: int = 0,
+    ):
+        """각 모듈 호출을 개별 래핑 — Writer 503이 비싼 Architect를 재실행하지 않게."""
         last_exc: Exception | None = None
         for attempt in range(self.MAX_RETRIES):
             try:
-                raw = await llm_client.call(
-                    system_prompt=_SYSTEM,
-                    user_prompt=user_prompt,
-                    max_tokens=4096,
-                    temperature=0.2,
+                return await factory()
+            except LLMTruncationError as exc:
+                if truncation_is_card_overload:
+                    # Writer(Haiku) 출력 천장 = 카드 과다. 재시도 무의미.
+                    logger.error(
+                        "S6 %s: 출력 천장 (out=%d/max=%d) — card_count=%d 과다",
+                        stage, exc.output_tokens, exc.max_tokens, card_count,
+                    )
+                    raise RuntimeError(
+                        f"ERR-S6-002: 카드 {card_count}장이 모델 출력 한계"
+                        f"({exc.max_tokens} 토큰)를 초과해 JSON이 잘렸습니다. "
+                        f"카드 수를 줄이거나 더 큰 출력 모델이 필요합니다."
+                    ) from exc
+                # Architect 출력 천장 = 프롬프트 버그(작은 출력인데 잘림). 카드 수 문제 아님.
+                logger.error(
+                    "S6 %s: 출력 천장 — 프롬프트 점검 필요 (out=%d/max=%d)",
+                    stage, exc.output_tokens, exc.max_tokens,
                 )
-                card_data = CardEditorData.model_validate(
-                    json.loads(self._extract_json(raw))
-                )
-                # 후처리: verified 강제 초기화 + risk_level 재판정 + 레이아웃 결정
-                card_data = self._post_process(card_data)
-                card_data.layout_variants = self._infer_layout(card_data)
-                critical = self._count_risk(card_data, RiskLevel.CRITICAL)
-                high = self._count_risk(card_data, RiskLevel.HIGH)
-                logger.info("S6: done. CRITICAL=%d HIGH=%d", critical, high)
-                return S6Output(
-                    card_data=card_data,
-                    critical_count=critical,
-                    high_count=high,
-                )
+                raise RuntimeError(
+                    f"ERR-S6-003: {stage} 출력이 천장에서 잘림 — 프롬프트 점검 필요."
+                ) from exc
             except Exception as exc:
                 last_exc = exc
-                logger.warning("S6: attempt %d failed — %s", attempt + 1, exc)
+                logger.warning("S6 %s: attempt %d failed — %s", stage, attempt + 1, exc)
+                if "503" in str(exc) and attempt < self.MAX_RETRIES - 1:
+                    wait = self._503_BACKOFF[min(attempt, len(self._503_BACKOFF) - 1)]
+                    logger.info("S6 %s: 503 서버 과부하 — %ds 대기 후 재시도", stage, wait)
+                    await asyncio.sleep(wait)
 
         raise RuntimeError(f"ERR-S6-001: {last_exc}")
 
-    # ── 헬퍼 ──────────────────────────────────────────────────────────────────
+    # ── 조립 ──────────────────────────────────────────────────────────────────
 
-    def _format_section_map(self, section_map: dict[str, str]) -> str:
-        parts = []
-        total = 0
-        for section, text in section_map.items():
-            chunk = f"### {section}\n{text}"
-            if total + len(chunk) > self.SECTION_MAX_CHARS:
-                remaining = self.SECTION_MAX_CHARS - total
-                if remaining > 200:
-                    parts.append(chunk[:remaining] + "\n[truncated]")
-                break
-            parts.append(chunk)
-            total += len(chunk)
-        return "\n\n".join(parts)
+    def _assemble(self, storyboard: Storyboard, recommended_theme: str, wr_out: WriterOutput) -> CardEditorData:
+        """설계팀 storyboard·theme + 콘텐츠팀 cards·meta → CardEditorData."""
+        theme_key = recommended_theme if recommended_theme in THEME_PRESETS else "tech_blue"
+        return CardEditorData(
+            storyboard=storyboard,
+            meta=wr_out.meta,
+            cards=wr_out.cards,
+            theme=THEME_PRESETS[theme_key],
+            recommended_theme_key=theme_key,
+        )
 
-    @staticmethod
-    def _extract_json(text: str) -> str:
-        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if m:
-            return m.group(1)
-        m = re.search(r"\{.*\}", text, re.DOTALL)
-        if m:
-            return m.group(0)
-        return text
+    # ── 후처리 ────────────────────────────────────────────────────────────────
 
     @staticmethod
     def _post_process(card_data: CardEditorData) -> CardEditorData:
         """verified 강제 False + risk_level 규칙 재판정."""
-        for field_value in _iter_field_values(card_data):
-            field_value.verified = False
-            # risk_level 재판정 (LLM이 잘못 넣었을 경우 교정)
-            if (field_value.claim_type == ClaimType.QUANTITATIVE
-                    and field_value.match_quality == MatchQuality.FAILED):
-                field_value.risk_level = RiskLevel.CRITICAL
-            elif field_value.match_quality in (MatchQuality.FUZZY, MatchQuality.SEMANTIC):
-                field_value.risk_level = RiskLevel.HIGH
-            elif field_value.match_quality == MatchQuality.NORMALIZED:
-                field_value.risk_level = RiskLevel.MEDIUM
+        for fv in _iter_field_values(card_data):
+            fv.verified = False
+            # 위험 신호는 수치(정량)가 진다. 정성/인과 의역은 MEDIUM 상한.
+            is_quant = fv.claim_type == ClaimType.QUANTITATIVE
+            mq = fv.match_quality
+            if is_quant and mq == MatchQuality.FAILED:
+                fv.risk_level = RiskLevel.CRITICAL
+            elif is_quant and mq in (MatchQuality.FUZZY, MatchQuality.SEMANTIC):
+                fv.risk_level = RiskLevel.HIGH
+            elif is_quant and mq == MatchQuality.NORMALIZED:
+                fv.risk_level = RiskLevel.MEDIUM
+            elif mq in (MatchQuality.FAILED, MatchQuality.FUZZY, MatchQuality.SEMANTIC):
+                # 정성/인과: 의역·미매칭은 검토 권장(MEDIUM)이지 위험(HIGH) 아님
+                fv.risk_level = RiskLevel.MEDIUM
             else:
-                field_value.risk_level = RiskLevel.LOW
+                fv.risk_level = RiskLevel.LOW
         return card_data
 
+    # ── 발행급 밀도 측정 (docs/21) ────────────────────────────────────────────
+
     @staticmethod
-    def _infer_layout(card_data: CardEditorData) -> dict[str, str]:
-        """LLM이 채운 signals를 읽어 카드별 레이아웃 타입 결정.
-
-        선택 규칙 (docs/08_design_spec.md §5-0 기준):
-          Card1 → A  (커버, 항상 고정)
-          Card2 → E  (is_hook=true) | B (기본)
-          Card3 → C  (stat_count>=3) | G (has_process_steps and step_count>=3) | B
-          Card4 → D  (has_comparison=true) | B (기본)
-          Card5 → K  (클로징, 항상 고정)
-        """
-        variants: dict[str, str] = {}
-
-        variants["1"] = "A"
-        variants["5"] = "K"
-
-        # Card 2
-        sig2 = card_data.card2.signals
-        variants["2"] = "E" if sig2.is_hook else "B"
-
-        # Card 3
-        sig3 = card_data.card3.signals
-        if sig3.stat_count >= 3:
-            variants["3"] = "C"
-        elif sig3.has_process_steps and sig3.step_count >= 3:
-            variants["3"] = "G"
-        else:
-            variants["3"] = "B"
-
-        # Card 4
-        sig4 = card_data.card4.signals
-        variants["4"] = "D" if sig4.has_comparison else "B"
-
-        logger.info(
-            "S6: layout inferred — %s",
-            ", ".join(f"Card{k}={v}" for k, v in sorted(variants.items())),
-        )
-        return variants
+    def _density_warnings(card_data: CardEditorData) -> list[str]:
+        """발행급 bar(docs/21 A1 슬라이드수·A4 글자수) 측정 — 위반을 경고로 수집한다.
+        하드 실패·자동 절단은 하지 않는다(의미·fidelity 훼손 방지). 프롬프트가 1차 강제, 이건 측정/관측."""
+        warns: list[str] = []
+        n = len(card_data.cards)
+        if not (5 <= n <= 7):
+            warns.append(f"슬라이드 수 {n}장(권장 5~7)")
+        for card in card_data.cards:
+            for key, cap in S6CardJsonAgent.DENSITY_CAPS.items():
+                fv = card.fields.get(key)
+                if fv and fv.value:
+                    text = fv.value.replace("*", "")  # 강조 마커 제외
+                    if len(text) > cap:
+                        warns.append(f"카드{card.card_num} {key} {len(text)}자(상한 {cap})")
+        return warns
 
     @staticmethod
     def _count_risk(card_data: CardEditorData, level: RiskLevel) -> int:
-        return sum(
-            1 for fv in _iter_field_values(card_data) if fv.risk_level == level
-        )
+        return sum(1 for fv in _iter_field_values(card_data) if fv.risk_level == level)
+
+    # ── 텍스트 헬퍼 ───────────────────────────────────────────────────────────
+
+    def _format_section_map(self, section_map: dict[str, str]) -> str:
+        return format_section_map(section_map, self.SECTION_MAX_CHARS)
+
+    @staticmethod
+    def _extract_json(text: str) -> str:
+        return extract_json(text)
 
 
 def _iter_field_values(card_data: CardEditorData):
     """CardEditorData의 모든 FieldValue를 순회."""
-    for group in [card_data.meta, card_data.card1, card_data.card2,
-                  card_data.card3, card_data.card4, card_data.card5]:
-        for val in vars(group).values():
-            if isinstance(val, FieldValue):
-                yield val
+    for fv in vars(card_data.meta).values():
+        if isinstance(fv, FieldValue):
+            yield fv
+    for slot in card_data.cards:
+        yield from slot.fields.values()
 
 
 s6_agent = S6CardJsonAgent()

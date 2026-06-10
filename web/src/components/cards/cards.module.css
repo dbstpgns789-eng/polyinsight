@@ -1,0 +1,289 @@
+/* ─────────────────────────────────────────────────────────────────────────
+ * cards.module.css — React 카드 컴포넌트 디자인 토큰
+ *
+ * `backend/templates/_shared.css`의 verbatim 복제. CI 시각 회귀가 Jinja
+ * 출력과 React 캔버스의 픽셀 차이를 잡으므로 토큰 동기화는 강제.
+ *
+ * 백엔드 템플릿 수정 시 이 파일도 반드시 함께 수정.
+ * ───────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css');
+
+.scope {
+  /* Surface */
+  --surface-base:       #FFFFFF;
+  --surface-card:       #F8F9FA;
+  --surface-overlay:    rgba(0, 0, 0, 0.45);
+
+  /* Text */
+  --text-primary:       #212529;
+  --text-secondary:     #495057;
+  --text-caption:       #868E96;
+  --text-on-dark:       #FFFFFF;
+  --text-on-dark-muted: rgba(255, 255, 255, 0.80);
+
+  /* Component */
+  --badge-bg-light:     rgba(255, 255, 255, 0.88);
+  --badge-border-light: rgba(0, 0, 0, 0.12);
+  --shadow-card:        0 4px 16px rgba(0,0,0,0.08), 0 16px 48px rgba(0,0,0,0.06);
+  --radius-card:        20px;
+  --radius-pill:        100px;
+
+  /* Spacing */
+  --space-xs:  8px;
+  --space-sm:  16px;
+  --space-md:  24px;
+  --space-lg:  40px;
+  --space-xl:  60px;
+
+  /* --theme-* 은퇴: 카드는 --set-* 만 사용 (덱 오버라이드는 CardFrame). 구 island 클래스 잔재는 후속 정리 */
+
+  font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.scope *,
+.scope *::before,
+.scope *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ── 캔버스 ── */
+.cardCanvas {
+  width: 1080px;
+  height: 1080px;
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-base);
+}
+
+.cardSafeZone {
+  position: absolute;
+  inset: 60px;
+}
+
+/* ── 배지 ── */
+.badgeLight {
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 32px;
+  background: var(--badge-bg-light);
+  border: 1.5px solid var(--badge-border-light);
+  border-radius: var(--radius-pill);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+}
+
+.badgeDark {
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 32px;
+  background: rgba(255,255,255,0.10);
+  border: 1.5px solid rgba(255,255,255,0.28);
+  border-radius: var(--radius-pill);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text-on-dark);
+  white-space: nowrap;
+}
+
+/* ── 삼각형 코너 ── */
+.triangleCorner {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 520px;
+  height: 520px;
+  background: var(--theme-primary);
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  z-index: 5;
+}
+
+/* ── 흰색 콘텐츠 카드 ── */
+.contentCard {
+  background: var(--surface-base);
+  border-radius: var(--radius-card);
+  padding: 52px 56px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  overflow: hidden;
+}
+
+.contentCardWithAccent::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 8px;
+  background: var(--theme-primary);
+  border-radius: 20px 0 0 20px;
+}
+
+/* ── 언더라인 ── */
+.headingUnderline {
+  display: block;
+  width: 60px;
+  height: 6px;
+  background: var(--theme-primary);
+  border-radius: 3px;
+  margin-top: 16px;
+}
+
+/* ── 텍스트 계층 ── */
+.textD1 {
+  font-size: 110px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--text-on-dark);
+}
+.textD2 {
+  font-size: 88px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--text-on-dark);
+}
+.textH1 {
+  font-size: 56px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.textH2 {
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+.textB1 {
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+.textB2 {
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.textN1 {
+  font-size: 72px;
+  font-weight: 900;
+  line-height: 1.0;
+  letter-spacing: -0.02em;
+  color: var(--theme-primary);
+}
+
+.accent { color: var(--theme-primary); }
+.onDark { color: var(--text-on-dark); }
+.muted  { color: var(--text-on-dark-muted); }
+
+/* ── 번호 원형 ── */
+.stepCircle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--theme-primary);
+  color: var(--text-on-dark);
+  font-size: 26px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ── 이미지 슬롯 ── */
+
+/* bg: 전체 배경 사진 */
+.bgPhoto {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  z-index: 0;
+}
+.bgOverlay {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1;
+}
+
+/* inset_right: 우측 패널 사진 */
+.insetRightPanel {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: 420px; overflow: hidden;
+  z-index: 0;
+}
+.insetRightPanel img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  display: block;
+}
+.insetRightPanel::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg,
+    rgba(15,17,23,1) 0%,
+    rgba(15,17,23,0.30) 40%,
+    rgba(15,17,23,0) 100%);
+}
+
+/* inner: 흰 카드 내부 인라인 이미지 */
+.innerImage {
+  border-radius: 14px; overflow: hidden;
+  width: 100%; flex-shrink: 0;
+}
+.innerImage img {
+  width: 100%; display: block;
+  object-fit: cover; max-height: 320px;
+}
+.imageZone {
+  width: 100%;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--surface-card);
+}
+.imageZone img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+}
+
+/* ── 기관 로고 자리 ── */
+.orgLogoCover {
+  position: absolute;
+  bottom: 40px;
+  left: 60px;
+  height: 36px;
+  z-index: 20;
+  opacity: 0.9;
+}
+
+/* ── 편집 모드 UI ── */
+.editFocused {
+  outline: 1.5px solid var(--theme-primary);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.editableText {
+  cursor: text;
+  transition: outline-color 120ms ease;
+}
+.editableText:hover {
+  outline: 1px dashed rgba(255, 255, 255, 0.5);
+  outline-offset: 4px;
+}
+.editableText.onLight:hover {
+  outline-color: rgba(0, 0, 0, 0.18);
+}

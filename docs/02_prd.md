@@ -1,5 +1,6 @@
 # Product Requirements Document (PRD)
 > PolyInsight v2.0 | 2025-05-05
+> ⚠️ 계획 시점 기록(제품 요구사항). 현재 아키텍처/데이터모델/디자인은 `docs/04·05·07·18` 참조.
 
 ---
 

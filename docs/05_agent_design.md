@@ -1,5 +1,5 @@
 # 05 · Agent Design
-> PolyInsight v2.0 | 2026-05-11
+> PolyInsight v2.1 | 2026-05-18
 > 에이전트 계약(Agent Contracts) 및 S6 프롬프트 규칙
 > CLAUDE.md §3·§4·§5·§6을 코드 수준으로 구체화한 문서.
 
@@ -50,8 +50,13 @@ Orchestrator는 `await agent.execute(input_data)` 형태로만 호출한다.
 ## 2. Orchestrator 호출 순서
 
 ```python
-# backend/agents/orchestrator.py  ← agents/ 내부 (backend/ 루트 아님)
-async def run_pipeline(job_id: str, pdf_bytes: bytes) -> None:
+# backend/agents/orchestrator.py
+async def run_pipeline(
+    job_id: str,
+    pdf_bytes: bytes,
+    theme: CardTheme | None = None,
+    card_count: int = 5,          # 사용자가 업로드 시 입력 (3~15)
+) -> None:
     state = await db.create_job(job_id)
 
     # S1 — 블로킹 실패 허용
@@ -74,21 +79,22 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes) -> None:
         state.warnings += s2_out.warnings
     await db.update_job(job_id, stage="S6", progress=40, degraded=state.degraded)
 
-    # S6
+    # S6 — card_count 전달, LLM이 템플릿 배치 + 내용 추출
     s6_out: S6Output = await s6_agent.execute(S6Input(
         job_id=job_id,
-        section_map=s2_out.section_map,
+        section_map=s1_out.section_map,
         page_map=s1_out.page_map,
         paper_metadata=s1_out.metadata,
+        card_count=card_count,
     ))
     await db.save_card_data(job_id, s6_out.card_data)
     await db.update_job(job_id, stage="S7", progress=65)
 
-    # S7 — theme은 기본값 사용 (추후 사용자 DesignPanel에서 오버라이드)
+    # S7 — S6 추천 테마 사용. 사용자가 RightPanel에서 오버라이드한 경우 user_theme 우선
     s7_out: S7Output = await s7_agent.execute(S7Input(
         job_id=job_id,
         card_data=s6_out.card_data,
-        theme=CardTheme(),  # primary="#2563EB", dark="#1A4C96"
+        theme=s6_out.card_data.user_theme or s6_out.card_data.recommended_theme,
     ))
     await db.update_job(job_id, stage="S8", progress=90)
 
@@ -187,19 +193,45 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes) -> None:
 
 ## 5. S6 — Card News JSON
 
-**파일**: `backend/agents/s6_card_json.py`
+**파일**: `backend/agents/s6_card_json.py`(코디네이터) + `backend/agents/s6/`(설계팀·콘텐츠팀·mock·프롬프트)
 
 S6는 파이프라인에서 **할루시네이션 위험이 가장 높은 단계**다.
 이 섹션의 모든 규칙은 CLAUDE.md §3과 동일하며, 코드 구현 수준의 세부 명세를 추가한다.
+
+> **2026-06-10 — S6 내부 멀티에이전트 분해.** S6는 더 이상 단일 LLM 호출이 아니다.
+> 내부적으로 **설계팀 Architect(Sonnet, 레이아웃 결정) → 콘텐츠팀 Writer(Haiku, 본문) →
+> 검증팀(코드, risk 판정)** 으로 나뉘고, 제한된 피드백 루프(1회)로 fit 불일치를 교정한다.
+> **파이프라인 계약 `S6Input → S6Output`은 동결** — 오케스트레이터는 여전히 S6 하나만 본다.
+> 모듈은 서로 직접 호출하지 않고 코디네이터(`S6CardJsonAgent`)가 중계한다(CLAUDE.md §4).
+> 설계: `docs/superpowers/specs/2026-06-10-multiagent-s6-design.md`
 
 ### 5-1. 계약
 
 | 항목 | 내용 |
 |------|------|
-| 입력 | `S6Input(job_id, section_map, page_map, paper_metadata)` |
-| 출력 | `S6Output(card_data, critical_count, high_count, warnings)` |
-| 실패 유형 | **논블로킹** — LLM 파싱 실패 3회 시 ERR-S6-001 (에이전트가 예외 raise하고 Orchestrator가 처리) |
-| 의존성 | `llm_client` (Claude API), `FieldValue` 스키마 |
+| 입력 | `S6Input(job_id, section_map, page_map, paper_metadata, card_count=5)` |
+| 출력 | `S6Output(card_data: CardEditorData, critical_count, high_count, warnings)` |
+| card_data 구조 | `CardEditorData(meta: CardMeta, cards: List[CardSlot], recommended_theme: CardTheme)` — card_count만큼의 CardSlot |
+
+#### recommended_theme 결정 규칙
+
+S6는 논문 도메인·논조를 분석해 적합한 `CardTheme`을 추천한다.
+추천은 LLM이 아닌 **규칙 기반(rule-based)**으로 결정한다 — S6 LLM 호출 비용 증가 없음.
+
+| 조건 (키워드 / 도메인) | 추천 테마 |
+|---|---|
+| 생명과학, 환경, 재료, 농업 — hue 152 계열 | `forest-light` |
+| 컴퓨터과학, 인공지능, 전자 — 어두운 계열 | `deep-dark` |
+| 사회과학, 인문, 교육, 경제 — 중립 계열 | `academic-gray` |
+| 의학, 심리, 의생명 — 따뜻한 중립 계열 | `ivory-soft` |
+| 판단 불가 / 도메인 키워드 없음 | `forest-light` (기본) |
+
+도메인 판단 근거: `paper_metadata.title` + `section_map`의 Abstract 첫 200자에서 키워드 매칭.
+
+추천값은 `CardEditorData.recommended_theme`에 저장되어 프론트엔드와 S7 모두에 전달된다.
+사용자가 RightPanel에서 테마를 변경하면 `user_theme`이 `recommended_theme`을 오버라이드한다.
+| 실패 유형 | **논블로킹** — LLM 파싱 실패 3회 시 ERR-S6-001 (에이전트가 예외 raise, Orchestrator 처리) |
+| 의존성 | `llm_client` (Gemini), `FieldValue` 스키마 |
 
 ### 5-2. 그라운딩 규칙 (비협상)
 
@@ -240,33 +272,65 @@ RULE 6: 원문에 없는 내용을 value로 생성하지 않는다.
 RULE 7: verified는 항상 False로 초기화한다. 사용자가 에디터에서만 True로 변경한다.
 ```
 
-### 5-3. 처리 흐름 (Chain-of-Thought)
+### 5-3. 처리 흐름 (멀티에이전트, Storyboard-first)
 
-S6는 단일 LLM 호출이 아닌 **내부 3단계 chain-of-thought**를 거친다.
-단, 외부로는 최종 `CardEditorData` JSON만 노출한다.
+S6 코디네이터는 두 LLM 모듈과 코드 검증을 순서대로 중계한다. 레이아웃 판단(설계팀)만
+좋은 모델(Sonnet)로 라우팅하고, 본문(콘텐츠팀)·검증은 각각 Haiku·코드가 맡는다.
+
+설계 원칙: **AI가 기획과 디자인을 책임진다** (CLAUDE.md Design Philosophy).
+레이아웃 선택은 스토리 맥락이 있어야 정확하므로 설계팀이 전체 흐름을 본 상태에서 결정한다.
 
 ```
-Step 1 — 논문 이해
-  입력: section_map 전체 텍스트
-  내부 질문:
-    - 이 논문의 핵심 기술/기여는 무엇인가?
-    - 정량적 성과 수치는 어디에 있는가? (섹션, 페이지 기록)
-    - 기존 한계(problem)와 새 접근(achievement)은 무엇인가?
-    - 연구팀/기관 정보는 어디에 있는가?
-  출력: 내부 메모 (LLM context 내부에서만 사용)
+설계팀 Architect (Sonnet) — s6/architect.py
+  Step 1 SEARCH    : 원문(section_map)에서 핵심 구절·수치 위치 파악
+  Step 2 STORYBOARD: card_count장 전체 계획 확정 — 각 비트의 narrative_role,
+                     template_type, key_message, content_shape_reason를 결정.
+                     첫=cover_v2·끝=closing_v2 고정, 중간 비트는 '내용 모양'으로
+                     뼈대 선택(SEQUENCING_RULES). 본문 fields는 만들지 않는다.
 
-Step 2 — 필드 매핑
-  내부 질문:
-    - CardEditorData의 각 필드에 무엇을 넣어야 하는가?
-    - 각 값의 원문 근거 섹션과 페이지는?
-    - match_quality와 confidence는 어떻게 판정해야 하는가?
-  출력: 필드별 (value, source, match_quality, claim_type) 초안
+콘텐츠팀 Writer (Haiku) — s6/writer.py
+  Step 3 WRITE     : storyboard 비트별로 fields를 원문에서 추출·재작성(가독성 규칙).
+                     cards[n].template_type == beats[n].template_type 강제.
+                     뼈대에 grounded 내용이 안 맞으면 mismatch_signals로 보고(억지 생성 금지).
 
-Step 3 — FieldValue 생성 및 risk_level 판정
-  RULE 5에 따라 risk_level 자동 판정
-  최종 JSON 직렬화 및 Pydantic 검증
-  출력: CardEditorData (JSON)
+피드백 루프 (코디네이터, 1회 상한) — s6_card_json.py
+  mismatch_signals 있으면 → Architect가 지목 비트만 재설계 → Writer 부분 재작성·병합.
+  1회 후에도 불일치면 안전 뼈대(callout)로 대체 + degraded 경고(S6Output.warnings).
+
+검증팀 Verify (코드) — _post_process
+  Step 4 SCORE     : confidence / match_quality / risk_level 자동 판정 (RULE 5).
+
+출력 스키마:
+{
+  "storyboard": {
+    "story_arc": "전체 스토리 한 문장 요약",
+    "beats": [
+      {
+        "card_num": 1,
+        "template_type": "cover_v2",
+        "narrative_role": "논문 주제 소개",
+        "key_message": "핵심 한 줄",
+        "content_shape_reason": "이 뼈대를 고른 내용 모양 근거 (설계팀)"
+      },
+      ...
+    ]
+  },
+  "meta": { ... },
+  "cards": [
+    { "card_num": 1, "template_type": "cover_v2", "fields": { "headline": FV, ... } },
+    ...
+  ],
+  "mismatch_signals": [
+    { "card_num": 4, "mismatch": true, "reason": "...", "suggested_shape": "bigstat_compare" }
+  ]
+}
 ```
+
+storyboard·recommended_theme는 설계팀(ArchitectOutput), meta·cards·mismatch_signals는
+콘텐츠팀(WriterOutput) 출력이다. 코디네이터가 둘을 `_assemble`로 합쳐 CardEditorData를 만든다.
+
+storyboard는 `CardEditorData.storyboard`에 저장되어 SQLite에 유지된다.
+프론트엔드에서 "AI가 이렇게 기획했습니다" 형태로 표시하거나 디버깅에 활용한다.
 
 ### 5-4. 시스템 프롬프트
 
@@ -380,18 +444,25 @@ DOI: {doi}
   "source": {{
     "section": "원문 섹션명 (예: Results)",
     "page": 페이지번호(정수)
-  }},
-  "risk_level": "CRITICAL" | "HIGH" | "MEDIUM" | "LOW",
-  "verified": false
+  }}
 }}
+# risk_level·verified는 LLM이 출력하지 않는다 (2026-06-03~).
+# 출력 토큰 절감 목적 — 코드(_post_process)가 match_quality·claim_type을 보고 자동 판정.
 
-risk_level 자동 판정:
+risk_level 자동 판정 (코드 전담):
 - quantitative + failed → CRITICAL
 - fuzzy 또는 semantic → HIGH
 - normalized → MEDIUM
 - exact 또는 qualitative → LOW
+verified → 항상 False로 초기화 (사용자가 에디터에서만 True).
 """
 ```
+
+> **출력 토큰 한계 (중요)**: Haiku 4.5의 최대 출력은 **8192 토큰**(컨텍스트 윈도우 200K와 별개의 천장). 카드 수가 많으면 JSON이 이 천장을 넘어 잘린다. 대응:
+> - LLM 출력에서 risk_level·verified 제외 (위) → 토큰 절감
+> - `card_count` 상한 **7** (`backend/routers/jobs.py`) — Haiku 안전권
+> - 출력 잘림 시 `stop_reason=="max_tokens"` → `LLMTruncationError` → S6가 즉시 중단(재시도 안 함) + `ERR-S6-002`. truncation은 동일 입력·저온이라 재시도해도 같은 위치에서 잘리므로.
+> - 미래 등급제: 상위 모델(Sonnet 4.6, 출력 64K)로 card_count 상한 확장.
 
 ### 5-5. LLM 호출 설정
 
@@ -481,35 +552,55 @@ def _validate_grounding(self, card_data: CardEditorData) -> list[str]:
 
 | 항목 | 내용 |
 |------|------|
-| 입력 | `S7Input(job_id, card_data)` |
-| 출력 | `S7Output(images, warnings)` — `images: list[bytes]` (길이 1~5) |
-| 실패 유형 | **논블로킹** — 개별 카드 타임아웃 시 해당 카드 skip, 나머지 계속 |
-| 의존성 | `playwright.async_api`, `docs/08_design_spec.md` 기반 HTML 템플릿 |
+| 입력 | `S7Input(job_id, card_data: CardEditorData, theme: CardTheme)` |
+| 출력 | `S7Output(images: list[bytes], warnings)` — card_count만큼의 PNG |
+| 실패 유형 | **논블로킹** — 개별 카드 타임아웃/오류 시 해당 카드 skip, 나머지 계속 |
+| 의존성 | `playwright.async_api`, `web/src/app/render/[jobId]/[cardNum]/page.tsx` (Next.js render 라우트, `settings.WEB_BASE_URL`) |
+| 사전조건 | **card_data가 DB에 저장돼 있어야 함** — render 라우트가 `GET /api/cards/{job}`로 DB를 읽기 때문. orchestrator는 S7 직전에 저장, export 엔드포인트는 이미 저장된 데이터로 호출 |
 
-### 6-2. 처리 흐름
+> **렌더 소스 React 전환 (Phase A 2026-06-02 → Phase B 완료 2026-06-08)**
+> S7은 PNG의 HTML 소스를 **Jinja2 → React 컴포넌트로 전환**했다. 에디터(`web/src/components/cards/skeletons|skin/`)와 export PNG가 **단일 소스**에서 나온다. 이중 구현(Jinja ↔ React) drift 부채 제거가 목적.
+> - **Phase A (2026-06-02)**: 동작 경로를 React goto로 전환. Jinja 코드는 fallback으로 일시 보존.
+> - **Phase B (2026-06-08, 완료)**: Jinja 코드(`_build_card_context`·`render_slot_html`·`_playwright_render_async`·`LAYOUT_TEMPLATES`)·`backend/templates/*.html`·`/preview` 엔드포인트·`web/src/app/compare/`·Jinja2 의존성 **삭제 완료**. 이제 S7은 React goto 단일 경로.
+
+### 6-2. 처리 흐름 (React goto 방식)
 
 ```
-1. Playwright 브라우저 컨텍스트 시작 (재사용 가능한 browser 인스턴스)
+1. Playwright 브라우저 컨텍스트 시작 (viewport 1080×1080, device_scale_factor=1)
 
-2. card_data에서 layout_variants 읽기 → 각 카드의 레이아웃 타입 결정
-   (CoverCard → Type A, TextCard → Type B, ... 08_design_spec.md §5-0 참고)
+2. card_data.cards → URL 목록 생성:
+   urls = [f"{WEB_BASE_URL}/render/{job_id}/{slot.card_num}" for slot in cards]
 
-3. 카드별 순차 렌더링 (병렬 미적용 — 메모리 제한):
-   for card_num in range(1, 6):
-     a. CardEditorData에서 해당 카드 필드 추출
-     b. FieldValue.value만 평탄화 (plain string)
-     c. HTML 템플릿 렌더링 (Jinja2 또는 f-string)
-        - --theme-primary: card_data.theme.primary 주입
-        - 레이아웃 타입에 맞는 CSS 클래스 적용
-     d. Playwright page.set_content(html) + page.screenshot(...)
-        viewport: 1080×1080, device_scale_factor=1
-     e. 타임아웃(15초) 초과 시 warnings에 추가, images에 None 대신 skip
+3. 각 URL 순회:
+   for url in urls:
+     a. page.goto(url, wait_until="networkidle")
+     b. page.wait_for_selector("[data-render-ready]", state="attached")
+        → render 라우트가 데이터 + document.fonts.ready 완료 후 body에 신호 부착.
+          state="attached" 필수: render 루트가 position:fixed라 body가 zero-area →
+          기본값 state="visible"이면 hidden 판정되어 timeout (2026-06-02 버그 수정).
+     c. page.screenshot(clip 1080×1080)
+     d. 타임아웃/오류 시 warnings에 추가, skip
 
-4. 브라우저 컨텍스트 닫기
-
-5. S7Output(images=렌더링된 bytes 목록, warnings) 반환
-   images 길이 < 5이면 warnings에 "partial render" 추가
+4. S7Output(images, warnings) 반환
+   images 길이 < len(cards) → "partial render" 경고
 ```
+
+### 6-3. 템플릿 목록 (12개 기능 기반)
+
+| template_type | 파일 | 용도 |
+|---|---|---|
+| `cover` | cover.html | 표지 |
+| `hook` | hook.html | 문제 제기 |
+| `problem` | problem.html | 연구 과제 |
+| `circle3` | circle3.html | 3요소 원형 |
+| `compare2` | compare2.html | 비교 분석 |
+| `grid4` | grid4.html | 2×2 그리드 |
+| `definition` | definition.html | 용어 정의 |
+| `flow` | flow.html | 프로세스 순서 |
+| `data` | data.html | 바 차트 |
+| `showcase` | showcase.html | 성과 하이라이트 |
+| `closing` | closing.html | 마무리 |
+| `brand` | brand.html | 기관 브랜딩 |
 
 ### 6-3. 구현 제약
 
@@ -526,9 +617,9 @@ screenshot_opts = {
 }
 ```
 
-- HTML 템플릿은 `backend/templates/card_{type}.html` 형태로 관리
-- CSS 변수 `--theme-primary`는 렌더링 시 `<style>:root{--theme-primary: #xxx;}</style>`로 주입
-- 폰트 파일(Pretendard)은 `frontend/public/fonts/`에서 `@font-face`로 로드
+- HTML 소스는 React 카드 컴포넌트(`web/src/components/cards/`) — render 라우트가 호스트
+- 디자인 토큰(`--set-*` 등)·테마는 `web/src/app/globals.css`와 CardFrame 주입으로 적용
+- 폰트(Pretendard Variable)는 `web/src/app/globals.css`에서 로드
 
 ---
 
@@ -634,31 +725,22 @@ class LLMClient:
 
 ---
 
-## 10. S7 데이터 주입 방식 (Jinja2)
+## 10. S7 데이터 주입 방식 (React goto)
 
-계획 단계에서는 `html.replace("__CARD_DATA__", ...)` 문자열 치환 방식이었으나,
-**Jinja2 템플릿**으로 구현됐다.
+> 과거 Jinja2 문자열 주입(`html.replace` → `Environment.render` → `page.set_content`)은
+> Phase B(2026-06-08)에서 **제거**됐다. 현재 방식은 6-2 참조.
+
+S7은 HTML을 직접 생성하지 않는다. `card_data`를 DB에 저장한 뒤
+**Next.js render 라우트를 `page.goto`** 한다 — PNG 소스 = 에디터와 동일한 React
+카드 컴포넌트(`web/src/components/cards/skeletons|skin/`), 단일 소스.
 
 ```python
-# backend/agents/s7_renderer.py
-from jinja2 import Environment, FileSystemLoader
-
-_jinja = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)), autoescape=False)
-
-# 카드별 렌더링
-html = _jinja.get_template(tmpl_name).render(**ctx)
-await page.set_content(html, wait_until="networkidle")
+# backend/agents/s7_renderer.py — 요지
+urls = [f"{settings.WEB_BASE_URL}/render/{job_id}/{slot.card_num}" for slot in card_data.cards]
+await page.goto(url, wait_until="networkidle")
+await page.wait_for_selector("[data-render-ready]", state="attached")  # 폰트/데이터 로딩 신호
+png = await page.screenshot(clip={"x":0,"y":0,"width":1080,"height":1080})
 ```
-
-템플릿 파일명 (계획 대비 변경):
-
-| 슬롯 | 계획 | 실제 파일명 |
-|------|------|------------|
-| Card 1 | `card_cover.html` | `cover.html` |
-| Card 2 | `card_hook.html` | `hook.html` |
-| Card 3 | `card_grid.html` | `grid.html` |
-| Card 4 | `card_text.html` | `text.html` |
-| Card 5 | `card_closing.html` | `closing.html` |
 
 ---
 
@@ -702,12 +784,14 @@ async def test_s6_real_api(agent, paper_section_map):
 
 | 파일 | 테스트 수 | LLM 호출 | 통과 |
 |------|----------|---------|------|
-| test_s1.py | 8 | 없음 | ✅ |
-| test_s2.py | 8 | 없음 (regex) | ✅ |
-| test_s6.py | 9 | mock | ✅ |
-| test_s7.py | 5 | 없음 | ✅ |
-| test_s8.py | 6 | 없음 | ✅ |
-| **합계** | **36** | **0** | **✅** |
+| test_s1.py | 9 | 없음 | ✅ |
+| test_s6.py | — | mock | (재작성 필요) |
+| test_s7.py | — | 없음 | (재작성 필요) |
+| test_s8.py | — | 없음 | (재작성 필요) |
+| test_api.py | 18 | mock | ✅ |
+| **합계** | **27+** | **0** | **일부 ✅** |
+
+> test_s6/s7/s8은 CardSlot 기반 모델로 재작성 필요 (현재 구모델 참조).
 
 ---
 
@@ -715,5 +799,8 @@ async def test_s6_real_api(agent, paper_section_map):
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|-----------|
-| 2026-05-11 | v1.0 | 최초 작성. S1~S8 에이전트 계약 전체, S6 프롬프트 초안 포함. |
+| 2026-05-18 | v2.0 | CardSlot 가변 구조, 12개 기능 기반 템플릿, S6 프롬프트 전면 재설계, card_count 파라미터, API 테스트 추가. |
+| 2026-06-03 | v1.3 | S6 출력 토큰 한계 대응: LLM 출력에서 risk_level·verified 제외(코드 자동 판정), card_count 상한 7, LLMTruncationError로 truncation 즉시 중단(ERR-S6-002). |
+| 2026-06-02 | v1.2 | S7 렌더 소스 Jinja2 → React render 라우트 goto 전환 (Phase A). `wait_for_selector` state="attached" 수정, WEB_BASE_URL 설정, S7 사전 DB 저장 조건 명시. |
 | 2026-05-13 | v1.1 | LLM Anthropic→Gemini 교체, orchestrator 경로 수정, S7 Jinja2 주입 방식, 테스트 전략 추가. |
+| 2026-05-11 | v1.0 | 최초 작성. S1~S8 에이전트 계약 전체, S6 프롬프트 초안 포함. |

@@ -16,6 +16,11 @@ Core principle — **fidelity over style**:
 - Do not introduce claims not supported by the source
 - Numbers and statistics must be quoted directly from the original text
 
+Design philosophy:
+- **창작은 AI가** — 스토리 기획, 템플릿 선택, 레이아웃 결정은 AI의 책임이다
+- **검증은 코드가** — 수치와 팩트의 원문 대조는 코드가 전담한다
+- **최종 판단은 사용자가** — 사용자는 검토·수정·승인 권한을 가진다
+
 ---
 
 ## 2. Pipeline Structure (v2.0 — Current)
@@ -64,6 +69,16 @@ Each field in S6 JSON output must carry:
 ```
 
 CRITICAL = quantitative + match_quality failed → always flag for human review.
+
+**Risk escalates only on NUMBERS (claim_type = quantitative).** Qualitative/causal
+paraphrase caps at MEDIUM — rewriting prose for readability is not a fidelity risk.
+```
+quantitative + failed              → CRITICAL
+quantitative + (fuzzy|semantic)    → HIGH
+quantitative + normalized          → MEDIUM
+qualitative|causal + (failed|fuzzy|semantic) → MEDIUM  (cap)
+else (exact, qualitative normalized)         → LOW
+```
 
 ---
 
@@ -132,7 +147,9 @@ export modal        Export & download overlay (no separate route)
 
 Key frontend rules:
 - Upload and Export are **modals** (React Portal), not pages
-- Card editor ActionBar CTA is **disabled** when CRITICAL/HIGH count > 0
+- Export preflight **warns** on unreviewed/CRITICAL items but does **not** hard-block —
+  user has final judgment ("최종 판단은 사용자가"). (Earlier "CTA disabled on CRITICAL/HIGH"
+  was never implemented and is retired by decision 2026-06-06.)
 - Image slots are **optional** — export is allowed without images
 - Auto-save every 5 seconds idle
 
@@ -146,6 +163,7 @@ Before changing code, always read:
 docs/04_architecture.md   Pipeline structure and component design
 docs/05_agent_design.md   Agent contracts and S6 prompt rules
 docs/07_api_data_model.md API endpoints and data schemas
+docs/18_card_design_system.md  Card skin/skeleton system, tokens, 8 skeletons, focal/image_fit
 ```
 
 If code conflicts with docs → treat docs as intended design.
@@ -170,9 +188,59 @@ When writing docs:
 
 ---
 
+## 12. Monorepo Structure (v2.2 — Current)
+
+```
+polyinsight/
+  CLAUDE.md          ← 모든 Claude가 읽는 공통 규칙 (이 파일)
+  PRODUCT.md         ← 브랜드/제품 정의 (impeccable 스킬 참조)
+  DESIGN.md          ← 디자인 시스템 토큰 (impeccable 스킬 참조)
+  package.json       ← npm workspaces 루트
+  docs/              ← canonical 공유 문서 — 복사본 생성 금지
+  backend/           ← FastAPI + S1-S8 파이프라인 (Python, 포트 8000)
+  web/               ← Next.js 15 프로덕션 프론트엔드 (포트 3000)
+    CLAUDE.md        ← web 전용 추가 규칙
+```
+
+**포트 할당 (충돌 없음)**:
+- `backend`: 8000 (FastAPI uvicorn)
+- `web`:     3000 (Next.js dev server)
+
+**각 Claude 역할별 필수 읽기 파일**:
+
+| Claude 역할 | 필수 파일 |
+|---|---|
+| 모든 Claude | 루트 `CLAUDE.md` |
+| Backend/Full-stack | `docs/04_architecture.md`, `docs/07_api_data_model.md` |
+| Web Claude | `web/CLAUDE.md`, `docs/10_screen_design.md`, `docs/12_card_editor_content.md`, `docs/18_card_design_system.md` |
+
+**docs/ 원칙**: 파일 하나, 위치 하나. 각 workspace에 복사본 생성 금지.
+docs 변경 → 코드 변경 순서를 지킨다.
+
+---
+
 ## 11. Change Log
 
 | Date       | Version | Change Summary                                              |
 |------------|---------|-------------------------------------------------------------|
+| 2026-06-06 | v2.3    | risk 분류 정직화 (정량만 HIGH/CRITICAL, 정성 의역 MEDIUM 상한) + export는 경고-후-진행(하드 차단 폐기). docs/superpowers/specs/2026-06-06-risk-taxonomy-design.md |
+| 2026-05-19 | v2.2    | frontend/, landing/ 삭제 (deprecated 프로토타입), web/ 단독 프론트엔드로 확정, PRODUCT.md/DESIGN.md 루트로 이동 |
+| 2026-05-19 | v2.1    | Monorepo 통합 (landing/, web/ 추가), CSS 이식 실패 회고 → web/CLAUDE.md 규칙 추가 |
 | 2025-05-05 | v2.0    | S3/S4 removed (absorbed into S6), S5 removed, Playwright, SQLite, S6 rewrite |
 | (previous) | v1.0    | Sequential S1-S8, Pillow, in-memory dict, S5 included       |
+
+## 13. CSS 이식 공통 규칙
+
+복수의 CSS 시스템을 하나로 합칠 때 발생하는 토큰 불일치 방지 규칙.
+`web/CLAUDE.md` 섹션 6에서 구체적 매핑 테이블 확인.
+
+**핵심 원칙**: 이식(코드 옮기기) 전에 통합(디자인 언어 통일)이 선행되어야 한다.
+
+```
+NEVER  @theme 블록에 hex/rgb 색상값을 직접 쓴다 — 반드시 var() 참조
+NEVER  "빌드 성공"을 이식 완료 기준으로 삼는다
+ALWAYS 이식 전 토큰 매핑 테이블을 작성한다
+ALWAYS 이식 후 브라우저에서 두 영역의 색상이 동일한지 시각 검증한다
+```
+
+자세한 사례 분석: `docs/14_migration_retrospective.md`

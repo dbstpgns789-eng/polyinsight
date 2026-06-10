@@ -2,170 +2,122 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from pathlib import Path
+import sys
+from concurrent.futures import ThreadPoolExecutor
 
-from jinja2 import Environment, FileSystemLoader
 from playwright.async_api import async_playwright
 
 from .base import BaseAgent
 from ..core.config import settings
-from ..core.models import CardEditorData, CardTheme, S7Input, S7Output
+from ..core.models import S7Input, S7Output
 
 logger = logging.getLogger(__name__)
 
-TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
-
-# layout variant → template file
-LAYOUT_TEMPLATES: dict[str, str] = {
-    "A": "type_a.html",
-    "B": "type_b.html",
-    "C": "type_c.html",
-    "D": "type_d.html",
-    "E": "type_e.html",
-    "G": "type_g.html",
-    "K": "type_k.html",
-}
-
-# layout_variants 비어있을 때 기본값
-_DEFAULT_VARIANTS: dict[str, str] = {
-    "1": "A", "2": "E", "3": "B", "4": "B", "5": "K",
-}
+# S7 전용 스레드풀 — 각 스레드가 독립 ProactorEventLoop를 가짐
+_playwright_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="s7-playwright")
 
 
-def _build_card_context(
-    card_num: int,
-    card_data: CardEditorData,
-    theme: CardTheme,
-) -> dict:
-    """카드별 Jinja2 context 생성. FieldValue.value만 추출, 이름 충돌 없음."""
-    ctx: dict = {
-        "theme_primary": theme.primary,
-        "theme_dark": theme.dark,
-        "card_num": f"{card_num:02d}",
-        "org": card_data.meta.org.value,
-        "dept": card_data.meta.dept.value,
-        "researcher": card_data.meta.researcher.value,
-        "month": card_data.meta.month.value,
-        "edition_number": card_data.meta.edition_number.value,
-    }
+async def _playwright_render_via_url_async(urls: list[str], timeout_s: float) -> tuple[list[bytes], list[str]]:
+    """Playwright 렌더링 (URL goto 방식). React render 라우트를 방문해서 스크린샷.
 
-    if card_num == 1:
-        ctx |= {
-            "pretitle": card_data.card1.pretitle.value,
-            "title": card_data.card1.title.value,
-            "mascot_bubble": card_data.card1.mascot_bubble.value,
-        }
-    elif card_num == 2:
-        ctx |= {
-            "intro": card_data.card2.intro.value,
-            "keyword_line": card_data.card2.keyword_line.value,
-            "footnote": card_data.card2.footnote.value,
-            # Type B 폴백용 제네릭 필드
-            "card_label": "연구 배경",
-            "section_title": card_data.card2.keyword_line.value,
-            "body_text": card_data.card2.intro.value,
-            "sub_text": card_data.card2.footnote.value,
-        }
-    elif card_num == 3:
-        ctx |= {
-            "problem": card_data.card3.problem.value,
-            "achievement": card_data.card3.achievement.value,
-            "mascot_bubble": card_data.card3.mascot_bubble.value,
-            "photo_caption": card_data.card3.photo_caption.value,
-            # Type B 폴백용 제네릭 필드
-            "card_label": "Research Highlights",
-            "section_title": "핵심 문제와 성과",
-            "body_text": card_data.card3.achievement.value,
-            "sub_text": card_data.card3.mascot_bubble.value,
-        }
-    elif card_num == 4:
-        ctx |= {
-            "before_label": card_data.card4.before_label.value,
-            "after_label": card_data.card4.after_label.value,
-            "description": card_data.card4.description.value,
-            "result": card_data.card4.result.value,
-            "mascot_bubble": card_data.card4.mascot_bubble.value,
-            # Type B 폴백용 제네릭 필드
-            "card_label": "Analysis",
-            "section_title": "상세 분석",
-            "body_text": card_data.card4.description.value,
-            "sub_text": card_data.card4.result.value,
-        }
-    elif card_num == 5:
-        ctx |= {
-            "pre_title": card_data.card5.pre_title.value,
-            "main_title": card_data.card5.main_title.value,
-            "cta": card_data.card5.cta.value,
-            "team_name": card_data.card5.team_name.value,
-        }
+    page.goto(Next.js URL) + [data-render-ready] 대기.
+    """
+    images: list[bytes] = []
+    warnings: list[str] = []
+    timeout_ms = timeout_s * 1000
 
-    return ctx
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(headless=True)
+        browser_ctx = await browser.new_context(
+            viewport={"width": 1080, "height": 1200},  # 1080 클립 + 하단 여유 → dev 인디케이터가 클립 밖
+            device_scale_factor=1,
+        )
+
+        for i, url in enumerate(urls, start=1):
+            try:
+                page = await browser_ctx.new_page()
+                await page.goto(url, wait_until="networkidle", timeout=timeout_ms)
+                # 데이터 + 폰트 로딩 완료 신호 대기 (폰트 race 방지).
+                # state="attached": render 페이지 루트가 position:fixed라 body가 zero-area
+                # → 기본값 state="visible"이면 hidden 판정되어 timeout. 신호는 존재 여부만 확인.
+                await page.wait_for_selector("[data-render-ready]", state="attached", timeout=timeout_ms)
+                png = await asyncio.wait_for(
+                    page.screenshot(
+                        type="png",
+                        clip={"x": 0, "y": 0, "width": 1080, "height": 1080},
+                        full_page=False,
+                    ),
+                    timeout=timeout_s,
+                )
+                images.append(png)
+                await page.close()
+                logger.info("S7: card %d rendered via URL (%d bytes)", i, len(png))
+            except asyncio.TimeoutError:
+                msg = f"S7: card {i} timeout ({timeout_ms:.0f}ms) — {url}"
+                logger.error(msg)
+                warnings.append(msg)
+            except Exception as exc:
+                msg = f"S7: card {i} error — {exc} ({url})"
+                logger.error(msg)
+                warnings.append(msg)
+
+        await browser_ctx.close()
+        await browser.close()
+
+    return images, warnings
+
+
+def _playwright_render_via_url_sync(urls: list[str], timeout_s: float) -> tuple[list[bytes], list[str]]:
+    """ProactorEventLoop를 직접 생성해서 URL 기반 Playwright 렌더 실행."""
+    if sys.platform == "win32":
+        loop = asyncio.ProactorEventLoop()
+    else:
+        loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_playwright_render_via_url_async(urls, timeout_s))
+    finally:
+        loop.close()
 
 
 class S7RendererAgent(BaseAgent[S7Input, S7Output]):
-    """S7: CardEditorData → 5장 PNG bytes (Playwright headless Chromium)."""
-
-    def __init__(self) -> None:
-        self._jinja = Environment(
-            loader=FileSystemLoader(str(TEMPLATES_DIR)),
-            autoescape=False,
-        )
+    """S7: CardEditorData → N장 PNG bytes (Playwright headless Chromium, React render 라우트)."""
 
     async def execute(self, input_data: S7Input) -> S7Output:
+        """CardEditorData → N장 PNG. React render 라우트(Next.js)를 goto해서 스크린샷.
+
+        card_data는 호출 전에 DB에 저장되어 있어야 한다 (render 라우트가 DB에서 읽음).
+        - orchestrator: S7 직전에 저장
+        - export 엔드포인트: 이미 DB에서 읽어서 호출
+        """
+        job_id = input_data.job_id
         card_data = input_data.card_data
-        theme = input_data.theme
-        variants = card_data.layout_variants or _DEFAULT_VARIANTS
-        images: list[bytes] = []
         warnings: list[str] = []
 
-        async with async_playwright() as pw:
-            browser = await pw.chromium.launch(headless=True)
-            browser_ctx = await browser.new_context(
-                viewport={"width": 1080, "height": 1080},
-                device_scale_factor=1,
-            )
+        urls = [
+            f"{settings.WEB_BASE_URL}/render/{job_id}/{slot.card_num}"
+            for slot in card_data.cards
+        ]
+        if not urls:
+            return S7Output(images=[], warnings=warnings + ["S7: no renderable cards"])
 
-            for card_num in range(1, 6):
-                variant = variants.get(str(card_num), _DEFAULT_VARIANTS[str(card_num)])
-                tmpl_name = LAYOUT_TEMPLATES.get(variant, "type_b.html")
-                try:
-                    ctx = _build_card_context(card_num, card_data, theme)
-                    html = self._jinja.get_template(tmpl_name).render(**ctx)
+        # Playwright를 전용 스레드(ProactorEventLoop)에서 실행
+        timeout_s = settings.PLAYWRIGHT_TIMEOUT_MS / 1000
+        loop = asyncio.get_event_loop()
+        images, render_warnings = await loop.run_in_executor(
+            _playwright_pool,
+            _playwright_render_via_url_sync,
+            urls,
+            timeout_s,
+        )
+        warnings.extend(render_warnings)
 
-                    page = await browser_ctx.new_page()
-                    await page.set_content(html, wait_until="networkidle")
-
-                    png = await asyncio.wait_for(
-                        page.screenshot(
-                            type="png",
-                            clip={"x": 0, "y": 0, "width": 1080, "height": 1080},
-                            full_page=False,
-                        ),
-                        timeout=settings.PLAYWRIGHT_TIMEOUT_MS / 1000,
-                    )
-                    images.append(png)
-                    await page.close()
-                    logger.info(
-                        "S7: card %d rendered (variant=%s, %d bytes)",
-                        card_num, variant, len(png),
-                    )
-
-                except asyncio.TimeoutError:
-                    msg = f"S7: card {card_num} timeout ({settings.PLAYWRIGHT_TIMEOUT_MS}ms)"
-                    logger.error(msg)
-                    warnings.append(msg)
-                except Exception as exc:
-                    msg = f"S7: card {card_num} error — {exc}"
-                    logger.error(msg)
-                    warnings.append(msg)
-
-            await browser_ctx.close()
-            await browser.close()
-
-        if len(images) < 5:
-            warnings.append(f"S7: partial render — {len(images)}/5 cards")
+        total = len(card_data.cards)
+        if len(images) < total:
+            warnings.append(f"S7: partial render — {len(images)}/{total} cards")
 
         return S7Output(images=images, warnings=warnings)
 
 
 s7_agent = S7RendererAgent()
+S7Renderer = S7RendererAgent

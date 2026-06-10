@@ -1,5 +1,5 @@
 # API & Data Model
-> PolyInsight v2.0 | 2025-05-05
+> PolyInsight v2.1 | 2026-05-18
 
 ---
 
@@ -14,7 +14,10 @@ PDF를 업로드하고 파이프라인을 백그라운드로 시작한다.
 
 **Request** — `multipart/form-data`
 ```
-file: File   (PDF, 최대 50MB)
+file:       File     (PDF, 최대 50MB)
+card_count: integer  (3~7, 기본값 7) — 생성할 카드 수
+                     ※ 상한 7: Haiku 4.5 출력 한계(8192 토큰) 안전권.
+                       8장 이상은 큰 논문에서 S6 JSON이 잘림. 등급제 시 상위 모델로 확장.
 ```
 
 **Response** `202 Accepted`
@@ -57,8 +60,6 @@ file: File   (PDF, 최대 50MB)
 {
   "jobId": "uuid-v4",
   "cardData": { /* CardEditorData — §2-4 참고 */ },
-  "layoutVariants": { "1": "A", "2": "B", "3": "A", "4": "C", "5": "A" },
-  "autoSaveStatus": "saved",
   "updatedAt": "2025-05-05T12:00:00Z"
 }
 ```
@@ -66,13 +67,12 @@ file: File   (PDF, 최대 50MB)
 ---
 
 #### `PATCH /api/cards/:jobId/data`
-카드 에디터 자동저장. 변경된 필드만 전송.
+카드 에디터 자동저장. CardEditorData 전체 교체.
 
 **Request** `application/json`
 ```json
 {
-  "cardData": { /* 부분 CardEditorData */ },
-  "layoutVariants": { "1": "B" }
+  "cardData": { /* CardEditorData 전체 */ }
 }
 ```
 
@@ -358,7 +358,18 @@ class CardStatus:
 ### 2-4. CardEditorData (프론트 타입)
 
 ```typescript
+// 카드 수가 가변 (card_count에 따라 3~7장)
+// 에디터는 cards[] 배열을 순서대로 렌더링
+interface CardThemeId = 'forest-light' | 'deep-dark' | 'academic-gray' | 'ivory-soft'
+
 interface CardEditorData {
+  recommended_theme: CardThemeId   // S6가 도메인 분석 후 결정. 변경 불가 (읽기 전용)
+  user_theme: CardThemeId | null   // 사용자가 RightPanel에서 선택한 값. null이면 recommended_theme 사용
+  // 덱 색상 오버라이드 (선택적). 미설정=세트(--set-*) 기본값 사용.
+  // 레거시 theme/recommended_theme_key는 스키마 유지하나 신 카드 렌더는 사용하지 않음 (--theme-* 은퇴).
+  bg_color?: string       // 덱 배경 오버라이드(선택). --set-bg / --set-bg-gradient를 덮음.
+  accent_color?: string   // 덱 강조 오버라이드(선택). --set-accent를 덮음.
+  font_pairing?: string   // 덱 글꼴 오버라이드(선택). --set-font를 덮음(레지스트리 키).
   meta: {
     org:            FieldValue
     dept:           FieldValue
@@ -366,38 +377,48 @@ interface CardEditorData {
     month:          FieldValue
     edition_number: FieldValue
   }
-  card1: {
-    pretitle:      FieldValue
-    title:         FieldValue
-    mascot_bubble: FieldValue
-  }
-  card2: {
-    intro:        FieldValue
-    keyword_line: FieldValue
-    footnote:     FieldValue
-  }
-  card3: {
-    problem:       FieldValue
-    achievement:   FieldValue
-    mascot_bubble: FieldValue
-    photo_caption: FieldValue
-  }
-  card4: {
-    before_label:  FieldValue
-    after_label:   FieldValue
-    description:   FieldValue
-    result:        FieldValue
-    mascot_bubble: FieldValue
-  }
-  card5: {
-    pre_title:  FieldValue
-    main_title: FieldValue
-    cta:        FieldValue
-    team_name:  FieldValue
-  }
-  layout_variants: Record<number, 'A' | 'B' | 'C' | 'D'>
+  cards: CardSlot[]
+}
+
+interface CardSlot {
+  card_num:      number          // 1, 2, 3, ...
+  template_type: TemplateType    // 뼈대 종류 — 에디터에서 변경 불가
+  fields: Record<string, FieldValue>  // 뼈대별 텍스트 필드 — 에디터에서 value 수정 가능
+  image_url?:  string | null     // 이미지 존 보유 뼈대만. 에디터 업로드 시 채움
+  focal?:      { x: number; y: number }  // 이미지 초점(0~1). cover 크롭 위치. 없으면 center
+  image_fit?:  'cover' | 'contain'       // 존 안 이미지 맞춤. 기본 cover. contain=통째로(잘림0)
+  field_styles?: { [fieldKey: string]: FieldStyle }  // 요소별 미세조정(선택적)
+}
+
+// 신 8뼈대(skin/skeleton 디자인 시스템). 상세: docs/18_card_design_system.md
+type TemplateType =
+  | 'cover_v2' | 'statement' | 'feature' | 'process_v2'
+  | 'bigstat_compare' | 'reasons' | 'grid_v2' | 'closing_v2'
+
+interface FieldStyle {
+  size?:    'S' | 'M' | 'L' | 'XL'
+  tracking?: number                          // em 단위, [-0.05, +0.1] 클램프
+  weight?:  'regular' | 'bold'
+  align?:   'left' | 'center' | 'right'
+  color?:   'ink-strong' | 'ink-muted' | 'accent'
 }
 ```
+
+**에디터 편집 범위**:
+- `fields[*].value` — 텍스트 내용 수정 가능
+- `fields[*].verified` — 확인 완료 버튼으로 true 변경 가능
+- `image_url` — 이미지 존 보유 뼈대(cover_v2·feature·statement·closing_v2)에 업로드
+- `focal` / `image_fit` — 이미지 초점(클릭)·맞춤(채움/전체) 조정
+- `bg_color?: string` — 덱 배경 오버라이드(선택). 미설정=세트 기본. `--set-bg`/`--set-bg-gradient`를 덮음.
+- `accent_color?: string` — 덱 강조 오버라이드(선택). 미설정=세트 기본. `--set-accent`를 덮음.
+- `font_pairing?: string` — 덱 글꼴 오버라이드(선택). 미설정=세트 기본. `--set-font`를 덮음. 레지스트리 키(`pretendard`·`serif`·`gothic_a1`).
+- (레거시 `theme`/`recommended_theme_key`는 스키마 유지하나 신 카드 렌더는 사용하지 않음 — `--theme-*` 은퇴.)
+- `field_styles?: { [fieldKey]: FieldStyle }` — 요소별 미세조정(선택적).
+  `FieldStyle = { size?: 'S'|'M'|'L'|'XL'; tracking?: number; weight?: 'regular'|'bold';
+  align?: 'left'|'center'|'right'; color?: 'ink-strong'|'ink-muted'|'accent' }`.
+  전 필드 선택적. 백엔드는 `extra='ignore'`로 통과시키지만, export 메타데이터 보존을 위해
+  `CardSlot`에 정식 필드로도 보유한다.
+- `template_type` — **변경 불가** (LLM이 결정, 사용자 고정)
 
 ---
 
@@ -499,5 +520,9 @@ interface ExportStatus {
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-06-08 | v2.4 | CardEditorData에 `bg_color?`/`accent_color?` 덱 오버라이드 추가. `--theme-*` 은퇴 명시. 상세: `docs/18_card_design_system.md §3 덱 단위 오버라이드`. |
+| 2026-06-03 | v2.3 | card_count 상한 15→7 (Haiku 출력 한계 안전권). S6 LLM 출력에서 risk_level·verified 제외 (코드 자동 판정). LLMTruncationError 도입 — 출력 천장 도달 시 ERR-S6-002 즉시 반환. |
+| 2026-06-01 | v2.2 | CardEditorData에 `recommended_theme` / `user_theme` 추가. AI 테마 추천 + 사용자 오버라이드 설계 확정. |
+| 2026-05-18 | v2.1 | POST /api/upload에 card_count 추가. CardEditorData → CardSlot 가변 구조. layout_variants 제거. 라우터 구현 완료. |
 | 2025-05-05 | v2.0 | API 전면 재설계. S5 제거. export API 6개 추가. FieldValue 스키마 확정. 에러 코드 체계화. |
 | (이전) | v1.0 | 단순 upload/status/result 3개 엔드포인트. S5 포함. 인메모리 응답. |

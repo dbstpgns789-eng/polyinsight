@@ -47,8 +47,9 @@ class S8PackagingAgent(BaseAgent[S8Input, S8Output]):
         # ── 3. ZIP 생성 ────────────────────────────────────────────────────────
         zip_bytes: bytes | None = None
         try:
-            title_fv = input_data.card_data.card1.title
-            slug = _slugify(title_fv.value or "polyinsight")
+            first_card = input_data.card_data.cards[0] if input_data.card_data.cards else None
+            title_val = first_card.fields.get("title").value if (first_card and "title" in first_card.fields) else ""
+            slug = _slugify(title_val or "polyinsight")
             month = datetime.now(timezone.utc).strftime("%Y%m")
             zip_name = f"polyinsight_{slug}_{month}.zip"
 
@@ -87,3 +88,4 @@ class S8PackagingAgent(BaseAgent[S8Input, S8Output]):
 
 
 s8_agent = S8PackagingAgent()
+S8Packager = S8PackagingAgent

@@ -30,3 +30,58 @@ Thumbs.db
 # Test reports
 test_report.html
 .pytest_cache/
+
+# Pipeline test outputs (generated artifacts)
+pipeline_debug.log
+render_output/
+render_output_v2/
+render_output_pipeline/
+s1_output.json
+s1_output_raw.txt
+
+# DB (local dev)
+polyinsight.db
+
+# Landing (Astro)
+landing/node_modules/
+landing/dist/
+landing/.astro/
+landing/.env
+
+# Claude / skill internal
+.superpowers/
+.impeccable/
+.agents/
+.claude/skills/
+.claude/worktrees/
+skills-lock.json
+skills-lock.jso
+
+# Visual gate artifacts (세트 전문화 v1)
+backend/scripts/gate/
+
+# Debug artifacts
+debug_*.png
+debug_*.py
+debug_*.mjs
+screenshot_*.png
+gemini-code-*.html
+web/debug_*
+web/screenshot_*
+web/take_screenshot.py
+web/src/components/editor/extract_assignments.py
+
+# Next.js
+web/.next/
+web/out/
+
+# Sample / debug rendering artifacts
+샘플폴더/
+typeC_sample/
+render_compare/
+render_compare.py
+render_test.py
+render_test_v2.py
+run.py
+prompt.md
+gemini-code-*.html

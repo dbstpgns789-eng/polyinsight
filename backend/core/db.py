@@ -214,6 +214,28 @@ async def get_card_data(job_id: str) -> str | None:
             return row[0] if row else None
 
 
+async def update_job_title(job_id: str, title: str) -> bool:
+    """job 표시명(title) 갱신. 존재하면 True."""
+    async with aiosqlite.connect(_db_path()) as conn:
+        cursor = await conn.execute(
+            "UPDATE jobs SET title = ?, updated_at = ? WHERE job_id = ?",
+            (title, _utc_now().isoformat(), job_id),
+        )
+        await conn.commit()
+        return (cursor.rowcount or 0) > 0
+
+
+async def delete_job(job_id: str) -> bool:
+    """job과 연관 데이터(card_data·card_images·exports) 일괄 삭제. job 존재 시 True."""
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute("DELETE FROM card_images WHERE job_id = ?", (job_id,))
+        await conn.execute("DELETE FROM card_data WHERE job_id = ?", (job_id,))
+        await conn.execute("DELETE FROM exports WHERE job_id = ?", (job_id,))
+        cursor = await conn.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))
+        await conn.commit()
+        return (cursor.rowcount or 0) > 0
+
+
 async def save_card_image(
     job_id: str,
     card_num: int,

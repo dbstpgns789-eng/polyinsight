@@ -1,5 +1,5 @@
 # Architecture Design
-> PolyInsight v2.0 | 2025-05-05
+> PolyInsight v2.1 | 2026-05-18
 
 ---
 
@@ -28,14 +28,17 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 
 ### 2-1. 변경 전 vs 변경 후 비교
 
-| 항목 | v1.0 (이전) | v2.0 (현재) |
-|---|---|---|
-| S3/S4 존재 여부 | 존재 (순차/병렬 변형) | **제거** (S6 내부 chain-of-thought로 흡수) |
-| S5 (홍보 문장) | 존재 | **제거** (KITECH 버전 불필요) |
-| S6 사실 근거 | S3/S4 출력 기반 | **원문 section_map 우선** — 내부 chain-of-thought로 기여/요약 흡수 |
-| S7 렌더링 엔진 | Pillow (Python 이미지 합성) | **Playwright** (headless Chromium) |
-| 저장소 | 인메모리 dict (TTL 30분) | **SQLite** 영구 저장 |
-| 파일 보존 | 프로세스 재시작 시 소멸 | PNG/ZIP 24시간 TTL, 메타데이터 영구 |
+| 항목 | v1.0 (이전) | v2.0 | v2.1 (현재) |
+|---|---|---|---|
+| S3/S4 존재 여부 | 존재 | **제거** | 제거 유지 |
+| S5 (홍보 문장) | 존재 | **제거** | 제거 유지 |
+| S6 카드 구조 | Card1~5 고정 5장 | Card1~5 고정 5장 | **가변 (card_count 입력, 3~15장)** |
+| S6 템플릿 결정 | 없음 | signals → `_infer_layout()` | **LLM이 직접 template_type 배정** |
+| 카드 데이터 모델 | 고정 필드 | Card1~5 고정 클래스 | **CardSlot(template_type, fields: dict)** |
+| 템플릿 체계 | 없음 | type_a/b/c/d/e/g/k (7개) | **기능 기반 12개** (cover/hook/flow 등) |
+| API 라우터 | 없음 | TODO | **구현 완료** (jobs/projects/export) |
+| S7 렌더링 엔진 | Pillow | **Playwright** | Playwright 유지 |
+| 저장소 | 인메모리 dict | **SQLite** | SQLite 유지 |
 
 ---
 
@@ -44,28 +47,26 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 ```
 사용자
   │
-  │  PDF 업로드
+  │  PDF 업로드 + card_count (3~15)
   ▼
 [FastAPI]  POST /api/upload
   │
   │  asyncio.create_task()
   ▼
-[Orchestrator]
+[Orchestrator]  run_pipeline(job_id, pdf_bytes, card_count)
   │
   ├─ S1: Text Extraction      pdfplumber / PyMuPDF
   │        │
-  │        │  raw_text, page_map
+  │        │  raw_text, page_map, section_map, metadata
   │        ▼
-    ├─ S2: Section Parsing      regex + LLM fallback
-    │        │
-    │        │  section_map {title, abstract, methods, results, ...}
-    │        ▼
-    ├─ S6: Card News JSON        원문 direct read + 내부 기여 추출
-    │        │                   + 한국어 컨텍스트 이해 후 FieldValue 생성
-  │        │  card_data (FieldValue 스키마)
+  ├─ S6: Card News JSON        내부 멀티에이전트 (계약 S6Input→S6Output 동결)
+  │        │  설계팀 Architect(Sonnet) → 콘텐츠팀 Writer(Haiku) → 검증(코드)
+  │        │  피드백 루프 1회(fit 불일치 교정), 코디네이터가 중계
+  │        │  출력: CardEditorData(storyboard, cards: List[CardSlot])
   │        ▼
   ├─ S7: PNG Rendering         Playwright headless Chromium
-  │        │                   1080×1080 × 5장, 순차 렌더링
+  │        │  CardSlot.template_type → HTML 템플릿 선택
+  │        │  1080×1080 × N장 (card_count만큼)
   │        │  png_bytes[]
   │        ▼
   └─ S8: Output Packaging      SQLite 저장, ZIP 생성, 상태 업데이트
@@ -85,12 +86,10 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 
 | 스테이지 | 입력 | 출력 | 실패 시 |
 |---|---|---|---|
-| **S1** Text Extraction | PDF bytes | `raw_text: str`, `page_map: dict` | 파이프라인 중단. ERROR 상태 저장. |
-| **S2** Section Parsing | `raw_text` | `section_map: dict[str, SectionText]` | 빈 section_map → degraded_mode 플래그. |
-| ~~S5~~ | ~~제거됨~~ | ~~제거됨~~ | — |
-| **S6** Card News JSON | `section_map` + `page_map` + `paper_metadata` | `CardData` (FieldValue 스키마) | 필드별 `confidence=low`, `risk_level=CRITICAL`. |
-| **S7** PNG Rendering | `CardData` + `images` + `profile` | `png_bytes[5]` | 해당 카드 skip. 부분 성공 허용. |
-| **S8** Output Packaging | `png_bytes[]` + `CardData` | SQLite row 업데이트, ZIP bytes | 항상 실행. 실패해도 상태만 ERROR로 표기. |
+| **S1** Text Extraction | `S1Input(job_id, pdf_bytes)` | `S1Output(raw_text, page_map, section_map, metadata)` | 파이프라인 중단. ERROR 상태 저장. |
+| **S6** Card News JSON | `S6Input(section_map, page_map, metadata, card_count)` | `S6Output(card_data: CardEditorData, critical_count, high_count)` | 필드별 `confidence=low`, `risk_level=CRITICAL`. 3회 재시도. |
+| **S7** PNG Rendering | `S7Input(card_data: CardEditorData, theme)` | `S7Output(images: list[bytes])` — N장 (card_count만큼) | 개별 카드 skip. 부분 성공 허용. |
+| **S8** Output Packaging | `S8Input(job_id, card_data, images, warnings)` | `S8Output(job_id, status)` | 항상 실행. 실패해도 상태만 ERROR로 표기. |
 
 **FieldValue 스키마** (S6 출력 단위):
 
@@ -115,68 +114,63 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 
 ```
 backend/
-├── main.py                  FastAPI 앱 진입점, 라우터 등록, 앱 상태 초기화
+├── main.py                  FastAPI 앱 진입점, 라우터 등록, CORS
 ├── agents/
-│   ├── orchestrator.py      파이프라인 실행 제어 (유일한 컨트롤러) ← agents/ 내부
+│   ├── orchestrator.py      파이프라인 실행 제어 (유일한 컨트롤러)
+│   │                          run_pipeline(job_id, pdf_bytes, theme, card_count)
+│   ├── base.py              BaseAgent[InputT, OutputT] 추상 클래스
 │   ├── s1_extractor.py      pdfplumber / PyMuPDF 텍스트 추출
-│   ├── s2_parser.py         섹션 파싱 (regex + LLM fallback)
-│   ├── s6_card_json.py      카드뉴스 JSON 생성 (원문 우선, Gemini)
-│   ├── s7_renderer.py       Playwright PNG 렌더링 (Jinja2 데이터 주입)
+│   ├── s6_card_json.py      카드뉴스 JSON 생성 (Gemini, 가변 카드)
+│   ├── s7_renderer.py       Playwright PNG 렌더링 (React render 라우트 goto)
 │   └── s8_packaging.py      SQLite 저장 + ZIP 생성
-├── api/
-│   └── routes/
-│       ├── upload.py        POST /api/upload
-│       ├── status.py        GET  /api/status/:jobId
-│       ├── cards.py         GET/PATCH /api/cards/:jobId
-│       ├── export.py        POST /api/cards/:jobId/export
-│       │                    GET  /api/export/:exportId/status
-│       │                    GET  /api/export/:exportId/download
-│       │                    POST /api/export/:exportId/retry
-│       └── result.py        GET  /api/result/:jobId
-├── core/
-│   ├── models.py            Pydantic 스키마 (RunState, CardData, FieldValue)
-│   ├── db.py                SQLite 연결 및 마이그레이션
-│   └── config.py            환경변수, 상수
-└── storage/
-    └── export_store.py      ExportJob 인메모리 상태 (렌더링 진행 추적용)
+├── routers/
+│   ├── jobs.py              POST /api/upload
+│   │                        GET  /api/status/:jobId
+│   │                        GET  /api/cards/:jobId
+│   │                        PATCH /api/cards/:jobId/data
+│   ├── projects.py          GET  /api/projects
+│   │                        GET  /api/projects/stats
+│   │                        GET  /api/activities
+│   └── export.py            GET  /api/export/:exportId/download
+│                            GET  /api/cards/:jobId/image/:cardNum
+└── core/
+    ├── models.py            Pydantic 스키마 (CardSlot, CardEditorData, FieldValue 등)
+    ├── db.py                SQLite 연결 및 마이그레이션
+    ├── llm_client.py        Gemini API 클라이언트 (rate limit, retry)
+    └── config.py            환경변수, 상수
+
+# S7 PNG의 HTML 소스는 web/ React 카드 컴포넌트(skin/skeleton)다. 백엔드 Jinja 템플릿은
+# React 전환(Phase B, 2026-06-08) 완료로 제거됨. → web/src/components/cards/skeletons|skin/
 ```
 
-### 3-2. Frontend (4개 화면)
+### 3-2. Frontend (`web/` — Next.js 15)
 
 ```
-frontend/src/
-├── pages/
-│   ├── DashboardPage.jsx    /dashboard — 프로젝트 목록, 통계, 활동 피드
-│   └── CardEditorPage.jsx   /editor/:jobId — 3패널 에디터
+web/src/                        Next.js 15 App Router + TypeScript (포트 3000)
+├── app/
+│   ├── page.tsx                / — 랜딩
+│   ├── dashboard/              /dashboard — 프로젝트 목록(그리드)·통계·활동
+│   ├── editor/[jobId]/         /editor/:jobId — 3패널 카드 에디터
+│   ├── render/[jobId]/[cardNum]/  S7 PNG 렌더 대상 (Playwright goto, mode="render")
+│   ├── login/ · signup/        인증 화면
+│   └── globals.css             디자인 토큰(:root) + Pretendard Variable
 ├── components/
-│   ├── dashboard/           대시보드 전용 컴포넌트
-│   │   ├── ProjectGrid.jsx
-│   │   ├── ProjectCard.jsx
-│   │   └── StatsBar.jsx
-│   ├── upload/              업로드 모달 (React Portal)
-│   │   ├── UploadModal.jsx
-│   │   ├── DropZone.jsx
-│   │   └── PipelineProgress.jsx
-│   ├── editor/              카드 에디터 3패널
-│   │   ├── EditorTopBar.jsx
-│   │   ├── ContentPanel.jsx
-│   │   ├── PreviewPanel.jsx
-│   │   ├── DesignPanel.jsx
-│   │   └── ActionBar.jsx
-│   └── export/              내보내기 모달 (React Portal)
-│       ├── ExportModal.jsx
-│       ├── PreflightView.jsx
-│       ├── RenderingView.jsx
-│       ├── DoneView.jsx
-│       └── ErrorView.jsx
-├── hooks/
-│   ├── useCardData.js       카드 데이터 fetch + 자동저장
-│   └── usePipelineStatus.js 파이프라인 상태 폴링
-├── api/
-│   └── client.js            axios 인스턴스 + API 함수 모음
-└── types/
-    └── cardData.d.ts        TypeScript 타입 정의 (선택)
+│   ├── editor/                 3패널: LeftPanel·MidCanvas·RightPanel·FactDrawer·Topbar
+│   ├── cards/                  카드 렌더 — skin/skeleton 디자인 시스템
+│   │   ├── CardRenderer.tsx    template_type → 컴포넌트 dispatch
+│   │   ├── index.ts            CARD_COMPONENTS 레지스트리 (8뼈대)
+│   │   ├── skeletons/          뼈대(레이아웃) 8: Cover·Statement·Feature·Process·BigStatCompare·Reasons·Grid·Closing
+│   │   ├── skin/               피부(토큰+컴포넌트): CardSurface·Eyebrow·Headline·BigStat·CompareBars·SourceTag·VisualZone …
+│   │   └── shared/             EditableText·EditableImage·delimiters
+│   ├── export/                 내보내기 모달 (React Portal)
+│   └── auth/ · ui/             인증 폼 · 공용 아이콘
+├── hooks/                      useCardData (fetch + 자동저장) 등
+├── lib/                        api.ts · focal.ts · imageSlots.ts · mockData.ts
+├── store/                      uiStore (zustand)
+└── types/                      editor.ts (Card · CardEditorData · FieldValue)
 ```
+
+> 디자인 시스템(skin/skeleton)·이미지(focal/image_fit) 상세는 `docs/18_card_design_system.md` 참조.
 
 **화면-모달 관계**:
 - 업로드 모달 / 내보내기 모달 → `createPortal(…, document.body)` 로 렌더링
@@ -188,7 +182,7 @@ Orchestrator는 파이프라인의 **유일한 진입점**이다.
 에이전트는 Orchestrator를 통해서만 호출된다.
 
 ```python
-async def run_pipeline(job_id: str, pdf_bytes: bytes):
+async def run_pipeline(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_count: int = 5):
     state = RunState(job_id=job_id)
 
     # S1 — 실패 시 즉시 중단
@@ -352,5 +346,7 @@ CREATE TABLE researchers (
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-05-18 | v2.1 | 가변 카드 구조(CardSlot), 12개 기능 기반 템플릿, API 라우터 구현, card_count 파라미터 추가 |
+| 2026-06-02 | v2.x | S7 렌더 소스 Jinja2 → React render 라우트 전환 (Phase A, Jinja fallback 보존). orchestrator S7 직전 DB 저장 추가 |
 | 2025-05-05 | v2.0 | S3/S4 제거 (S6 흡수), S5 제거, Playwright 교체, SQLite 도입, FieldValue 스키마 정의 |
 | (이전) | v1.0 | 순차 파이프라인 S1~S8, S5 포함, Pillow 렌더링, 인메모리 dict (TTL 30분) |

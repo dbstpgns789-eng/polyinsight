@@ -1,0 +1,12 @@
+{
+  "name": "polyinsight-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PolyInsight — 학술 논문 PDF → 카드뉴스 생성 서비스",
+  "workspaces": ["web"],
+  "scripts": {
+    "dev:web":   "npm run dev --workspace=web",
+    "build:web": "npm run build --workspace=web"
+  },
+  "engines": { "node": ">=18.0.0" }
+}

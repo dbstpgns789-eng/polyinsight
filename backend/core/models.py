@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Literal
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
+
+# ---------------------------------------------------------------------------
+# S6 Grounding primitives — do NOT change without updating docs/05_agent_design.md
+# ---------------------------------------------------------------------------
 
 class MatchQuality(str, Enum):
     EXACT = "exact"
@@ -34,13 +38,48 @@ class FieldSource(BaseModel):
 
 
 class FieldValue(BaseModel):
-    value: str
-    confidence: Literal["high", "medium", "low"]
-    match_quality: MatchQuality
-    claim_type: ClaimType
-    source: FieldSource
-    risk_level: RiskLevel
+    value: str = ""
+    confidence: Literal["high", "medium", "low"] = "low"
+    match_quality: MatchQuality = MatchQuality.SEMANTIC
+    claim_type: ClaimType = ClaimType.QUALITATIVE
+    source: FieldSource = Field(default_factory=lambda: FieldSource(section="editor", page=0))
+    risk_level: RiskLevel = RiskLevel.LOW
     verified: bool = False
+
+
+class FieldStyle(BaseModel):
+    """요소별 토큰-바운드 미세조정. 전 필드 선택적."""
+    size: Literal["S", "M", "L", "XL"] | None = None
+    tracking: float | None = None
+    weight: Literal["regular", "bold"] | None = None
+    align: Literal["left", "center", "right"] | None = None
+    color: Literal["ink-strong", "ink-muted", "accent"] | None = None
+
+
+# ---------------------------------------------------------------------------
+# Card structure (v2 — variable card count)
+# ---------------------------------------------------------------------------
+
+VALID_TEMPLATE_TYPES = {
+    # 구 12 섬 템플릿 (섬 철거 슬라이스 전까지 공존)
+    "cover", "hook", "problem", "circle3", "compare2",
+    "grid4", "definition", "flow", "data", "showcase",
+    "closing", "brand",
+    # 신규 8 뼈대 (디자인 시스템)
+    "cover_v2", "statement", "feature", "process_v2",
+    "reasons", "grid_v2", "closing_v2", "bigstat_compare",
+    # 확장 레이아웃 (6)
+    "definition", "image_hero", "callout", "multistat", "quote", "compare_table",
+}
+
+
+class CardSlot(BaseModel):
+    """단일 카드. template_type이 어떤 HTML 템플릿을 쓸지 결정."""
+    card_num: int
+    template_type: str                         # VALID_TEMPLATE_TYPES 중 하나
+    fields: Dict[str, FieldValue]              # 템플릿 변수명 → grounded 값
+    image_url: str | None = None               # 에디터 전용 이미지 슬롯
+    field_styles: Dict[str, FieldStyle] | None = None   # 요소별 override(선택적)
 
 
 class CardMeta(BaseModel):
@@ -51,69 +90,58 @@ class CardMeta(BaseModel):
     edition_number: FieldValue
 
 
-class Card1(BaseModel):
-    pretitle: FieldValue
-    title: FieldValue
-    mascot_bubble: FieldValue
+# ---------------------------------------------------------------------------
+# Storyboard — S6가 콘텐츠 작성 전에 확정하는 전체 기획
+# ---------------------------------------------------------------------------
+
+class CardStorybeat(BaseModel):
+    """카드 한 장의 기획 단위. template_type은 여기서 확정되고 CardSlot과 일치해야 한다."""
+    card_num: int
+    template_type: str
+    narrative_role: str                        # 이 카드가 전체 스토리에서 하는 역할
+    key_message: str                           # 이 카드에서 전달할 핵심 메시지 한 줄
+    content_shape_reason: str = ""             # 설계팀이 이 뼈대를 고른 '내용 모양' 근거(선택)
 
 
-class Card2Signals(BaseModel):
-    is_hook: bool = False
+class Storyboard(BaseModel):
+    story_arc: str                             # 전체 스토리 한 문장 요약
+    beats: List[CardStorybeat]
 
 
-class Card3Signals(BaseModel):
-    stat_count: int = 0
-    has_process_steps: bool = False
-    step_count: int = 0
+# ---------------------------------------------------------------------------
+# Theme — defined here so CardEditorData can reference it
+# ---------------------------------------------------------------------------
+
+class CardTheme(BaseModel):
+    primary: str = "#2563EB"
+    dark: str = "#1A4C96"
 
 
-class Card4Signals(BaseModel):
-    has_comparison: bool = False
-
-
-class Card2(BaseModel):
-    intro: FieldValue
-    keyword_line: FieldValue
-    footnote: FieldValue
-    signals: Card2Signals = Field(default_factory=Card2Signals)
-
-
-class Card3(BaseModel):
-    problem: FieldValue
-    achievement: FieldValue
-    mascot_bubble: FieldValue
-    photo_caption: FieldValue
-    signals: Card3Signals = Field(default_factory=Card3Signals)
-
-
-class Card4(BaseModel):
-    before_label: FieldValue
-    after_label: FieldValue
-    description: FieldValue
-    result: FieldValue
-    mascot_bubble: FieldValue
-    signals: Card4Signals = Field(default_factory=Card4Signals)
-
-
-class Card5(BaseModel):
-    pre_title: FieldValue
-    main_title: FieldValue
-    cta: FieldValue
-    team_name: FieldValue
-
-
-LayoutVariant = Literal["A", "B", "C", "D", "E", "G", "K"]
+THEME_PRESETS: dict[str, CardTheme] = {
+    "tech_blue":     CardTheme(primary="#2563EB", dark="#1A4C96"),
+    "forest_green":  CardTheme(primary="#16A34A", dark="#166534"),
+    "sunset_orange": CardTheme(primary="#EA580C", dark="#9A3412"),
+    "royal_violet":  CardTheme(primary="#7C3AED", dark="#4C1D95"),
+    "golden_yellow": CardTheme(primary="#D97706", dark="#92400E"),
+    "slate":         CardTheme(primary="#475569", dark="#1E293B"),
+}
 
 
 class CardEditorData(BaseModel):
+    storyboard: Storyboard | None = None       # S6 기획 결과, 디버깅·UI 표시용
     meta: CardMeta
-    card1: Card1
-    card2: Card2
-    card3: Card3
-    card4: Card4
-    card5: Card5
-    layout_variants: Dict[str, LayoutVariant] = Field(default_factory=dict)
+    cards: List[CardSlot]                      # 가변 길이 (S6가 결정)
+    theme: CardTheme = Field(default_factory=CardTheme)
+    recommended_theme_key: str | None = None
+    bg_color: str | None = None                # 덱 배경 오버라이드(선택). None=세트 기본
+    accent_color: str | None = None            # 덱 강조 오버라이드(선택). None=세트 기본
+    font_pairing: str | None = None            # 덱 글꼴 오버라이드(선택). None=세트 기본(레지스트리 키)
+    set_key: str | None = None                 # 덱 스타일 세트 선택(선택). None=기본(report_light)
 
+
+# ---------------------------------------------------------------------------
+# Job / pipeline state
+# ---------------------------------------------------------------------------
 
 class JobStatus(str, Enum):
     PENDING = "PENDING"
@@ -133,6 +161,10 @@ class RunState(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+
+# ---------------------------------------------------------------------------
+# S1
+# ---------------------------------------------------------------------------
 
 class S1Input(BaseModel):
     job_id: str
@@ -156,11 +188,16 @@ class S1Output(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# S6
+# ---------------------------------------------------------------------------
+
 class S6Input(BaseModel):
     job_id: str
     section_map: dict[str, str]
     page_map: dict[int, str]
     paper_metadata: PaperMetadata
+    card_count: int = 5                        # 사용자가 요청한 카드 수
 
 
 class S6Output(BaseModel):
@@ -170,10 +207,48 @@ class S6Output(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-class CardTheme(BaseModel):
-    primary: str = "#2563EB"
-    dark: str = "#1A4C96"
+# ---------------------------------------------------------------------------
+# S6 내부 멀티에이전트 계약 (설계팀 Architect / 콘텐츠팀 Writer)
+# S6Input/S6Output 은 동결 — 아래는 S6 코디네이터가 두 모듈을 중계할 때 쓰는 내부 타입.
+# ---------------------------------------------------------------------------
 
+class MismatchSignal(BaseModel):
+    """Writer가 '이 뼈대엔 grounded 내용이 안 맞는다'고 설계팀에 되돌리는 신호."""
+    card_num: int
+    mismatch: bool = True
+    reason: str
+    suggested_shape: str
+
+
+class ArchitectInput(BaseModel):
+    section_map: dict[str, str]
+    paper_metadata: PaperMetadata
+    card_count: int = 5
+    revise_beats: list[MismatchSignal] | None = None     # 피드백 루프 2차: 지목 비트만 수정
+    current_storyboard: Storyboard | None = None         # 2차 수정 시 기존 스토리보드 전달
+
+
+class ArchitectOutput(BaseModel):
+    storyboard: Storyboard
+    recommended_theme: str
+
+
+class WriterInput(BaseModel):
+    section_map: dict[str, str]
+    paper_metadata: PaperMetadata
+    storyboard: Storyboard
+    only_beats: list[int] | None = None                  # 부분 재작성 대상 card_num (없으면 전체)
+
+
+class WriterOutput(BaseModel):
+    cards: list[CardSlot]
+    meta: CardMeta
+    mismatch_signals: list[MismatchSignal] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# S7
+# ---------------------------------------------------------------------------
 
 class S7Input(BaseModel):
     job_id: str
@@ -186,6 +261,10 @@ class S7Output(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# S8
+# ---------------------------------------------------------------------------
+
 class S8Input(BaseModel):
     job_id: str
     card_data: CardEditorData
@@ -197,6 +276,10 @@ class S8Output(BaseModel):
     job_id: str
     status: JobStatus
 
+
+# ---------------------------------------------------------------------------
+# Export
+# ---------------------------------------------------------------------------
 
 class CardRenderStatus(str, Enum):
     PENDING = "PENDING"
