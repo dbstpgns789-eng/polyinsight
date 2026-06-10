@@ -100,6 +100,7 @@ class CardStorybeat(BaseModel):
     template_type: str
     narrative_role: str                        # 이 카드가 전체 스토리에서 하는 역할
     key_message: str                           # 이 카드에서 전달할 핵심 메시지 한 줄
+    content_shape_reason: str = ""             # 설계팀이 이 뼈대를 고른 '내용 모양' 근거(선택)
 
 
 class Storyboard(BaseModel):
@@ -204,6 +205,45 @@ class S6Output(BaseModel):
     critical_count: int
     high_count: int
     warnings: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# S6 내부 멀티에이전트 계약 (설계팀 Architect / 콘텐츠팀 Writer)
+# S6Input/S6Output 은 동결 — 아래는 S6 코디네이터가 두 모듈을 중계할 때 쓰는 내부 타입.
+# ---------------------------------------------------------------------------
+
+class MismatchSignal(BaseModel):
+    """Writer가 '이 뼈대엔 grounded 내용이 안 맞는다'고 설계팀에 되돌리는 신호."""
+    card_num: int
+    mismatch: bool = True
+    reason: str
+    suggested_shape: str
+
+
+class ArchitectInput(BaseModel):
+    section_map: dict[str, str]
+    paper_metadata: PaperMetadata
+    card_count: int = 5
+    revise_beats: list[MismatchSignal] | None = None     # 피드백 루프 2차: 지목 비트만 수정
+    current_storyboard: Storyboard | None = None         # 2차 수정 시 기존 스토리보드 전달
+
+
+class ArchitectOutput(BaseModel):
+    storyboard: Storyboard
+    recommended_theme: str
+
+
+class WriterInput(BaseModel):
+    section_map: dict[str, str]
+    paper_metadata: PaperMetadata
+    storyboard: Storyboard
+    only_beats: list[int] | None = None                  # 부분 재작성 대상 card_num (없으면 전체)
+
+
+class WriterOutput(BaseModel):
+    cards: list[CardSlot]
+    meta: CardMeta
+    mismatch_signals: list[MismatchSignal] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
