@@ -12,7 +12,7 @@ from ..core.config import settings
 from ..core.llm_client import LLMTruncationError
 from ..core.models import (
     ArchitectInput, ArchitectOutput, WriterInput, WriterOutput,
-    CardEditorData, FieldValue,
+    CardEditorData, CardSlot, FieldValue,
     MatchQuality, RiskLevel, ClaimType,
     Storyboard,
     S6Input, S6Output,
@@ -42,7 +42,7 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
             logger.info("S6: DEV_MOCK_LLM=True — mock 설계팀/콘텐츠팀으로 동형 경로 실행")
             arch_out = mock_storyboard(input_data.card_count, input_data.paper_metadata)
             wr_out = mock_cards(arch_out.storyboard, input_data.paper_metadata)
-            card_data = self._assemble(arch_out, wr_out)
+            card_data = self._assemble(arch_out.storyboard, arch_out.recommended_theme, wr_out)
             card_data = self._post_process(card_data)
             return S6Output(
                 card_data=card_data,
@@ -66,7 +66,15 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
             card_count=input_data.card_count,
         )
 
-        card_data = self._assemble(arch_out, wr_out)
+        storyboard = arch_out.storyboard
+        warnings: list[str] = []
+        # ── 피드백 루프 (1회 상한): 콘텐츠팀이 fit 불일치를 보고하면 설계팀이 지목 비트만 재설계 ──
+        if wr_out.mismatch_signals:
+            storyboard, wr_out, warnings = await self._resolve_mismatch(
+                input_data, arch_out, wr_out,
+            )
+
+        card_data = self._assemble(storyboard, arch_out.recommended_theme, wr_out)
         card_data = self._post_process(card_data)
         critical = self._count_risk(card_data, RiskLevel.CRITICAL)
         high = self._count_risk(card_data, RiskLevel.HIGH)
@@ -74,27 +82,109 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
         if density_warns:
             logger.warning("S6 발행급 밀도 경고(docs/21): %s", "; ".join(density_warns))
         logger.info(
-            "S6: done. cards=%d CRITICAL=%d HIGH=%d",
-            len(card_data.cards), critical, high,
+            "S6: done. cards=%d CRITICAL=%d HIGH=%d warnings=%d",
+            len(card_data.cards), critical, high, len(warnings),
         )
-        return S6Output(card_data=card_data, critical_count=critical, high_count=high)
+        return S6Output(
+            card_data=card_data, critical_count=critical, high_count=high, warnings=warnings,
+        )
 
     # ── 모듈 호출 래퍼 ────────────────────────────────────────────────────────
 
-    async def _run_writer(self, input_data: S6Input, storyboard: Storyboard) -> WriterOutput:
-        """Writer 실행 + 스토리보드 커버리지 일관성 검증(불일치 시 재시도 유발)."""
+    async def _run_writer(
+        self, input_data: S6Input, storyboard: Storyboard,
+        only_beats: list[int] | None = None,
+    ) -> WriterOutput:
+        """Writer 실행 + 커버리지 일관성 검증(불일치 시 재시도 유발). only_beats=부분 재작성."""
         wr = await writer.run(WriterInput(
             section_map=input_data.section_map,
             paper_metadata=input_data.paper_metadata,
             storyboard=storyboard,
+            only_beats=only_beats,
         ))
-        beat_nums = {b.card_num for b in storyboard.beats}
+        expected = set(only_beats) if only_beats else {b.card_num for b in storyboard.beats}
         card_nums = {c.card_num for c in wr.cards}
-        if card_nums != beat_nums:
+        if card_nums != expected:
             raise ValueError(
-                f"Writer 커버리지 불일치: beats={sorted(beat_nums)} cards={sorted(card_nums)}"
+                f"Writer 커버리지 불일치: expected={sorted(expected)} cards={sorted(card_nums)}"
             )
         return wr
+
+    # ── 피드백 루프 (1회 상한) ────────────────────────────────────────────────
+
+    async def _resolve_mismatch(
+        self, input_data: S6Input, arch_out: ArchitectOutput, wr_out: WriterOutput,
+    ) -> tuple[Storyboard, WriterOutput, list[str]]:
+        """Writer 불일치 신호 → 설계팀 지목 비트 재설계 → Writer 부분 재작성 → 병합/안전뼈대."""
+        signals = wr_out.mismatch_signals
+        bad = [s.card_num for s in signals]
+        logger.info("S6 피드백 루프: 불일치 카드 %s — 재설계 1회", bad)
+
+        arch2: ArchitectOutput = await self._with_retries(
+            lambda: architect.run(ArchitectInput(
+                section_map=input_data.section_map,
+                paper_metadata=input_data.paper_metadata,
+                card_count=input_data.card_count,
+                revise_beats=signals,
+                current_storyboard=arch_out.storyboard,
+            )),
+            stage="Architect-revise", truncation_is_card_overload=False,
+        )
+        wr2: WriterOutput = await self._with_retries(
+            lambda: self._run_writer(input_data, arch2.storyboard, only_beats=bad),
+            stage="Writer-revise", truncation_is_card_overload=True,
+            card_count=input_data.card_count,
+        )
+
+        merged_cards = self._merge_cards(wr_out.cards, wr2.cards)
+        storyboard = arch2.storyboard
+        warnings: list[str] = []
+
+        # 1회 후에도 잔여 불일치 → 억지로 끼우지 않고 안전 뼈대로 내려앉되 degraded로 표면화.
+        if wr2.mismatch_signals:
+            storyboard, merged_cards, warnings = self._safe_fallback(
+                storyboard, merged_cards, wr2.mismatch_signals,
+            )
+
+        return storyboard, WriterOutput(cards=merged_cards, meta=wr_out.meta), warnings
+
+    @staticmethod
+    def _merge_cards(orig: list[CardSlot], new: list[CardSlot]) -> list[CardSlot]:
+        by_num = {c.card_num: c for c in orig}
+        for c in new:
+            by_num[c.card_num] = c
+        return [by_num[k] for k in sorted(by_num)]
+
+    @staticmethod
+    def _safe_fallback(
+        storyboard: Storyboard, cards: list[CardSlot], signals: list,
+    ) -> tuple[Storyboard, list[CardSlot], list[str]]:
+        """잔여 불일치 비트를 안전 뼈대(callout)로 대체 — 기존 headline/body 재사용, degraded 경고."""
+        SAFE = "callout"
+        warns: list[str] = []
+        beat_by = {b.card_num: b for b in storyboard.beats}
+        card_by = {c.card_num: c for c in cards}
+        for s in signals:
+            n = s.card_num
+            if n not in card_by:
+                continue
+            old = card_by[n]
+            fields: dict[str, FieldValue] = {}
+            if "headline" in old.fields:
+                fields["headline"] = old.fields["headline"]
+            elif old.fields:
+                fields["headline"] = next(iter(old.fields.values()))
+            if "body" in old.fields:
+                fields["body"] = old.fields["body"]
+            card_by[n] = CardSlot(card_num=n, template_type=SAFE,
+                                  fields=fields or {"headline": FieldValue(value="")})
+            if n in beat_by:
+                beat_by[n].template_type = SAFE          # 스토리보드↔카드 동기화
+            warns.append(f"카드{n} 레이아웃 fit 미해결—안전 뼈대({SAFE}) 대체")
+        new_sb = Storyboard(story_arc=storyboard.story_arc,
+                            beats=[beat_by[b.card_num] for b in storyboard.beats])
+        new_cards = [card_by[c.card_num] for c in cards]
+        return new_sb, new_cards, warns
 
     async def _with_retries(
         self, factory, *, stage: str,
@@ -137,14 +227,11 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
 
     # ── 조립 ──────────────────────────────────────────────────────────────────
 
-    def _assemble(self, arch_out: ArchitectOutput, wr_out: WriterOutput) -> CardEditorData:
+    def _assemble(self, storyboard: Storyboard, recommended_theme: str, wr_out: WriterOutput) -> CardEditorData:
         """설계팀 storyboard·theme + 콘텐츠팀 cards·meta → CardEditorData."""
-        theme_key = (
-            arch_out.recommended_theme
-            if arch_out.recommended_theme in THEME_PRESETS else "tech_blue"
-        )
+        theme_key = recommended_theme if recommended_theme in THEME_PRESETS else "tech_blue"
         return CardEditorData(
-            storyboard=arch_out.storyboard,
+            storyboard=storyboard,
             meta=wr_out.meta,
             cards=wr_out.cards,
             theme=THEME_PRESETS[theme_key],
