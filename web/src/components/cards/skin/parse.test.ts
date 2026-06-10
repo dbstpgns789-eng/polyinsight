@@ -1,5 +1,31 @@
 import { describe, it, expect } from 'vitest'
-import { parseEmphasis, parseCompareRows, rowsToRaw, compareBarValue, type CompareRow } from './parse'
+import { parseEmphasis, parseCompareRows, rowsToRaw, compareBarValue, parseStats, statsToRaw, parseTableRows, tableRowsToRaw, type CompareRow } from './parse'
+
+describe('parseStats', () => {
+  it('라벨:값:단위 파싱', () => {
+    expect(parseStats('로딩효율:19.36:%|입자크기:1.87:μm')).toEqual([
+      { label: '로딩효율', value: '19.36', unit: '%' },
+      { label: '입자크기', value: '1.87', unit: 'μm' },
+    ])
+  })
+  it('라벨 비면 버림 + 왕복', () => {
+    const items = parseStats('A:1:%')
+    expect(statsToRaw(items)).toBe('A:1:%')
+  })
+  it('빈 입력 빈 배열', () => { expect(parseStats('')).toEqual([]) })
+})
+
+describe('parseTableRows', () => {
+  it('속성:A:B 파싱', () => {
+    expect(parseTableRows('강도:238:199|분해성:완전:불가')).toEqual([
+      { attr: '강도', a: '238', b: '199' },
+      { attr: '분해성', a: '완전', b: '불가' },
+    ])
+  })
+  it('왕복', () => {
+    expect(tableRowsToRaw(parseTableRows('x:1:2'))).toBe('x:1:2')
+  })
+})
 
 describe('compareBarValue', () => {
   it('퍼센트 기호 제거', () => { expect(compareBarValue('20.78%')).toBe(20.78) })

@@ -12,6 +12,12 @@ import Process from './skeletons/Process'
 import Reasons from './skeletons/Reasons'
 import Grid from './skeletons/Grid'
 import Closing from './skeletons/Closing'
+import Definition from './skeletons/Definition'
+import ImageHero from './skeletons/ImageHero'
+import Callout from './skeletons/Callout'
+import MultiStat from './skeletons/MultiStat'
+import Quote from './skeletons/Quote'
+import CompareTable from './skeletons/CompareTable'
 
 export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> = {
   cover_v2:        Cover,
@@ -22,6 +28,13 @@ export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> 
   reasons:         Reasons,
   grid_v2:         Grid,
   closing_v2:      Closing,
+  // 확장 레이아웃 (6)
+  definition:      Definition,
+  image_hero:      ImageHero,
+  callout:         Callout,
+  multistat:       MultiStat,
+  quote:           Quote,
+  compare_table:   CompareTable,
 }
 
 export { default as CardRenderer } from './CardRenderer'

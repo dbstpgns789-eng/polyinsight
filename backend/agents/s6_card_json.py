@@ -56,6 +56,26 @@ _TEMPLATE_SPEC = """
 [closing_v2]  마무리 / 협력 (마지막 카드)
   필드: eyebrow, headline(*별표* 강조), body(마무리 2~3문장), source_ref(선택)
 
+[definition]  개념 풀이 (어려운 용어를 쉽게)
+  필드: eyebrow(예: "개념"), headline(용어/질문, *별표* 강조), body(중학생도 알게 2~3문장), caption(한 줄 비유·요약)
+
+[image_hero]  논문 그림/그래프를 주인공으로
+  필드: eyebrow, headline(*별표* 강조), caption(그림 설명 한 줄). 이미지는 업로드 슬롯(있을 때만 채움)
+
+[callout]     "이것만 기억" 한 줄 강조 (중앙정렬)
+  필드: eyebrow, headline(핵심 한 줄, *별표* 강조), body(보조 한 줄)
+
+[multistat]   핵심 수치 여러 개 한 화면
+  필드: eyebrow, headline(*별표* 강조),
+        stats("라벨:값:단위" — |로 항목, :로 구분; 값은 숫자만; 2~4개), source_ref(선택)
+
+[quote]       핵심 주장/인용 (임팩트)
+  필드: eyebrow, quote(큰 인용문 한 문장, *별표* 강조 가능), attribution("— 출처/연구자")
+
+[compare_table]  속성별 A vs B 비교 표
+  필드: eyebrow, headline(*별표* 강조), col_a(A 컬럼명=우리/제안), col_b(B 컬럼명=기존),
+        rows("속성:A값:B값" — |로 행, :로 구분; 2~4행), source_ref(선택)
+
 [포맷 규칙 — 엄수]
 - headline 강조: 핵심어를 *별표*로 감싼다 (예: 기존보다 *더 단단*하다). 1곳 권장.
 - 다항목 필드: 항목 구분 |, 쌍 구분 :. 라벨/값 내부에 |·: 사용 금지.
@@ -77,6 +97,9 @@ _SEQUENCING_RULES = """
 - card_count 장에 맞게 storyboard에서 뼈대 조합을 직접 결정한다.
 - 같은 뼈대 연속·중복 지양. 내러티브: 표지 → 문제/혁신 → 성능 → 응용 → 마무리.
 - 8뼈대 모두 선택지다. 논문 내용이 있으면 reasons·process_v2·grid_v2도 적극 활용한다.
+- 확장 레이아웃(선택, 내용이 맞으면 적극 사용): [definition](어려운 용어 1개 풀이),
+  [multistat](핵심 수치 2~4개), [quote](핵심 주장 한 문장), [compare_table](A vs B 표),
+  [callout]("이것만 기억" 한 줄), [image_hero](논문 그림이 주인공). 단 내용에 맞을 때만.
 """
 
 # ---------------------------------------------------------------------------

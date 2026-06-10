@@ -68,6 +68,8 @@ VALID_TEMPLATE_TYPES = {
     # 신규 8 뼈대 (디자인 시스템)
     "cover_v2", "statement", "feature", "process_v2",
     "reasons", "grid_v2", "closing_v2", "bigstat_compare",
+    # 확장 레이아웃 (6)
+    "definition", "image_hero", "callout", "multistat", "quote", "compare_table",
 }
 
 

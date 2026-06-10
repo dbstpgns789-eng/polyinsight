@@ -64,3 +64,43 @@ export function parsePairs(raw: string | undefined): Pair[] {
 export function pairsToRaw(pairs: Pair[]): string {
   return pairs.map((p) => (p.b ? `${p.a}:${p.b}` : p.a)).join('|')
 }
+
+export interface StatItem {
+  label: string
+  value: string
+  unit: string
+}
+
+/** "라벨:값:단위|..." → StatItem[] (multistat 뼈대). 라벨 비면 버림. */
+export function parseStats(raw: string | undefined): StatItem[] {
+  if (!raw) return []
+  return raw.split('|').map((seg) => {
+    const [label = '', value = '', unit = ''] = seg.split(':')
+    return { label: label.trim(), value: value.trim(), unit: unit.trim() }
+  }).filter((s) => s.label.length > 0)
+}
+
+/** StatItem[] → "라벨:값:단위|...". parseStats의 역. */
+export function statsToRaw(items: StatItem[]): string {
+  return items.map((s) => `${s.label}:${s.value}:${s.unit}`).join('|')
+}
+
+export interface TableRow {
+  attr: string
+  a: string
+  b: string
+}
+
+/** "속성:A값:B값|..." → TableRow[] (compare_table 뼈대). 속성 비면 버림. */
+export function parseTableRows(raw: string | undefined): TableRow[] {
+  if (!raw) return []
+  return raw.split('|').map((seg) => {
+    const [attr = '', a = '', b = ''] = seg.split(':')
+    return { attr: attr.trim(), a: a.trim(), b: b.trim() }
+  }).filter((r) => r.attr.length > 0)
+}
+
+/** TableRow[] → "속성:A:B|...". parseTableRows의 역. */
+export function tableRowsToRaw(rows: TableRow[]): string {
+  return rows.map((r) => `${r.attr}:${r.a}:${r.b}`).join('|')
+}

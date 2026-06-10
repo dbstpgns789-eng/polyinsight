@@ -66,6 +66,48 @@ export const MOCK_EDITOR_DATA: ApiResponse = {
         body: { value: '실험실 성과를 파일럿 규모로 확장해 경제성과 균일도를 확인하는 후속 연구를 진행한다.', confidence: 'high', source: { section: 'Conclusion', page: 12 } },
         source_ref: { value: '출처: Cellulose (2024) · Conclusion' },
       } },
+      // ── 확장 레이아웃 데모 (9~14) ──
+      // 9 — 개념 풀이 definition
+      { card_num: 9, template_type: 'definition', fields: {
+        eyebrow: { value: '개념' },
+        headline: { value: '*COF*가 뭐길래?' },
+        body: { value: '분자를 그물처럼 단단히 엮은 다공성 물질이에요. 구멍이 아주 많아 가볍고, 표면적이 넓어 무언가를 잘 담습니다.' },
+        caption: { value: '스펀지처럼 구멍 많은, 그런데 단단한 그물' },
+      } },
+      // 10 — 이미지 히어로 image_hero
+      { card_num: 10, template_type: 'image_hero', fields: {
+        eyebrow: { value: '구조 관찰' },
+        headline: { value: '전자현미경으로 본 *미세구슬*' },
+        caption: { value: '균일한 구형 + 다공성 표면 (SEM 이미지)' },
+      } },
+      // 11 — 콜아웃 callout
+      { card_num: 11, template_type: 'callout', fields: {
+        eyebrow: { value: '한 줄 요약' },
+        headline: { value: '플라스틱은 안 썩고, 셀룰로스는 약했다 — 그 둘을 *합쳤다*' },
+        body: { value: '강도와 생분해성, 드디어 동시에.' },
+      } },
+      // 12 — 멀티 수치 multistat
+      { card_num: 12, template_type: 'multistat', fields: {
+        eyebrow: { value: '핵심 지표' },
+        headline: { value: '숫자로 보는 *성능*' },
+        stats: { value: '압축강도:238:MPa|기존 대비:+19.6:%|기공률:62:%|분해 기간:90:일' },
+        source_ref: { value: '출처: Cellulose (2024) · Results' },
+      } },
+      // 13 — 인용 quote
+      { card_num: 13, template_type: 'quote', fields: {
+        eyebrow: { value: '연구자의 말' },
+        quote: { value: '약한 게 친환경의 숙명은 *아니다*.' },
+        attribution: { value: '— 연구책임자, KITECH' },
+      } },
+      // 14 — 비교 표 compare_table
+      { card_num: 14, template_type: 'compare_table', fields: {
+        eyebrow: { value: '비교' },
+        headline: { value: '기존 플라스틱 vs *우리 소재*' },
+        col_a: { value: '우리 소재' },
+        col_b: { value: '폴리프로필렌' },
+        rows: { value: '압축강도:238 MPa:199 MPa|생분해성:완전 분해:불가|원료:식물:석유' },
+        source_ref: { value: '출처: Cellulose (2024)' },
+      } },
     ],
   },
 }
