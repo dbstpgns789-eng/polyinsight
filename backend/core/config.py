@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     DATABASE_URL: str = "./polyinsight.db"
     LLM_MODEL: str = "claude-haiku-4-5-20251001"
+    LLM_MODEL_ARCHITECT: str = "claude-sonnet-4-6"  # 설계팀(레이아웃 판단) 전용 — 토큰 작아 비용 낮음
     PLAYWRIGHT_TIMEOUT_MS: int = 15000
     WEB_BASE_URL: str = "http://localhost:3000"  # S7 render 라우트 호스트 (Next.js)
     EXPORT_TTL_HOURS: int = 24

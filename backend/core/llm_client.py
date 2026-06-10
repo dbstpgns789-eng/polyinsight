@@ -50,14 +50,19 @@ class LLMClient:
         temperature: float = 0.3,
         timeout_s: int = 120,
         stop_sequences: list[str] | None = None,
+        model: str | None = None,
     ) -> str:
-        # Haiku 4.5 max output: 8192 tokens
-        capped_tokens = min(max_tokens, 8192)
+        # per-call 모델 오버라이드 (없으면 인스턴스 기본). 팀별 라우팅용.
+        resolved = model or self.model
+        # 출력 천장은 모델별로 다르다. Haiku 4.5 = 8192(이 천장이 ERR-S6-002 트리거).
+        # Sonnet 등은 더 큰 출력 허용 → 천장 완화.
+        ceiling = 8192 if resolved.startswith("claude-haiku") else 64000
+        capped_tokens = min(max_tokens, ceiling)
         logger.info("LLM call | model=%s | prompt_len=%d | max_tokens=%d",
-                    self.model, len(user_prompt), capped_tokens)
+                    resolved, len(user_prompt), capped_tokens)
 
         kwargs: dict = dict(
-            model=self.model,
+            model=resolved,
             max_tokens=capped_tokens,
             temperature=temperature,
             system=system_prompt,
