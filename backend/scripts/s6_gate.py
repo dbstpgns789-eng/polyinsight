@@ -87,5 +87,41 @@ async def main(card_count: int = 6) -> int:
     return 1
 
 
+async def main_full(card_count: int = 6) -> int:
+    """전체 슬라이스 E2E — 설계팀(Sonnet)→콘텐츠팀(Haiku)→조립→루프→검증."""
+    from backend.agents.s6_card_json import s6_agent
+    from backend.core.models import S6Input
+
+    inp = S6Input(
+        job_id="gate-full",
+        section_map=_section_map(),
+        page_map={1: "p1"},
+        paper_metadata=PaperMetadata(
+            title="Fabrication of composite microbeads of cellulose and covalent organic nanosheets",
+            authors=["KITECH"], year=2024, doi=None,
+        ),
+        card_count=card_count,
+    )
+    t0 = time.time()
+    out = await s6_agent.execute(inp)
+    dt = time.time() - t0
+    cd = out.card_data
+    print(f"\n=== S6 full E2E ({dt:.1f}s) — cards={len(cd.cards)} CRITICAL={out.critical_count} HIGH={out.high_count} ===")
+    print(f"theme: {cd.recommended_theme_key}")
+    for c in cd.cards:
+        tag = "  ★확장" if c.template_type in EXTENDED else ""
+        head = c.fields.get("headline") or c.fields.get("quote")
+        print(f"  카드{c.card_num} [{c.template_type}]{tag}  {head.value if head else ''}")
+    if out.warnings:
+        print("warnings:")
+        for w in out.warnings:
+            print(f"  - {w}")
+    ext = [c.template_type for c in cd.cards if c.template_type in EXTENDED]
+    print(f"\n확장 레이아웃 {len(ext)}개: {ext}")
+    return 0
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "full":
+        raise SystemExit(asyncio.run(main_full()))
     raise SystemExit(asyncio.run(main()))
