@@ -16,14 +16,13 @@ interface CardFrameProps {
   bgColor?: string            // 덱 배경 오버라이드. 미설정 시 세트 기본(--set-bg-gradient)
   accentColor?: string        // 덱 강조 오버라이드. 미설정 시 세트 기본(--set-accent)
   fontPairing?: string        // 덱 글꼴 오버라이드(레지스트리 키). 미설정 시 세트 기본(--set-font)
-  cardNum?: number            // 카드 번호(프레임 우상단 배지). 표시 여부는 --set-number-display 토큰(세트별)
   scale?: number              // 1 = 1080px 원본, 0.5 = 540px 표시
   set?: CardSet               // 피부 토큰(--set-*) 주입. 기본 에디토리얼 라이트.
   children: ReactNode
   className?: string
 }
 
-export default function CardFrame({ bgColor, accentColor, fontPairing, cardNum, scale = 1, set = REPORT_LIGHT_SET, children, className }: CardFrameProps) {
+export default function CardFrame({ bgColor, accentColor, fontPairing, scale = 1, set = REPORT_LIGHT_SET, children, className }: CardFrameProps) {
   // Wrapper는 시각적 크기 (scaled). overflow:hidden으로 inner의 layout overflow를 클립.
   const wrapperStyle: CSSProperties = {
     width: CARD_SIZE * scale,
@@ -54,16 +53,6 @@ export default function CardFrame({ bgColor, accentColor, fontPairing, cardNum, 
     <div style={wrapperStyle} className={className}>
       <div className={styles.scope} style={innerStyle}>
         {children}
-        {cardNum != null && (
-          <div aria-hidden style={{
-            position: 'absolute', top: 56, right: 72, zIndex: 2,
-            display: 'var(--set-number-display, none)',
-            fontFamily: 'var(--set-font)', fontSize: 34, fontWeight: 800,
-            color: 'var(--set-ink-faint)', fontVariantNumeric: 'tabular-nums', letterSpacing: '0.04em',
-          }}>
-            {String(cardNum).padStart(2, '0')}
-          </div>
-        )}
       </div>
     </div>
   )
