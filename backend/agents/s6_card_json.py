@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 
 from .base import BaseAgent
+from .s6._util import extract_json, format_section_map
 from ..core.config import settings
 from ..core.llm_client import llm_client, LLMTruncationError
 from ..core.models import (
@@ -88,28 +88,27 @@ _TEMPLATE_SPEC = """
 # ---------------------------------------------------------------------------
 
 _SEQUENCING_RULES = """
-레이아웃은 두 층으로 결정한다 — 디자인팀이 논문을 받아 "아 이런 내용이구나 → 여긴 이렇게
-만들면 되겠다"라고 판단하는 그 과정을 그대로 한다.
+레이아웃은 두 층으로 결정한다 — 디자인팀이 논문을 받아 판단하는 그대로.
 
-[1층] 내러티브 스파인 — 무슨 이야기를 어떤 순서로
-- 첫 카드: [cover_v2], 마지막 카드: [closing_v2] (고정)
-- 흐름: 표지 → 문제/한계 → 핵심 혁신 → 근거·성능 → 응용 → 마무리
-- card_count에 맞춰 비트 조합. 같은 뼈대 연속·중복 지양.
+[1층] 내러티브 스파인 = *역할*의 순서 (뼈대 이름이 아니라 '역할'로만 생각하라)
+- 첫 카드 = 표지([cover_v2]), 마지막 카드 = 마무리([closing_v2]) — 이 둘만 고정.
+- 중간 역할 흐름: 문제/한계 → 핵심 혁신 → 근거·성능 → 응용
+- card_count에 맞춰 역할을 배치. 같은 뼈대 연속·중복 지양.
 
-[2층] ★내용 모양 → 레이아웃 (각 비트에서 *콘텐츠가 어떻게 생겼는지* 보고 고른다 — 가장 중요)
-클래식만 반복하지 말고, 아래 진단을 *적극* 적용하라:
-- 핵심 수치가 1개 압도적              → [bigstat_compare]
-- 핵심 수치가 2~4개 병렬(여러 지표)    → [multistat]
-- 우리 vs 기존을 여러 속성으로 비교    → [compare_table]
-- 독자가 모를 핵심 용어 1개가 등장     → 그 용어 전용 [definition] 카드 1장
-- 한 문장으로 압축되는 강한 주장·철학  → [quote] 또는 [callout]
-- 인상적인 그림/도식이 핵심           → [image_hero] (이미지 업로드 슬롯)
-- 단계적 공정 → [process_v2]   ·   왜 이 소재(병렬 근거) → [reasons]   ·   응용처 나열 → [grid_v2]
-- 문제 제기/기존 한계 → [statement]
+[2층] ★중간 비트의 뼈대는 *내용 모양*으로 정한다 — 역할에 고정된 기본 뼈대는 없다.
+각 중간 비트마다 반드시 콘텐츠가 어떻게 생겼는지 진단한 뒤 고른다:
+- 핵심 수치 1개 압도적            → [bigstat_compare]
+- 핵심 수치 2~4개 병렬            → [multistat]
+- 우리 vs 기존 여러 속성 비교     → [compare_table]
+- 독자가 모를 핵심 용어 1개       → [definition] (그 용어 한 장)
+- 한 문장 강한 주장·철학          → [quote] / [callout]
+- 인상적 그림·도식이 핵심         → [image_hero]
+- 단계 공정 → [process_v2]  ·  병렬 근거 → [reasons]  ·  응용 나열 → [grid_v2]  ·  문제 제기 → [statement]
 
-판단 예: 결과에 수치가 여러 개면 bigstat_compare 대신 [multistat]. 어려운 용어가 있으면
-[definition]을 한 장 끼운다. 우리값 vs 기존값 표가 되면 [compare_table].
-규칙: 내용이 맞지 않으면 억지로 끼우지 말 것(맞을 때만). 그러나 맞으면 클래식 대신 적극 선택하라.
+원칙(엄수):
+- "성능 역할이니까 무조건 bigstat" 같은 캐논 기본값으로 가지 마라. 같은 '근거·성능' 역할도
+  수치가 여러 개면 [multistat], 표 비교면 [compare_table]다. 역할→뼈대를 1:1로 고정하지 마라.
+- 내용이 맞지 않으면 억지로 끼우지 말 것(맞을 때만). 그러나 맞으면 클래식 대신 반드시 그 레이아웃을 골라라.
 """
 
 # ---------------------------------------------------------------------------
@@ -611,28 +610,11 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
     # ── 텍스트 헬퍼 ───────────────────────────────────────────────────────────
 
     def _format_section_map(self, section_map: dict[str, str]) -> str:
-        parts = []
-        total = 0
-        for section, text in section_map.items():
-            chunk = f"### {section}\n{text}"
-            if total + len(chunk) > self.SECTION_MAX_CHARS:
-                remaining = self.SECTION_MAX_CHARS - total
-                if remaining > 200:
-                    parts.append(chunk[:remaining] + "\n[truncated]")
-                break
-            parts.append(chunk)
-            total += len(chunk)
-        return "\n\n".join(parts)
+        return format_section_map(section_map, self.SECTION_MAX_CHARS)
 
     @staticmethod
     def _extract_json(text: str) -> str:
-        m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
-        if m:
-            return m.group(1)
-        m = re.search(r"\{.*\}", text, re.DOTALL)
-        if m:
-            return m.group(0)
-        return text
+        return extract_json(text)
 
 
 def _iter_field_values(card_data: CardEditorData):
