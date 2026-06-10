@@ -31,6 +31,9 @@ export const DEEP_TEAL_SET: CardSet = {
     '--set-ink-faint': 'rgba(255,255,255,0.45)',
     '--set-surface': 'rgba(255,255,255,0.10)',
     '--set-surface-border': 'rgba(255,255,255,0.16)',
+    // 다크 프리미엄 — 골드 글로우 + 골드 네온 외곽선
+    '--set-glow-opacity': '0.18',
+    '--set-card-glow': 'inset 0 0 0 1.5px rgba(255,201,74,0.22)',
     // 타이포 — 1080 절대 px
     '--set-display': '220px',   // 스펙 §3.2의 88px 대체(드리프트 노트 참조)
     '--set-headline': '60px',
@@ -141,21 +144,54 @@ export const DARK_TECH_SET: CardSet = {
   },
 }
 
+// 웜 에디토리얼 — 따뜻한 크림 + 테라코타/앰버. 의료·건강·사회·인문 핏. 라이트. 색 OKLCH.
+export const WARM_EDITORIAL_SET: CardSet = {
+  set_key: 'warm_editorial',
+  seed: 'oklch(58% 0.14 48)',
+  tokens: {
+    '--set-font': "'Pretendard Variable', Pretendard, 'Noto Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif",
+    '--set-bg': 'oklch(97% 0.022 75)',
+    '--set-bg-grad': 'oklch(94% 0.035 70)',
+    '--set-bg-gradient': 'linear-gradient(168deg, oklch(98% 0.018 78) 0%, oklch(93.5% 0.038 68) 100%)',
+    '--set-accent': 'oklch(58% 0.14 48)',
+    '--set-accent-ink': 'oklch(99% 0.01 75)',
+    '--set-ink-strong': 'oklch(32% 0.06 55)',
+    '--set-ink-muted': 'oklch(48% 0.05 55)',
+    '--set-ink-faint': 'oklch(70% 0.04 60)',
+    '--set-surface': 'oklch(99% 0.012 75)',
+    '--set-surface-border': 'oklch(89% 0.03 65)',
+    '--set-display': '244px',
+    '--set-headline': '68px',
+    '--set-subhead': '32px',
+    '--set-body': '27px',
+    '--set-caption': '20px',
+    '--set-eyebrow': '18px',
+    '--set-pad': '86px',
+    '--set-gap': '28px',
+    '--set-radius-box': '18px',
+    '--set-radius-pill': '100px',
+  },
+}
+
 // ── 세트 레지스트리 — 덱이 set_key로 선택. 미설정/미지 키 → 기본(REPORT_LIGHT) ──
 export const DEFAULT_SET = REPORT_LIGHT_SET
 
 export const CARD_SETS: Record<string, CardSet> = {
   report_light: REPORT_LIGHT_SET,
-  dark_tech: DARK_TECH_SET,
   editorial_light: EDITORIAL_LIGHT_SET,
+  warm_editorial: WARM_EDITORIAL_SET,
+  dark_tech: DARK_TECH_SET,
   deep_teal: DEEP_TEAL_SET,
 }
 
 export interface SetOption { key: string; label: string; sub: string }
 /** RightPanel 세트 선택 UI에 노출할 세트(준비된 것만). */
 export const SET_OPTIONS: SetOption[] = [
-  { key: 'report_light', label: '리포트 라이트', sub: '코퍼릿 · 연구/기관' },
-  { key: 'dark_tech',    label: '다크 테크',     sub: '네온 · AI/전자/기계' },
+  { key: 'report_light',    label: '리포트 라이트',    sub: '코퍼릿 · 경제/정책/기관' },
+  { key: 'editorial_light', label: '에디토리얼 라이트', sub: '그린 · 바이오/화학/환경' },
+  { key: 'warm_editorial',  label: '웜 에디토리얼',    sub: '앰버 · 의료/사회/인문' },
+  { key: 'dark_tech',       label: '다크 테크',        sub: '네온 · AI/전자/기계' },
+  { key: 'deep_teal',       label: '딥 틸',            sub: '틸+골드 · 에너지/소재' },
 ]
 
 export function getSet(key?: string): CardSet {
