@@ -310,7 +310,8 @@ def test_card_editor_data_bg_color_default():
         org=fv, dept=fv, researcher=fv, month=fv, edition_number=fv,
     )
     data = CardEditorData(meta=meta, cards=[])
-    assert data.bg_color == "#111111"
+    # 덱 오버라이드는 선택적 — 기본 None은 "세트 기본색 사용"을 뜻한다(models.py:135).
+    assert data.bg_color is None
 
 
 def test_card_editor_data_bg_color_custom():
