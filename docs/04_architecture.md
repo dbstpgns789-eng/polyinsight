@@ -59,9 +59,10 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
   │        │
   │        │  raw_text, page_map, section_map, metadata
   │        ▼
-  ├─ S6: Card News JSON        LLM (Gemini)
-  │        │  card_count 전달 → 템플릿 배치 계획 + 원문 추출
-  │        │  출력: CardEditorData(cards: List[CardSlot])
+  ├─ S6: Card News JSON        내부 멀티에이전트 (계약 S6Input→S6Output 동결)
+  │        │  설계팀 Architect(Sonnet) → 콘텐츠팀 Writer(Haiku) → 검증(코드)
+  │        │  피드백 루프 1회(fit 불일치 교정), 코디네이터가 중계
+  │        │  출력: CardEditorData(storyboard, cards: List[CardSlot])
   │        ▼
   ├─ S7: PNG Rendering         Playwright headless Chromium
   │        │  CardSlot.template_type → HTML 템플릿 선택
