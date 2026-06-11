@@ -86,3 +86,27 @@ async def test_architect_revise_only_changes_targeted_beat(monkeypatch):
     # 비지목 비트는 원본 유지
     assert out.storyboard.beats[0].template_type == "cover_v2"
     assert out.storyboard.beats[2].template_type == "closing_v2"
+
+
+@pytest.mark.asyncio
+async def test_architect_uses_digest_when_present(monkeypatch):
+    from backend.core.models import PaperDigest, DigestNumber, FieldSource
+    beats = [_beat(1, "cover_v2"), _beat(2, "multistat"), _beat(3, "closing_v2")]
+    call = _patch_llm(monkeypatch, _storyboard_json(beats))
+    digest = PaperDigest(one_liner="요약",
+                         numbers=[DigestNumber(value="238", unit="MPa", label="강도",
+                                               source=FieldSource(section="Results", page=7))])
+    await arch_mod.architect.run(ArchitectInput(
+        section_map={"Abstract": "x" * 9999}, paper_metadata=_meta(), card_count=3, digest=digest))
+    sent = call.call_args.kwargs["user_prompt"]
+    assert "238" in sent and "MPa" in sent        # 다이제스트가 프롬프트에
+    assert "x" * 9999 not in sent                 # raw 50k는 안 들어감(압축됨)
+
+
+@pytest.mark.asyncio
+async def test_architect_falls_back_to_section_map_without_digest(monkeypatch):
+    beats = [_beat(1, "cover_v2"), _beat(2, "feature"), _beat(3, "closing_v2")]
+    call = _patch_llm(monkeypatch, _storyboard_json(beats))
+    await arch_mod.architect.run(ArchitectInput(
+        section_map={"Abstract": "RAWTEXT_MARKER"}, paper_metadata=_meta(), card_count=3))
+    assert "RAWTEXT_MARKER" in call.call_args.kwargs["user_prompt"]   # raw 직접
