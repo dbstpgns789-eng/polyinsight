@@ -226,6 +226,7 @@ class ArchitectInput(BaseModel):
     card_count: int = 5
     revise_beats: list[MismatchSignal] | None = None     # 피드백 루프 2차: 지목 비트만 수정
     current_storyboard: Storyboard | None = None         # 2차 수정 시 기존 스토리보드 전달
+    digest: "PaperDigest | None" = None                  # 있으면 digest 모드, 없으면 section_map(폴백)
 
 
 class ArchitectOutput(BaseModel):
@@ -238,12 +239,64 @@ class WriterInput(BaseModel):
     paper_metadata: PaperMetadata
     storyboard: Storyboard
     only_beats: list[int] | None = None                  # 부분 재작성 대상 card_num (없으면 전체)
+    digest: "PaperDigest | None" = None                  # raw와 함께 힌트로
 
 
 class WriterOutput(BaseModel):
     cards: list[CardSlot]
     meta: CardMeta
     mismatch_signals: list[MismatchSignal] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# 논문이해팀 Understand — PaperDigest(내용모양 인벤토리). 다이제스트는 힌트, raw가 권위.
+# ---------------------------------------------------------------------------
+
+class DigestNumber(BaseModel):
+    value: str                 # 숫자(가능하면 단위 제외)
+    unit: str = ""
+    label: str = ""            # 무엇을 재는 값인지
+    context: str = ""          # 한 줄 의미
+    source: FieldSource = Field(default_factory=lambda: FieldSource(section="", page=0))
+
+
+class DigestComparison(BaseModel):
+    attribute: str             # 비교 속성 (예: 압축강도)
+    items: list[str] = Field(default_factory=list)    # 비교 대상명
+    values: list[str] = Field(default_factory=list)   # 대상별 값(items와 병렬)
+    source: FieldSource = Field(default_factory=lambda: FieldSource(section="", page=0))
+
+
+class DigestTerm(BaseModel):
+    term: str
+    plain: str = ""            # 일상어 풀이
+
+
+class DigestFigure(BaseModel):
+    ref: str                   # 예: "Figure 3"
+    shows: str = ""            # 한 줄 설명
+
+
+class DigestClaim(BaseModel):
+    role: str                  # problem|innovation|result|application|method
+    text: str
+    source: FieldSource = Field(default_factory=lambda: FieldSource(section="", page=0))
+
+
+class PaperDigest(BaseModel):
+    one_liner: str = ""
+    numbers: list[DigestNumber] = Field(default_factory=list)
+    comparisons: list[DigestComparison] = Field(default_factory=list)
+    terms: list[DigestTerm] = Field(default_factory=list)
+    figures: list[DigestFigure] = Field(default_factory=list)
+    process_steps: list[str] = Field(default_factory=list)
+    claims: list[DigestClaim] = Field(default_factory=list)
+    domain_hint: str = ""
+
+
+class UnderstandInput(BaseModel):
+    section_map: dict[str, str]
+    paper_metadata: PaperMetadata
 
 
 # ---------------------------------------------------------------------------
@@ -295,3 +348,8 @@ class ExportJob(BaseModel):
     created_at: datetime
     zip_ready: bool = False
     error: str | None = None
+
+
+# ArchitectInput/WriterInput 이 PaperDigest(아래에 정의)를 forward ref 로 참조 → 해소.
+ArchitectInput.model_rebuild()
+WriterInput.model_rebuild()
