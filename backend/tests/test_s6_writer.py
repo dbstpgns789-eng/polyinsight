@@ -92,3 +92,28 @@ async def test_writer_only_beats_filters_to_targets(monkeypatch):
         section_map={}, paper_metadata=_meta(),
         storyboard=_sb(["cover_v2", "multistat", "closing_v2"]), only_beats=[2]))
     assert [c.card_num for c in out.cards] == [2]
+
+
+@pytest.mark.asyncio
+async def test_writer_injects_digest_hints_and_keeps_raw(monkeypatch):
+    from backend.core.models import PaperDigest, DigestNumber, FieldSource
+    call = _patch(monkeypatch, _cards_json(["cover_v2", "multistat", "closing_v2"]))
+    digest = PaperDigest(one_liner="요약",
+                         numbers=[DigestNumber(value="238", unit="MPa", label="강도",
+                                               source=FieldSource(section="Results", page=7))])
+    await wr_mod.writer.run(WriterInput(
+        section_map={"Results": "RAW_AUTHORITY"}, paper_metadata=_meta(),
+        storyboard=_sb(["cover_v2", "multistat", "closing_v2"]), digest=digest))
+    sent = call.call_args.kwargs["user_prompt"]
+    assert "238" in sent                  # 다이제스트 힌트 주입
+    assert "RAW_AUTHORITY" in sent        # raw도 여전히(권위)
+
+
+@pytest.mark.asyncio
+async def test_writer_digest_none_renders_empty_hint(monkeypatch):
+    call = _patch(monkeypatch, _cards_json(["cover_v2", "multistat", "closing_v2"]))
+    await wr_mod.writer.run(WriterInput(
+        section_map={"Results": "RAW"}, paper_metadata=_meta(),
+        storyboard=_sb(["cover_v2", "multistat", "closing_v2"])))
+    sent = call.call_args.kwargs["user_prompt"]
+    assert "RAW" in sent                  # digest 없어도 정상 동작
