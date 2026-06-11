@@ -121,7 +121,49 @@ async def main_full(card_count: int = 6) -> int:
     return 0
 
 
+async def main_ab(card_count: int = 6) -> int:
+    """A/B — 다이제스트 ON/OFF 비교(비용 프록시·확장레이아웃·CRITICAL·다이제스트 충실)."""
+    from backend.agents.s6.understand import understand
+    from backend.agents.s6.architect import architect
+    from backend.agents.s6._util import format_digest, format_section_map
+    from backend.core.models import ArchitectInput, UnderstandInput
+
+    sm = _section_map()
+    meta = PaperMetadata(title="cellulose COF microbeads", authors=["KITECH"], year=2024, doi=None)
+
+    off_chars = len(format_section_map(sm))
+    t0 = time.time()
+    digest = await understand.run(UnderstandInput(section_map=sm, paper_metadata=meta))
+    on_chars = len(format_digest(digest))
+    und_dt = time.time() - t0
+
+    print("\n=== A/B: 다이제스트 ON/OFF ===")
+    print(f"[비용 프록시] Architect 입력 문자수  OFF(raw)={off_chars:,}  ON(digest)={on_chars:,}  "
+          f"감소율={100*(1-on_chars/max(off_chars,1)):.0f}%")
+    print(f"[다이제스트 충실] numbers={len(digest.numbers)} comparisons={len(digest.comparisons)} "
+          f"terms={len(digest.terms)} claims={len(digest.claims)}  (Understand {und_dt:.1f}s)")
+
+    async def _layouts(use_digest: bool):
+        out = await architect.run(ArchitectInput(
+            section_map=sm, paper_metadata=meta, card_count=card_count,
+            digest=digest if use_digest else None))
+        return [b.template_type for b in out.storyboard.beats]
+
+    on = await _layouts(True)
+    off = await _layouts(False)
+    ext = lambda ts: [t for t in ts if t in EXTENDED]
+    print(f"[레이아웃] ON  확장 {len(ext(on))}개: {on}")
+    print(f"[레이아웃] OFF 확장 {len(ext(off))}개: {off}")
+
+    ok = (on_chars < off_chars) and (len(digest.numbers) + len(digest.terms) > 0) and (len(ext(on)) >= len(ext(off)))
+    print("\n" + ("✅ A/B 합격 — 비용↓ + 다이제스트 충실 + 레이아웃 비퇴행"
+                  if ok else "❌ A/B 미달 — 위 지표 점검"))
+    return 0 if ok else 1
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "ab":
+        raise SystemExit(asyncio.run(main_ab()))
     if len(sys.argv) > 1 and sys.argv[1] == "full":
         raise SystemExit(asyncio.run(main_full()))
     raise SystemExit(asyncio.run(main()))
