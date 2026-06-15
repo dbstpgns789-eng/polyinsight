@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     MAX_CONCURRENT_JOBS: int = 5
     DEBUG: bool = False
     DEV_MOCK_LLM: bool = False  # True 시 S6 LLM 호출 없이 mock 데이터 반환
+    SESSION_TTL_HOURS: int = 72         # 세션 쿠키/DB 만료
+    COOKIE_SECURE: bool = False         # 프로덕션(HTTPS/터널)에서 True
+    RENDER_TOKEN: str = ""              # 내부 렌더(Playwright) 서비스 우회 토큰. 프로덕션 필수.
 
 
 settings = Settings()
