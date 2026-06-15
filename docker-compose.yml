@@ -1,0 +1,44 @@
+# PolyInsight 단일 호스트 배포 (Oracle Always Free VM)
+# web ↔ backend는 compose 네트워크에서 service명으로 통신(= 기존 localhost 결합 대체).
+# 외부 노출은 cloudflared 터널이 web:3000 한 곳만.
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      - WEB_BASE_URL=http://web:3000          # S7 Playwright가 방문할 렌더 라우트
+      - DATABASE_URL=sqlite:////data/polyinsight.db
+    volumes:
+      - polyinsight-data:/data
+    expose:
+      - "8000"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      args:
+        NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
+        NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
+    environment:
+      - BACKEND_ORIGIN=http://backend:8000     # Next rewrite 프록시 대상
+    expose:
+      - "3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - web
+    restart: unless-stopped
+
+volumes:
+  polyinsight-data:
