@@ -107,6 +107,14 @@ docker compose exec backend python -m backend.scripts.create_invite   # 향후 �
 
 ---
 
+## 로컬 Docker E2E 검증 결과 (2026-06-15)
+
+서버 전에 로컬 compose(x64)로 빌드~E2E를 돌려 검증함. 인증(쿠키 through rewrite) + **렌더 토큰 풀루프(image_count=1)** 통과. 그 과정에서 잡은 버그 2건은 이미 수정됨:
+- `requirements.txt`: `pymupdf4llm` 누락 + PyMuPDF 핀 불일치 → 백엔드 import 크래시 (수정)
+- `BACKEND_ORIGIN`: Next는 `rewrites()`를 빌드 시점에 구움 → 런타임 env 무시 → **build arg로 전달**(web/Dockerfile + compose) (수정)
+
+→ ARM 서버에서도 거의 동일하게 동작 예상. 아래는 잔여 조정 가능 지점.
+
 ## 트러블슈팅 (첫 빌드 조정 가능 지점)
 
 - **web standalone 경로**: `web/Dockerfile` run 스테이지의 `server.js` 위치가 모노레포에선 `web/server.js`가 아닐 수 있음. 빌드 후 `docker run --rm <web이미지> ls`로 server.js 실제 경로 확인 → CMD 한 줄 조정.
