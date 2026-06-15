@@ -77,6 +77,28 @@ async def migrate() -> None:
                 photo_bytes BLOB,
                 created_at TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS invites (
+                code TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                used_by INTEGER REFERENCES users(id),
+                used_at TEXT
+            );
             """
         )
         await conn.commit()
@@ -358,3 +380,90 @@ async def list_jobs(limit: int = 20, offset: int = 0) -> list[dict]:
         data["warnings"] = json.loads(warnings) if warnings else []
         jobs.append(data)
     return jobs
+
+
+# ── 인증: users / sessions / invites ──────────────────────────────────────
+
+async def create_user(email: str, password_hash: str, role: str = "user") -> int:
+    now = _utc_now_iso()
+    async with aiosqlite.connect(_db_path()) as conn:
+        cursor = await conn.execute(
+            "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
+            (email, password_hash, role, now),
+        )
+        await conn.commit()
+        return int(cursor.lastrowid)
+
+
+async def get_user_by_email(email: str) -> dict | None:
+    async with aiosqlite.connect(_db_path()) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute("SELECT * FROM users WHERE email = ?", (email,)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def get_user_by_id(user_id: int) -> dict | None:
+    async with aiosqlite.connect(_db_path()) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def create_session(token: str, user_id: int, ttl_hours: int) -> None:
+    now = _utc_now()
+    expires_at = (now + timedelta(hours=ttl_hours)).isoformat()
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute(
+            "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+            (token, user_id, now.isoformat(), expires_at),
+        )
+        await conn.commit()
+
+
+async def get_valid_session(token: str) -> dict | None:
+    now = _utc_now_iso()
+    async with aiosqlite.connect(_db_path()) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT * FROM sessions WHERE token = ? AND expires_at > ?", (token, now)
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def delete_session(token: str) -> None:
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        await conn.commit()
+
+
+async def create_invite(code: str) -> None:
+    now = _utc_now_iso()
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute(
+            "INSERT INTO invites (code, created_at, used_by, used_at) VALUES (?, ?, NULL, NULL)",
+            (code, now),
+        )
+        await conn.commit()
+
+
+async def get_invite(code: str) -> dict | None:
+    async with aiosqlite.connect(_db_path()) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute("SELECT * FROM invites WHERE code = ?", (code,)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def consume_invite(code: str, user_id: int) -> bool:
+    """미사용 초대코드면 사용 처리하고 True. 없거나 이미 사용됐으면 False."""
+    now = _utc_now_iso()
+    async with aiosqlite.connect(_db_path()) as conn:
+        cursor = await conn.execute(
+            "UPDATE invites SET used_by = ?, used_at = ? WHERE code = ? AND used_by IS NULL",
+            (user_id, now, code),
+        )
+        await conn.commit()
+        return (cursor.rowcount or 0) > 0

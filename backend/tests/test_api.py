@@ -24,10 +24,14 @@ from backend.main import app
 
 @pytest_asyncio.fixture(autouse=True)
 async def use_memory_db(tmp_path, monkeypatch):
-    """각 테스트마다 독립된 SQLite 파일 사용."""
+    """각 테스트마다 독립된 SQLite 파일 사용 + auth 의존성 우회."""
+    from backend.core.auth import get_current_user
     db_file = str(tmp_path / "test.db")
     monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_file}")
     await _db.migrate()
+    app.dependency_overrides[get_current_user] = lambda: {"id": 1, "email": "test@test", "role": "user"}
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 @pytest_asyncio.fixture

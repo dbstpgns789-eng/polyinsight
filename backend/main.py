@@ -3,7 +3,7 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
 
 # Windows에서 Playwright subprocess 실행에 ProactorEventLoop 필요
@@ -11,8 +11,9 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.core.auth import get_current_user
 from backend.core.db import cleanup_expired_blobs, migrate
-from backend.routers import export, jobs, projects
+from backend.routers import auth, export, jobs, projects
 
 
 def _setup_file_logging() -> None:
@@ -56,6 +57,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(jobs.router)
-app.include_router(projects.router)
-app.include_router(export.router)
+app.include_router(auth.router)
+app.include_router(jobs.router, dependencies=[Depends(get_current_user)])
+app.include_router(projects.router, dependencies=[Depends(get_current_user)])
+app.include_router(export.router, dependencies=[Depends(get_current_user)])
