@@ -23,8 +23,7 @@ services:
       args:
         NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY:-}
         NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
-    environment:
-      - BACKEND_ORIGIN=http://backend:8000     # Next rewrite 프록시 대상
+        BACKEND_ORIGIN: http://backend:8000    # Next rewrite는 빌드 시점에 구워짐 → build arg
     expose:
       - "3000"
     depends_on:

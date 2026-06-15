@@ -3,11 +3,13 @@
 FROM node:20-bookworm-slim AS build
 WORKDIR /app
 
-# NEXT_PUBLIC_* 는 빌드 시점에 클라이언트 번들로 인라인된다 → build arg 필수.
+# Next는 NEXT_PUBLIC_* 와 next.config의 rewrites()를 모두 BUILD 시점에 굽는다 → build arg 필수.
 ARG NEXT_PUBLIC_POSTHOG_KEY=""
 ARG NEXT_PUBLIC_POSTHOG_HOST="https://us.i.posthog.com"
+ARG BACKEND_ORIGIN="http://backend:8000"
 ENV NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY \
-    NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST
+    NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST \
+    BACKEND_ORIGIN=$BACKEND_ORIGIN
 
 COPY package.json package-lock.json ./
 COPY web/package.json ./web/package.json
