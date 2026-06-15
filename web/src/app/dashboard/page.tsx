@@ -8,6 +8,8 @@ import {
   IconEdit, IconDownload, IconRefresh, IconWarning,
   IconTrash, IconSearch,
 } from '@/components/ui/Icons';
+import AuthGuard from '@/components/auth/AuthGuard';
+import LogoutButton from '@/components/auth/LogoutButton';
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true';
 
@@ -63,7 +65,7 @@ function getResultCountText(filter: FilterTab, search: string, count: number): s
   return `${FILTER_LABELS[filter]} ${count}개`;
 }
 
-export default function DashboardPage() {
+function DashboardPageInner() {
   const [filter, setFilter]   = useState<FilterTab>('all');
   const [sort, setSort]       = useState<SortKey>('newest');
   const [search, setSearch]   = useState('');
@@ -135,11 +137,14 @@ export default function DashboardPage() {
     <div className="dash">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
         <h1 className="dash__title" style={{ margin: 0 }}>내 카드뉴스</h1>
-        {USE_MOCK && (
-          <span style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--border)', padding: '2px 8px', borderRadius: 4 }}>
-            DEV (mock)
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {USE_MOCK && (
+            <span style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--border)', padding: '2px 8px', borderRadius: 4 }}>
+              DEV (mock)
+            </span>
+          )}
+          <LogoutButton />
+        </div>
       </div>
 
       {loading && (
@@ -347,5 +352,13 @@ function ProjectCard({ project, onDeleted }: { project: Project; onDeleted: () =
         </div>
       )}
     </article>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <AuthGuard>
+      <DashboardPageInner />
+    </AuthGuard>
   );
 }

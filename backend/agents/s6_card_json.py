@@ -7,11 +7,13 @@ from .base import BaseAgent
 from .s6._util import extract_json, format_section_map
 from .s6.architect import architect
 from .s6.writer import writer
+from .s6.understand import understand
 from .s6.mock import mock_storyboard, mock_cards
 from ..core.config import settings
 from ..core.llm_client import LLMTruncationError
 from ..core.models import (
     ArchitectInput, ArchitectOutput, WriterInput, WriterOutput,
+    UnderstandInput,
     CardEditorData, CardSlot, FieldValue,
     MatchQuality, RiskLevel, ClaimType,
     Storyboard,
@@ -50,29 +52,33 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
                 high_count=self._count_risk(card_data, RiskLevel.HIGH),
             )
 
-        # ── 멀티에이전트: 설계팀(Architect, Sonnet) → 콘텐츠팀(Writer, Haiku) ──
+        # ── 논문이해팀: raw → 다이제스트(실패 시 degraded 폴백, Architect가 raw 직접) ──
+        digest, warnings = await self._get_digest(input_data)
+
+        # ── 설계팀(Architect, Sonnet, digest 우선) → 콘텐츠팀(Writer, Haiku, raw+digest) ──
         arch_out: ArchitectOutput = await self._with_retries(
             lambda: architect.run(ArchitectInput(
                 section_map=input_data.section_map,
                 paper_metadata=input_data.paper_metadata,
                 card_count=input_data.card_count,
+                digest=digest,
             )),
             stage="Architect", truncation_is_card_overload=False,
         )
 
         wr_out: WriterOutput = await self._with_retries(
-            lambda: self._run_writer(input_data, arch_out.storyboard),
+            lambda: self._run_writer(input_data, arch_out.storyboard, digest=digest),
             stage="Writer", truncation_is_card_overload=True,
             card_count=input_data.card_count,
         )
 
         storyboard = arch_out.storyboard
-        warnings: list[str] = []
         # ── 피드백 루프 (1회 상한): 콘텐츠팀이 fit 불일치를 보고하면 설계팀이 지목 비트만 재설계 ──
         if wr_out.mismatch_signals:
-            storyboard, wr_out, warnings = await self._resolve_mismatch(
+            storyboard, wr_out, loop_warns = await self._resolve_mismatch(
                 input_data, arch_out, wr_out,
             )
+            warnings = warnings + loop_warns
 
         card_data = self._assemble(storyboard, arch_out.recommended_theme, wr_out)
         card_data = self._post_process(card_data)
@@ -91,14 +97,30 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
 
     # ── 모듈 호출 래퍼 ────────────────────────────────────────────────────────
 
+    async def _get_digest(self, input_data: S6Input):
+        """Understand 실행 — 실패하면 degraded 폴백(digest=None) + 경고. 다이제스트는 하드 의존 아님."""
+        try:
+            digest = await self._with_retries(
+                lambda: understand.run(UnderstandInput(
+                    section_map=input_data.section_map,
+                    paper_metadata=input_data.paper_metadata,
+                )),
+                stage="Understand", truncation_is_card_overload=False,
+            )
+            return digest, []
+        except RuntimeError as exc:
+            logger.warning("S6 Understand 실패 — 원문 직접 폴백: %s", exc)
+            return None, ["다이제스트 생략—원문 직접(degraded)"]
+
     async def _run_writer(
         self, input_data: S6Input, storyboard: Storyboard,
-        only_beats: list[int] | None = None,
+        only_beats: list[int] | None = None, digest=None,
     ) -> WriterOutput:
         """Writer 실행 + 커버리지 일관성 검증(불일치 시 재시도 유발). only_beats=부분 재작성."""
         wr = await writer.run(WriterInput(
             section_map=input_data.section_map,
             paper_metadata=input_data.paper_metadata,
+            digest=digest,
             storyboard=storyboard,
             only_beats=only_beats,
         ))

@@ -285,6 +285,11 @@ WRITER_USER = """## 논문 원문
 기관: {org}
 
 ---
+## 사전 추출 힌트 (논문이해팀 — 수치·출처·용어, 참고용. 최종 근거는 위 원문)
+
+{digest_hints}
+
+---
 ## 확정된 스토리보드 (설계팀)
 
 {storyboard_text}
@@ -321,4 +326,44 @@ WRITER_USER = """## 논문 원문
     ... (스토리보드 비트 수만큼)
   ],
   "mismatch_signals": []
+}}"""
+
+
+# ===========================================================================
+# 논문이해팀 Understand — 내용모양 인벤토리 추출 (Haiku)
+# ===========================================================================
+
+UNDERSTAND_SYSTEM = """당신은 학술 논문을 카드뉴스로 만들기 전, 원문에서 '내용 모양'을
+구조화해 뽑아내는 분석가입니다. 본문을 쓰지 않습니다 — 재료만 추출합니다.
+
+규칙:
+- section_map(원문)에서만 추출한다. 원문에 없는 건 지어내지 않는다(빈 배열로 둔다).
+- 수치·비교·주장에는 source{section, page}를 단다(원문 근거 위치).
+- 상한: numbers<=8, comparisons<=4, terms<=5, figures<=4, claims<=8. 중요도 순으로.
+- terms는 일반 독자가 모를 핵심 용어만(plain=일상어 한 줄 풀이).
+- claims.role은 problem|innovation|result|application|method 중 하나.
+
+반환: PaperDigest JSON만. 설명 없음."""
+
+UNDERSTAND_USER = """## 논문 원문
+
+{section_map_text}
+
+---
+제목: {title}
+저자: {authors}
+연도: {year}
+
+---
+## 지시
+아래 JSON만 반환하라(없는 섹션은 []):
+{{
+  "one_liner": "논문 한 문장 요약",
+  "numbers": [{{"value":"238","unit":"MPa","label":"압축강도","context":"우리 소재","source":{{"section":"Results","page":7}}}}],
+  "comparisons": [{{"attribute":"압축강도","items":["우리","PP"],"values":["238","199"],"source":{{"section":"Results","page":7}}}}],
+  "terms": [{{"term":"COF","plain":"구멍 많은 단단한 그물"}}],
+  "figures": [{{"ref":"Figure 3","shows":"미세구슬 SEM 이미지"}}],
+  "process_steps": ["단계1","단계2"],
+  "claims": [{{"role":"result","text":"플라스틱보다 단단","source":{{"section":"Results","page":7}}}}],
+  "domain_hint": "재료/환경"
 }}"""

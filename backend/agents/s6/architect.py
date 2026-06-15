@@ -13,7 +13,7 @@ from ...core.models import (
     ArchitectInput, ArchitectOutput, CardStorybeat, Storyboard,
     THEME_PRESETS, VALID_TEMPLATE_TYPES,
 )
-from ._util import extract_json, format_section_map
+from ._util import extract_json, format_section_map, format_digest
 from . import prompts
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,8 @@ class Architect:
     async def run(self, inp: ArchitectInput) -> ArchitectOutput:
         meta = inp.paper_metadata
         user = prompts.ARCHITECT_USER.format(
-            section_map_text=format_section_map(inp.section_map),
+            section_map_text=(format_digest(inp.digest) if inp.digest
+                              else format_section_map(inp.section_map)),
             title=meta.title or "unknown",
             authors=", ".join(meta.authors) if meta.authors else "unknown",
             year=meta.year or "unknown",

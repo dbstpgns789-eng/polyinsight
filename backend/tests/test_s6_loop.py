@@ -43,6 +43,13 @@ def _sig(n, shape="bigstat_compare"):
     return MismatchSignal(card_num=n, reason="숫자 1개뿐", suggested_shape=shape)
 
 
+@pytest.fixture(autouse=True)
+def _stub_understand(monkeypatch):
+    """Understand를 빈 다이제스트로 스텁(실 LLM 호출 방지)."""
+    from backend.core.models import PaperDigest
+    monkeypatch.setattr(s6mod.understand, "run", AsyncMock(return_value=PaperDigest(one_liner="mock")))
+
+
 @pytest.mark.asyncio
 async def test_loop_resolves_on_revision(monkeypatch):
     """Writer가 카드2 불일치 → Architect 재설계(bigstat) → Writer 부분재작성 → 해소(경고 없음)."""

@@ -4,12 +4,13 @@ import json
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from ..agents.orchestrator import run_pipeline
 from ..agents.s7_renderer import S7Renderer
 from ..core import db
+from ..core.auth import get_current_user
 from ..core.models import CardEditorData, CardTheme
 
 router = APIRouter(prefix="/api", tags=["jobs"])
@@ -26,6 +27,7 @@ async def upload_pdf(
     # le=7: Haiku 4.5 출력 한계(8192 토큰) 안전권. 8장 이상은 큰 논문에서 JSON 잘림 위험.
     # 미래 등급제에서 상위 모델(Sonnet 등) 사용 시 등급별로 상한 확장.
     card_count: Annotated[int, Form(ge=3, le=7)] = 7,
+    user: dict = Depends(get_current_user),
 ):
     """PDF 업로드 → 파이프라인 백그라운드 시작."""
     if file.content_type not in ("application/pdf", "application/octet-stream"):
@@ -38,7 +40,13 @@ async def upload_pdf(
 
     job_id = str(uuid.uuid4())
     await db.create_job(job_id, title=file.filename)
-    background_tasks.add_task(run_pipeline, job_id, pdf_bytes, CardTheme(), card_count)
+    await db.log_event(
+        "upload",
+        user_id=user["id"],
+        job_id=job_id,
+        payload={"filename": file.filename, "card_count": card_count},
+    )
+    background_tasks.add_task(run_pipeline, job_id, pdf_bytes, CardTheme(), card_count, user["id"])
 
     return {"jobId": job_id, "status": "PENDING"}
 
@@ -140,7 +148,7 @@ async def delete_job_endpoint(job_id: str):
 # ── 내보내기 트리거 ───────────────────────────────────────────────────────
 
 @router.post("/cards/{job_id}/export")
-async def trigger_export(job_id: str):
+async def trigger_export(job_id: str, user: dict = Depends(get_current_user)):
     """카드 데이터 기반 PNG 재렌더링 → ZIP 저장. 렌더링 완료 후 응답."""
     import io
     import zipfile as zf_mod
@@ -162,4 +170,10 @@ async def trigger_export(job_id: str):
 
     export_id = str(uuid.uuid4())
     await db.save_export(export_id, job_id, buf.getvalue(), f"polyinsight_{job_id[:8]}.zip")
+    await db.log_event(
+        "export",
+        user_id=user["id"],
+        job_id=job_id,
+        payload={"export_id": export_id, "image_count": len(s7_out.images)},
+    )
     return {"exportId": export_id, "status": "DONE"}

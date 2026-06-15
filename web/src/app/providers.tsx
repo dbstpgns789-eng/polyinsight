@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
+import PostHogProvider from '@/components/analytics/PostHogProvider'
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [qc] = useState(() => new QueryClient({
@@ -10,5 +11,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     },
   }))
 
-  return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  return (
+    <QueryClientProvider client={qc}>
+      <PostHogProvider>{children}</PostHogProvider>
+    </QueryClientProvider>
+  )
 }

@@ -13,8 +13,9 @@ import ExportModal from '@/components/export/ExportModal'
 import type { CardDataPayload, ApiResponse, FieldStyle } from '@/types/editor'
 import { MOCK_EDITOR_DATA } from '@/lib/mockData'
 import { renameJob, downloadCard } from '@/lib/api'
+import AuthGuard from '@/components/auth/AuthGuard'
 
-export default function EditorPage() {
+function EditorPageInner() {
   const params = useParams()
   const jobId = params.jobId as string
   const isDemo = jobId === 'demo'
@@ -338,5 +339,13 @@ export default function EditorPage() {
 
       {exportModalOpen && <ExportModal />}
     </div>
+  )
+}
+
+export default function EditorPage() {
+  return (
+    <AuthGuard>
+      <EditorPageInner />
+    </AuthGuard>
   )
 }

@@ -274,21 +274,26 @@ RULE 7: verified는 항상 False로 초기화한다. 사용자가 에디터에�
 
 ### 5-3. 처리 흐름 (멀티에이전트, Storyboard-first)
 
-S6 코디네이터는 두 LLM 모듈과 코드 검증을 순서대로 중계한다. 레이아웃 판단(설계팀)만
-좋은 모델(Sonnet)로 라우팅하고, 본문(콘텐츠팀)·검증은 각각 Haiku·코드가 맡는다.
+S6 코디네이터는 세 LLM 모듈과 코드 검증을 순서대로 중계한다. 레이아웃 판단(설계팀)만
+좋은 모델(Sonnet)로 라우팅하고, 이해·본문(논문이해·콘텐츠)은 Haiku, 검증은 코드가 맡는다.
 
 설계 원칙: **AI가 기획과 디자인을 책임진다** (CLAUDE.md Design Philosophy).
 레이아웃 선택은 스토리 맥락이 있어야 정확하므로 설계팀이 전체 흐름을 본 상태에서 결정한다.
 
 ```
-설계팀 Architect (Sonnet) — s6/architect.py
-  Step 1 SEARCH    : 원문(section_map)에서 핵심 구절·수치 위치 파악
+논문이해팀 Understand (Haiku) — s6/understand.py
+  Step 0 DIGEST    : raw section_map → PaperDigest(내용모양 인벤토리: 수치+출처·비교·
+                     용어·그림·공정·역할별 주장). 상위 N개로 제한. 본문은 쓰지 않는다.
+                     실패 시 degraded 폴백(Architect가 raw 직접). 다이제스트는 힌트, raw가 권위.
+
+설계팀 Architect (Sonnet, 작은 다이제스트 — 없으면 raw 폴백) — s6/architect.py
+  Step 1 SEARCH    : 다이제스트(또는 원문)에서 핵심 구절·수치 위치 파악
   Step 2 STORYBOARD: card_count장 전체 계획 확정 — 각 비트의 narrative_role,
                      template_type, key_message, content_shape_reason를 결정.
                      첫=cover_v2·끝=closing_v2 고정, 중간 비트는 '내용 모양'으로
                      뼈대 선택(SEQUENCING_RULES). 본문 fields는 만들지 않는다.
 
-콘텐츠팀 Writer (Haiku) — s6/writer.py
+콘텐츠팀 Writer (Haiku, raw 권위 + 다이제스트 힌트) — s6/writer.py
   Step 3 WRITE     : storyboard 비트별로 fields를 원문에서 추출·재작성(가독성 규칙).
                      cards[n].template_type == beats[n].template_type 강제.
                      뼈대에 grounded 내용이 안 맞으면 mismatch_signals로 보고(억지 생성 금지).

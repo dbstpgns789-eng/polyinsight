@@ -28,9 +28,11 @@ async def _playwright_render_via_url_async(urls: list[str], timeout_s: float) ->
 
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=True)
+        extra_headers = {"X-Render-Token": settings.RENDER_TOKEN} if settings.RENDER_TOKEN else {}
         browser_ctx = await browser.new_context(
             viewport={"width": 1080, "height": 1200},  # 1080 클립 + 하단 여유 → dev 인디케이터가 클립 밖
             device_scale_factor=1,
+            extra_http_headers=extra_headers,
         )
 
         for i, url in enumerate(urls, start=1):

@@ -42,6 +42,13 @@ def _no_sleep(monkeypatch):
     monkeypatch.setattr(s6mod.asyncio, "sleep", AsyncMock())
 
 
+@pytest.fixture(autouse=True)
+def _stub_understand(monkeypatch):
+    """Understand를 빈 다이제스트로 스텁(실 LLM 호출 방지). 재시도 테스트는 Architect/Writer만 검증."""
+    from backend.core.models import PaperDigest
+    monkeypatch.setattr(s6mod.understand, "run", AsyncMock(return_value=PaperDigest(one_liner="mock")))
+
+
 @pytest.mark.asyncio
 async def test_architect_503_then_success(monkeypatch):
     arch = AsyncMock(side_effect=[

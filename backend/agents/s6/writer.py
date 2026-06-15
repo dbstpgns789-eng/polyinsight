@@ -13,7 +13,7 @@ from ...core.models import (
     CardMeta, CardSlot, FieldValue, MismatchSignal, Storyboard,
     WriterInput, WriterOutput,
 )
-from ._util import extract_json, format_section_map
+from ._util import extract_json, format_section_map, format_digest
 from . import prompts
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,7 @@ class Writer:
             storyboard_text=_storyboard_text(inp.storyboard, only),
             template_spec=prompts.TEMPLATE_SPEC,
             only_beats_note=_only_note(only),
+            digest_hints=(format_digest(inp.digest) if inp.digest else "(없음)"),
         )
 
         raw = await llm_client.call(

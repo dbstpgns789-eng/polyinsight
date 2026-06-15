@@ -38,6 +38,13 @@ def _input(n=3):
                    paper_metadata=PaperMetadata(title="t", year=2024, doi=None), card_count=n)
 
 
+@pytest.fixture(autouse=True)
+def _stub_understand(monkeypatch):
+    """기본: Understand를 빈 다이제스트로 스텁(실 LLM 호출 방지). 개별 테스트가 덮어쓸 수 있음."""
+    from backend.core.models import PaperDigest
+    monkeypatch.setattr(s6mod.understand, "run", AsyncMock(return_value=PaperDigest(one_liner="mock")))
+
+
 @pytest.mark.asyncio
 async def test_coordinator_assembles_architect_and_writer(monkeypatch):
     types_ = ["cover_v2", "multistat", "closing_v2"]
@@ -65,3 +72,40 @@ async def test_coordinator_coverage_mismatch_retries_then_raises(monkeypatch):
 
     with pytest.raises(RuntimeError, match="ERR-S6-001"):
         await s6mod.s6_agent.execute(_input(3))
+
+
+@pytest.mark.asyncio
+async def test_coordinator_runs_understand_and_passes_digest(monkeypatch):
+    from backend.core.models import PaperDigest, DigestNumber, FieldSource
+    types_ = ["cover_v2", "multistat", "closing_v2"]
+    digest = PaperDigest(one_liner="요약",
+                         numbers=[DigestNumber(value="238", source=FieldSource(section="Results", page=7))])
+    und = AsyncMock(return_value=digest)
+    arch = AsyncMock(return_value=ArchitectOutput(storyboard=_sb(types_), recommended_theme="forest_green"))
+    wr = AsyncMock(return_value=WriterOutput(cards=_cards(types_), meta=_meta(), mismatch_signals=[]))
+    monkeypatch.setattr(s6mod.understand, "run", und)
+    monkeypatch.setattr(s6mod.architect, "run", arch)
+    monkeypatch.setattr(s6mod.writer, "run", wr)
+
+    out = await s6mod.s6_agent.execute(_input(3))
+    assert und.await_count == 1
+    assert arch.call_args.args[0].digest is digest      # Architect가 digest 받음
+    assert wr.call_args.args[0].digest is digest         # Writer도 digest 받음
+    assert out.warnings == []
+
+
+@pytest.mark.asyncio
+async def test_coordinator_falls_back_when_understand_fails(monkeypatch):
+    types_ = ["cover_v2", "feature", "closing_v2"]
+    und = AsyncMock(side_effect=Exception("boom"))       # 항상 실패
+    arch = AsyncMock(return_value=ArchitectOutput(storyboard=_sb(types_), recommended_theme="forest_green"))
+    wr = AsyncMock(return_value=WriterOutput(cards=_cards(types_), meta=_meta(), mismatch_signals=[]))
+    monkeypatch.setattr(s6mod.asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(s6mod.understand, "run", und)
+    monkeypatch.setattr(s6mod.architect, "run", arch)
+    monkeypatch.setattr(s6mod.writer, "run", wr)
+
+    out = await s6mod.s6_agent.execute(_input(3))
+    assert arch.call_args.args[0].digest is None         # degraded: digest 없이 진행
+    assert any("다이제스트 생략" in w for w in out.warnings)
+    assert len(out.card_data.cards) == 3

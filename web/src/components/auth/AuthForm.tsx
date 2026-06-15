@@ -10,6 +10,7 @@ interface Errors {
   email?: string;
   password?: string;
   confirm?: string;
+  invite?: string;
   form?: string;
 }
 
@@ -18,6 +19,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   const [email, setEmail]     = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
+  const [invite, setInvite]     = useState('');
   const [errors, setErrors]   = useState<Errors>({});
   const [loading, setLoading] = useState(false);
 
@@ -41,19 +43,42 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     return e;
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const errs = validate();
+    if (!isLogin && !invite.trim()) {
+      errs.invite = '초대코드를 입력해 주세요.';
+    }
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
     }
     setErrors({});
     setLoading(true);
-    setTimeout(() => {
-      localStorage.setItem('isLoggedIn', 'true');
+    try {
+      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
+      const payload = isLogin
+        ? { email, password }
+        : { email, password, invite };
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const msg = data?.detail?.message
+          ?? (isLogin ? '이메일 또는 비밀번호가 올바르지 않습니다.' : '회원가입에 실패했습니다.');
+        setErrors({ form: msg });
+        setLoading(false);
+        return;
+      }
       router.push('/dashboard');
-    }, 600);
+    } catch {
+      setErrors({ form: '서버에 연결할 수 없습니다.' });
+      setLoading(false);
+    }
   }
 
   return (
@@ -120,6 +145,25 @@ export default function AuthForm({ mode }: { mode: Mode }) {
             />
             {errors.confirm && (
               <p className="auth-field__error" id="err-confirm" role="alert">{errors.confirm}</p>
+            )}
+          </div>
+        )}
+
+        {!isLogin && (
+          <div className="auth-field">
+            <label htmlFor="auth-invite" className="auth-field__label">초대코드</label>
+            <input
+              id="auth-invite"
+              type="text"
+              className="auth-input"
+              placeholder="발급받은 초대코드"
+              value={invite}
+              onChange={e => { setInvite(e.target.value); clearFieldError('invite'); }}
+              aria-invalid={!!errors.invite || undefined}
+              aria-describedby={errors.invite ? 'err-invite' : undefined}
+            />
+            {errors.invite && (
+              <p className="auth-field__error" id="err-invite" role="alert">{errors.invite}</p>
             )}
           </div>
         )}

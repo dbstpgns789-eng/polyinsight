@@ -31,3 +31,29 @@ def extract_json(text: str) -> str:
     if m:
         return m.group(0)
     return text
+
+
+def format_digest(digest) -> str:
+    """PaperDigest를 프롬프트용 '내용모양 인벤토리' 텍스트로 직렬화. 빈 섹션은 생략."""
+    def _src(s):
+        return f"[{s.section} p{s.page}]" if s and s.section else ""
+
+    parts: list[str] = [f"한 줄 요약: {digest.one_liner}"]
+    if digest.numbers:
+        lines = [f"- {n.label or '값'}: {n.value}{n.unit} ({n.context}) {_src(n.source)}"
+                 for n in digest.numbers]
+        parts.append("핵심 수치:\n" + "\n".join(lines))
+    if digest.comparisons:
+        lines = [f"- {c.attribute}: " + " vs ".join(f"{i}={v}" for i, v in zip(c.items, c.values))
+                 + f" {_src(c.source)}" for c in digest.comparisons]
+        parts.append("비교쌍:\n" + "\n".join(lines))
+    if digest.terms:
+        parts.append("전문용어:\n" + "\n".join(f"- {t.term}: {t.plain}" for t in digest.terms))
+    if digest.figures:
+        parts.append("그림:\n" + "\n".join(f"- {f.ref}: {f.shows}" for f in digest.figures))
+    if digest.process_steps:
+        parts.append("공정 단계:\n" + "\n".join(f"- {s}" for s in digest.process_steps))
+    if digest.claims:
+        parts.append("역할별 핵심 주장:\n" + "\n".join(
+            f"- [{c.role}] {c.text} {_src(c.source)}" for c in digest.claims))
+    return "\n\n".join(parts)

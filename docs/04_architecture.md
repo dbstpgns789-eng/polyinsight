@@ -60,8 +60,8 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
   │        │  raw_text, page_map, section_map, metadata
   │        ▼
   ├─ S6: Card News JSON        내부 멀티에이전트 (계약 S6Input→S6Output 동결)
-  │        │  설계팀 Architect(Sonnet) → 콘텐츠팀 Writer(Haiku) → 검증(코드)
-  │        │  피드백 루프 1회(fit 불일치 교정), 코디네이터가 중계
+  │        │  논문이해 Understand(Haiku) → 설계 Architect(Sonnet) → 콘텐츠 Writer(Haiku) → 검증(코드)
+  │        │  다이제스트=힌트(raw 권위), Understand 실패 시 raw 폴백. 피드백 루프 1회.
   │        │  출력: CardEditorData(storyboard, cards: List[CardSlot])
   │        ▼
   ├─ S7: PNG Rendering         Playwright headless Chromium
