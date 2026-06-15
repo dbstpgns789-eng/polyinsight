@@ -56,6 +56,7 @@ async def signup(body: SignupBody, response: Response):
     user_id = await db.create_user(body.email, auth_core.hash_password(body.password))
     await db.consume_invite(body.invite, user_id)
     await _start_session(response, user_id)
+    await db.log_event("signup", user_id=user_id, payload={"email": body.email})
     return {"email": body.email}
 
 
@@ -65,6 +66,7 @@ async def login(body: LoginBody, response: Response):
     if user is None or not auth_core.verify_password(user["password_hash"], body.password):
         raise HTTPException(401, detail={"code": "ERR-AUTH-005", "message": "이메일 또는 비밀번호가 올바르지 않습니다."})
     await _start_session(response, user["id"])
+    await db.log_event("login", user_id=user["id"])
     return {"email": user["email"]}
 
 
@@ -72,7 +74,10 @@ async def login(body: LoginBody, response: Response):
 async def logout(request: Request, response: Response):
     token = request.cookies.get(COOKIE_NAME)
     if token:
+        sess = await db.get_valid_session(token)
         await db.delete_session(token)
+        if sess:
+            await db.log_event("logout", user_id=sess["user_id"])
     response.delete_cookie(COOKIE_NAME, path="/")
     return {"ok": True}
 

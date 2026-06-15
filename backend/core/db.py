@@ -99,6 +99,15 @@ async def migrate() -> None:
                 used_by INTEGER REFERENCES users(id),
                 used_at TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                event_type TEXT NOT NULL,
+                job_id TEXT,
+                payload TEXT,
+                created_at TEXT NOT NULL
+            );
             """
         )
         await conn.commit()
@@ -467,3 +476,37 @@ async def consume_invite(code: str, user_id: int) -> bool:
         )
         await conn.commit()
         return (cursor.rowcount or 0) > 0
+
+
+# ── 행동 로깅: events ──────────────────────────────────────────────────────
+
+async def log_event(
+    event_type: str,
+    user_id: int | None = None,
+    job_id: str | None = None,
+    payload: dict | None = None,
+) -> None:
+    """행동 감사 이벤트 1건 기록. 실패해도 호출자 흐름을 막지 않도록 호출부에서 감싼다."""
+    now = _utc_now_iso()
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute(
+            "INSERT INTO events (user_id, event_type, job_id, payload, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (user_id, event_type, job_id, json.dumps(payload or {}), now),
+        )
+        await conn.commit()
+
+
+async def list_events(limit: int = 100, offset: int = 0) -> list[dict]:
+    async with aiosqlite.connect(_db_path()) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT * FROM events ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset)
+        ) as cur:
+            rows = await cur.fetchall()
+    out: list[dict] = []
+    for row in rows:
+        d = dict(row)
+        d["payload"] = json.loads(d["payload"]) if d["payload"] else {}
+        out.append(d)
+    return out

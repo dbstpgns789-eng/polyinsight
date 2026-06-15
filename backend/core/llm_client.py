@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 
 import anthropic
@@ -8,6 +9,33 @@ import anthropic
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
+
+# ── per-job LLM 사용량 집계 (행동/비용 로깅용) ──────────────────────────────
+# 오케스트레이터가 job 시작 시 start_usage_capture()로 버킷을 설정하고,
+# 각 LLM call()이 같은 버킷(가변 dict)에 토큰을 누적한다. asyncio 태스크가
+# 버킷 설정 이후 생성되면 ContextVar가 같은 dict 참조를 상속한다.
+_usage_var: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "llm_usage", default=None
+)
+
+
+def start_usage_capture() -> dict:
+    bucket = {"input_tokens": 0, "output_tokens": 0, "calls": 0}
+    _usage_var.set(bucket)
+    return bucket
+
+
+def get_usage() -> dict | None:
+    return _usage_var.get()
+
+
+def _record_usage(input_tokens: int, output_tokens: int) -> None:
+    bucket = _usage_var.get()
+    if bucket is not None:
+        bucket["input_tokens"] += input_tokens
+        bucket["output_tokens"] += output_tokens
+        bucket["calls"] += 1
 
 
 class LLMAuthError(Exception):
@@ -88,6 +116,8 @@ class LLMClient:
         text = message.content[0].text if message.content else ""
         logger.info("LLM call done | input_tokens=%d | output_tokens=%d | stop_reason=%s",
                     message.usage.input_tokens, message.usage.output_tokens, message.stop_reason)
+        # 잘림 여부와 무관하게 실제 발생한 토큰을 집계 (비용 가시화).
+        _record_usage(message.usage.input_tokens, message.usage.output_tokens)
 
         # 출력이 천장에서 잘리면 JSON이 미완성 → 재시도 무의미. 호출자에게 명확히 신호.
         if message.stop_reason == "max_tokens":

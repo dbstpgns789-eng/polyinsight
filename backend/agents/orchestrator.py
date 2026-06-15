@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from ..core import db
+from ..core.llm_client import get_usage, start_usage_capture
 from ..core.models import (
     CardTheme,
     JobStatus,
@@ -27,16 +29,50 @@ async def run_pipeline(
     pdf_bytes: bytes,
     theme: CardTheme | None = None,
     card_count: int = 5,
+    user_id: int | None = None,
 ) -> None:
     """Full S1→S6→S7→S8 pipeline. S8 always runs."""
     if theme is None:
         theme = CardTheme()
 
     async with _job_semaphore:
-        await _execute(job_id, pdf_bytes, theme, card_count)
+        await _execute(job_id, pdf_bytes, theme, card_count, user_id)
 
 
-async def _execute(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_count: int = 5) -> None:
+async def _log_pipeline_done(
+    job_id: str, user_id: int | None, started: float, card_count: int
+) -> None:
+    """파이프라인 종료 시 최종 상태 + LLM 토큰 사용량을 events에 기록."""
+    usage = get_usage() or {}
+    final = await db.get_job(job_id)
+    try:
+        await db.log_event(
+            "pipeline_complete",
+            user_id=user_id,
+            job_id=job_id,
+            payload={
+                "status": final["status"] if final else None,
+                "degraded": bool(final["degraded"]) if final else None,
+                "duration_s": round(time.monotonic() - started, 2),
+                "card_count": card_count,
+                "input_tokens": usage.get("input_tokens", 0),
+                "output_tokens": usage.get("output_tokens", 0),
+                "llm_calls": usage.get("calls", 0),
+            },
+        )
+    except Exception:
+        logger.exception("pipeline_complete 이벤트 기록 실패")
+
+
+async def _execute(
+    job_id: str,
+    pdf_bytes: bytes,
+    theme: CardTheme,
+    card_count: int = 5,
+    user_id: int | None = None,
+) -> None:
+    start_usage_capture()
+    started = time.monotonic()
     warnings: list[str] = []
 
     # ── S1: PDF extraction ────────────────────────────────────────────────────
@@ -56,6 +92,7 @@ async def _execute(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_count: 
             progress=10,
             warnings=warnings + [f"ERR-S1: {exc}"],
         )
+        await _log_pipeline_done(job_id, user_id, started, card_count)
         return
 
     # ── S6: Card JSON generation ──────────────────────────────────────────────
@@ -81,6 +118,7 @@ async def _execute(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_count: 
             progress=50,
             warnings=warnings + [f"ERR-S6: {exc}"],
         )
+        await _log_pipeline_done(job_id, user_id, started, card_count)
         return
 
     # ── S7: PNG rendering ─────────────────────────────────────────────────────
@@ -116,3 +154,5 @@ async def _execute(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_count: 
             warnings=warnings,
         )
     )
+
+    await _log_pipeline_done(job_id, user_id, started, card_count)
