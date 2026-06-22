@@ -34,8 +34,8 @@ export default function CardFrame({ bgColor, accentColor, fontPairing, scale = 1
     overflow: 'hidden',
   }
 
-  // backdrop 모드: 이미지 위 텍스트가 보이도록 잉크 토큰을 흰색으로 오버라이드
-  const backdropTokenOverride: CSSProperties = imageMode === 'backdrop' ? {
+  // backdrop 모드 + 이미지 있을 때: 이미지 위 텍스트가 보이도록 잉크 토큰을 흰색으로 오버라이드
+  const backdropTokenOverride: CSSProperties = imageMode === 'backdrop' && imageUrl ? {
     '--set-ink-strong': '#ffffff',
     '--set-ink-muted': 'rgba(255,255,255,0.72)',
     '--set-ink-faint': 'rgba(255,255,255,0.45)',
