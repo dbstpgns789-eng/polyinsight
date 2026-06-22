@@ -8,7 +8,9 @@
 import CardFrame from './CardFrame'
 import { CARD_COMPONENTS } from './index'
 import { FieldStylesProvider } from './skin/fieldStyleContext'
+import { ImageModeProvider } from './skin/imageModeContext'
 import { getSet } from './skin/sets'
+import type { ImageMode } from '@/types/editor'
 import type { CardComponentProps } from './types'
 
 interface CardRendererProps extends CardComponentProps {
@@ -22,12 +24,23 @@ interface CardRendererProps extends CardComponentProps {
 export default function CardRenderer({ scale = 1, bgColor, accentColor, fontPairing, setKey, ...props }: CardRendererProps) {
   const { card } = props
   const Component = CARD_COMPONENTS[card.template_type]
+  const imageMode: ImageMode = card.image_mode ?? 'box'
 
   return (
     <FieldStylesProvider value={card.field_styles ?? {}}>
-      <CardFrame set={getSet(setKey)} bgColor={bgColor} accentColor={accentColor} fontPairing={fontPairing} scale={scale}>
-        {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
-      </CardFrame>
+      <ImageModeProvider value={imageMode}>
+        <CardFrame
+          set={getSet(setKey)}
+          bgColor={bgColor}
+          accentColor={accentColor}
+          fontPairing={fontPairing}
+          scale={scale}
+          imageUrl={card.image_url}
+          imageMode={imageMode}
+        >
+          {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
+        </CardFrame>
+      </ImageModeProvider>
     </FieldStylesProvider>
   )
 }
