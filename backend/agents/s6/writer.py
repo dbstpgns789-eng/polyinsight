@@ -10,7 +10,7 @@ import logging
 
 from ...core.llm_client import llm_client
 from ...core.models import (
-    CardMeta, CardSlot, FieldValue, MismatchSignal, Storyboard,
+    CardMeta, CardSlot, FieldValue, IMAGE_MODES, MismatchSignal, Storyboard,
     WriterInput, WriterOutput,
 )
 from ._util import extract_json, format_section_map, format_digest
@@ -56,7 +56,7 @@ class Writer:
             # 스토리보드가 진실 — 모델이 template_type을 어기면 교정.
             tt = beat_types.get(card_num, raw_card["template_type"])
             raw_mode = raw_card.get("image_mode", "box")
-            safe_mode = raw_mode if raw_mode in {"box", "backdrop", "ghost", "none"} else "box"
+            safe_mode = raw_mode if isinstance(raw_mode, str) and raw_mode in IMAGE_MODES else "box"
             cards.append(CardSlot(
                 card_num=card_num,
                 template_type=tt,

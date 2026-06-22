@@ -36,9 +36,12 @@ def _meta_json():
     return {k: _fv("x") for k in ("org", "dept", "researcher", "month", "edition_number")}
 
 
-def _cards_json(types_, signals=None):
+def _cards_json(types_, signals=None, image_modes=None):
     cards = [{"card_num": i + 1, "template_type": t, "fields": {"headline": _fv(f"h{i+1}")}}
              for i, t in enumerate(types_)]
+    if image_modes:
+        for c, mode in zip(cards, image_modes):
+            c["image_mode"] = mode
     return json.dumps({"meta": _meta_json(), "cards": cards,
                        "mismatch_signals": signals or []})
 
@@ -71,6 +74,29 @@ async def test_writer_coerces_template_type_to_storyboard(monkeypatch):
         section_map={}, paper_metadata=_meta(),
         storyboard=_sb(["cover_v2", "multistat", "closing_v2"])))
     assert out.cards[1].template_type == "multistat"
+
+
+@pytest.mark.asyncio
+async def test_writer_coerces_invalid_image_mode_to_box(monkeypatch):
+    # 화이트리스트 밖 문자열, 그리고 비문자열(list) 모두 box로 안전하게 강하.
+    _patch(monkeypatch, _cards_json(
+        ["cover_v2", "multistat", "closing_v2"],
+        image_modes=["fullscreen", ["backdrop"], "box"]))
+    out = await wr_mod.writer.run(WriterInput(
+        section_map={}, paper_metadata=_meta(),
+        storyboard=_sb(["cover_v2", "multistat", "closing_v2"])))
+    assert [c.image_mode for c in out.cards] == ["box", "box", "box"]
+
+
+@pytest.mark.asyncio
+async def test_writer_keeps_valid_image_mode(monkeypatch):
+    _patch(monkeypatch, _cards_json(
+        ["cover_v2", "multistat", "closing_v2"],
+        image_modes=["backdrop", "ghost", "none"]))
+    out = await wr_mod.writer.run(WriterInput(
+        section_map={}, paper_metadata=_meta(),
+        storyboard=_sb(["cover_v2", "multistat", "closing_v2"])))
+    assert [c.image_mode for c in out.cards] == ["backdrop", "ghost", "none"]
 
 
 @pytest.mark.asyncio
