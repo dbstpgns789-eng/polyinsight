@@ -15,12 +15,15 @@ export interface FieldStyle {
   color?: 'ink-strong' | 'ink-muted' | 'accent'
 }
 
+export type ImageMode = 'box' | 'backdrop' | 'ghost' | 'none'
+
 export interface Card {
   card_num: number
   template_type: string
   image_url?: string
   focal?: { x: number; y: number }
   image_fit?: 'cover' | 'contain'
+  image_mode?: ImageMode
   fields?: Record<string, FieldValue>
   field_styles?: Record<string, FieldStyle>
 }
