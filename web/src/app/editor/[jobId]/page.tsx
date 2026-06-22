@@ -10,7 +10,7 @@ import MidCanvas from '@/components/editor/MidCanvas'
 import RightPanel from '@/components/editor/RightPanel'
 import FactDrawer from '@/components/editor/FactDrawer'
 import ExportModal from '@/components/export/ExportModal'
-import type { CardDataPayload, ApiResponse, FieldStyle } from '@/types/editor'
+import type { CardDataPayload, ApiResponse, FieldStyle, Card } from '@/types/editor'
 import { MOCK_EDITOR_DATA } from '@/lib/mockData'
 import { renameJob, downloadCard } from '@/lib/api'
 import AuthGuard from '@/components/auth/AuthGuard'
@@ -122,6 +122,20 @@ function EditorPageInner() {
       const updatedCards = base.cards.map((card, idx) => {
         if (idx !== activeCardIdx) return card
         return { ...card, image_fit: fit }
+      })
+      const updated = { ...base, cards: updatedCards }
+      debouncedSave(updated)
+      return updated
+    })
+  }, [activeCardIdx, apiData, debouncedSave])
+
+  const handleImageModeUpdate = useCallback((mode: string) => {
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      const updatedCards = base.cards.map((card, idx) => {
+        if (idx !== activeCardIdx) return card
+        return { ...card, image_mode: mode as Card['image_mode'] }
       })
       const updated = { ...base, cards: updatedCards }
       debouncedSave(updated)
@@ -326,6 +340,8 @@ function EditorPageInner() {
           activeFieldStyle={focusedField ? cards[activeCardIdx]?.field_styles?.[focusedField] : undefined}
           onFieldStyleChange={handleFieldStyleChange}
           onFieldStyleReset={handleFieldStyleReset}
+          currentImageMode={cards[activeCardIdx]?.image_mode ?? 'box'}
+          onImageModeChange={handleImageModeUpdate}
         />
       </div>
 

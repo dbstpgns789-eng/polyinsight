@@ -27,6 +27,8 @@ interface Props {
   activeFieldStyle?: FieldStyle
   onFieldStyleChange: (fieldKey: string, patch: Partial<FieldStyle>) => void
   onFieldStyleReset: (fieldKey: string) => void
+  currentImageMode?: string
+  onImageModeChange: (mode: string) => void
 }
 
 // ── 슬롯 위치 다이어그램 ───────────────────────────────────────────────────
@@ -125,6 +127,7 @@ export default function RightPanel({
   currentFontPairing, onFontPairingChange,
   currentSetKey, onSetChange,
   focusedField, activeFieldStyle, onFieldStyleChange, onFieldStyleReset,
+  currentImageMode, onImageModeChange,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -132,7 +135,7 @@ export default function RightPanel({
   const [openColorRow, setOpenColorRow] = useState<'bg' | 'theme' | null>(null)
 
   const slotMeta = activeCard ? getSlotMeta(activeCard.template_type) : null
-  const hasSlot  = slotMeta?.type !== 'none'
+  const hasSlot = true
   const imageUrl = activeCard?.image_url
 
   useEffect(() => {
@@ -416,6 +419,38 @@ export default function RightPanel({
                       </div>
                     </div>
                   )}
+
+                  {/* image_mode 선택 */}
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 8 }}>
+                      이미지 배치 방식
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      {([
+                        { key: 'box',      label: '박스',     desc: '기존 영역 안에' },
+                        { key: 'backdrop', label: '풀블리드',  desc: '카드 전체 배경' },
+                        { key: 'ghost',    label: '고스트',    desc: '흐릿하게 배경에' },
+                        { key: 'none',     label: '이미지 없음', desc: '텍스트만' },
+                      ] as { key: string; label: string; desc: string }[]).map(({ key, label, desc }) => {
+                        const active = (currentImageMode ?? 'box') === key
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => onImageModeChange(key)}
+                            style={{
+                              padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                              border: active ? '1.5px solid var(--brand)' : '1px solid var(--border-subtle)',
+                              background: active ? 'var(--brand-soft)' : 'var(--canvas)',
+                            }}
+                          >
+                            <div style={{ fontSize: 12, fontWeight: 700, color: active ? 'var(--brand)' : 'var(--ink)' }}>{label}</div>
+                            <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{desc}</div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </>
               )}
             </div>
