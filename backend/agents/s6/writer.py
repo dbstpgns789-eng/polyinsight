@@ -55,7 +55,14 @@ class Writer:
             fields = {k: FieldValue.model_validate(v) for k, v in raw_card.get("fields", {}).items()}
             # 스토리보드가 진실 — 모델이 template_type을 어기면 교정.
             tt = beat_types.get(card_num, raw_card["template_type"])
-            cards.append(CardSlot(card_num=card_num, template_type=tt, fields=fields))
+            raw_mode = raw_card.get("image_mode", "box")
+            safe_mode = raw_mode if raw_mode in {"box", "backdrop", "ghost", "none"} else "box"
+            cards.append(CardSlot(
+                card_num=card_num,
+                template_type=tt,
+                fields=fields,
+                image_mode=safe_mode,
+            ))
 
         meta_out = CardMeta.model_validate(parsed["meta"])
         signals = [MismatchSignal.model_validate(s) for s in parsed.get("mismatch_signals", [])]

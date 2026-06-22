@@ -89,6 +89,17 @@ TEMPLATE_SPEC = """
 - bars 3번째 토큰은 1(강조행, 보통 최댓값/우리 방식) 또는 0.
 - **bars·stats의 '값'은 순수 숫자만** (단위·%·텍스트 금지. 예: "20.78" O / "20.78%"·"우수" X). 막대 너비 계산용.
 - 수치(stat_value·bars·stats)는 원문에서만, source 필수.
+
+[image_mode 선택 — 카드마다 필수]
+각 카드의 "image_mode" 필드를 반드시 출력하라.
+
+  "backdrop" — 사진·현장 이미지가 있고 시각 임팩트가 핵심인 카드 (표지, 강한 훅)
+  "ghost"    — 데이터/수치 카드에 이미지가 있지만 텍스트 가독성이 우선일 때
+  "none"     — 이미지가 없거나 텍스트 전용 카드 (process, reasons, bigstat_compare 등)
+  "box"      — 이미지를 박스 안에 담아 텍스트와 구분할 때 (폴백 기본값)
+
+이미지 없는 카드(bigstat_compare·process_v2·reasons·grid_v2·callout·multistat·definition·compare_table)는 반드시 "none".
+이미지 있는 표지/statement/feature 카드는 "backdrop" 우선 검토.
 """
 
 # ===========================================================================
