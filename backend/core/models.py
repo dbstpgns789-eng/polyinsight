@@ -4,7 +4,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Literal
 
-from pydantic import BaseModel, Field
+import re
+
+from pydantic import BaseModel, Field, field_validator
 
 
 # ---------------------------------------------------------------------------
@@ -34,7 +36,18 @@ class ClaimType(str, Enum):
 
 class FieldSource(BaseModel):
     section: str
-    page: int
+    page: int = 0
+
+    @field_validator("page", mode="before")
+    @classmethod
+    def _coerce_page(cls, v: object) -> int:
+        """LLM이 '1-2', '7, 1, 5' 등 복합 페이지를 문자열로 내보낼 때 첫 번째 정수만 취함."""
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str):
+            m = re.search(r"\d+", v)
+            return int(m.group()) if m else 0
+        return 0
 
 
 class FieldValue(BaseModel):
@@ -217,7 +230,7 @@ class MismatchSignal(BaseModel):
     card_num: int
     mismatch: bool = True
     reason: str
-    suggested_shape: str
+    suggested_shape: str = ""
 
 
 class ArchitectInput(BaseModel):
