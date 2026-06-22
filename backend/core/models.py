@@ -73,6 +73,8 @@ class FieldStyle(BaseModel):
 # Card structure (v2 — variable card count)
 # ---------------------------------------------------------------------------
 
+IMAGE_MODES = {"box", "backdrop", "ghost", "none"}
+
 VALID_TEMPLATE_TYPES = {
     # 구 12 섬 템플릿 (섬 철거 슬라이스 전까지 공존)
     "cover", "hook", "problem", "circle3", "compare2",
@@ -92,6 +94,9 @@ class CardSlot(BaseModel):
     template_type: str                         # VALID_TEMPLATE_TYPES 중 하나
     fields: Dict[str, FieldValue]              # 템플릿 변수명 → grounded 값
     image_url: str | None = None               # 에디터 전용 이미지 슬롯
+    focal: Dict[str, float] | None = None
+    image_fit: str | None = None
+    image_mode: str = "box"                    # 신규. 기본 'box' (하위 호환)
     field_styles: Dict[str, FieldStyle] | None = None   # 요소별 override(선택적)
 
 
