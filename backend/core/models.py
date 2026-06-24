@@ -86,6 +86,10 @@ VALID_TEMPLATE_TYPES = {
     "reasons", "grid_v2", "closing_v2", "bigstat_compare",
     # 확장 레이아웃 (6)
     "definition", "image_hero", "callout", "multistat", "quote", "compare_table",
+    # 확장 레이아웃 (15~30) — docs/23_layout_catalog.md
+    "radar_chart", "tradeoff_matrix", "terminal_block", "timeline", "checklist",
+    "mythbuster", "growth_chart", "ab_split", "funnel", "datapath", "tech_grid",
+    "decision_tree", "ticker", "do_dont", "swipe_bait", "chat",
 }
 
 

@@ -103,6 +103,100 @@ export const CARD_FIELD_SCHEMA: Record<string, FieldSpec[]> = {
     { key: 'rows', shape: 'table_rows', required: true, note: '속성:A값:B값, 2~4행' },
     { key: 'source_ref', shape: 'text', required: false },
   ],
+  // ── 확장 레이아웃 (15~30) — docs/23_layout_catalog.md ──
+  radar_chart: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'axes', shape: 'table_rows', required: true, note: '축라벨:우리값:기존값, 값은 숫자만, 3~6축' },
+    { key: 'source_ref', shape: 'text', required: true, note: '축마다 원문 source 필요' },
+  ],
+  tradeoff_matrix: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'pros', shape: 'pair_array', required: true, note: '제목:본문, 2~3' },
+    { key: 'cons', shape: 'pair_array', required: true, note: '제목:본문, 2~3' },
+  ],
+  terminal_block: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'code', shape: 'text', required: true, note: '모노스페이스 본문, 줄바꿈 허용' },
+    { key: 'lang', shape: 'text', required: false, note: '언어 라벨' },
+  ],
+  timeline: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'events', shape: 'table_rows', required: true, note: '연도:제목:설명, 3~5' },
+  ],
+  checklist: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'items', shape: 'step_array', required: true, note: '항목1|항목2, 3~6' },
+  ],
+  mythbuster: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'pairs', shape: 'pair_array', required: true, note: '오해:진실, 2~3' },
+  ],
+  growth_chart: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'series', shape: 'pair_array', required: true, note: 'x라벨:y값, y는 숫자만, 3~6점' },
+    { key: 'source_ref', shape: 'text', required: true, note: '점마다 원문 source 필요' },
+  ],
+  ab_split: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'variant_a', shape: 'pair_array', required: true, note: '라벨:값 (1쌍)' },
+    { key: 'variant_b', shape: 'pair_array', required: true, note: '라벨:값 (1쌍)' },
+    { key: 'winner', shape: 'text', required: true, note: 'a 또는 b' },
+  ],
+  funnel: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'stages', shape: 'stat_array', required: true, note: '단계:값:단위, 위→아래, 값은 숫자만, 3~5' },
+    { key: 'bottleneck', shape: 'text', required: false, note: '병목 단계명' },
+    { key: 'source_ref', shape: 'text', required: true },
+  ],
+  datapath: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'nodes', shape: 'step_array', required: true, note: '노드1|노드2|...' },
+    { key: 'edges', shape: 'pair_array', required: false, note: 'from:to (선택)' },
+  ],
+  tech_grid: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'items', shape: 'pair_array', required: true, note: '기술명:아이콘ID, 3~6' },
+  ],
+  decision_tree: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'root', shape: 'text', required: true, note: '첫 조건' },
+    { key: 'branches', shape: 'table_rows', required: true, note: '조건:예결과:아니오결과, 1~3' },
+  ],
+  ticker: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'items', shape: 'table_rows', required: true, note: '지표명:값:등락(up|down|flat), 3~6' },
+    { key: 'source_ref', shape: 'text', required: true },
+  ],
+  do_dont: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'dont', shape: 'pair_array', required: true, note: '제목:본문, 1~3' },
+    { key: 'do', shape: 'pair_array', required: true, note: '제목:본문, 1~3' },
+  ],
+  swipe_bait: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: true, note: '*강조*' },
+    { key: 'teaser', shape: 'text', required: true, note: '다음 장 예고 한 줄' },
+    { key: 'cut_items', shape: 'step_array', required: false, note: '잘려 보일 항목들' },
+  ],
+  chat: [
+    { key: 'eyebrow', shape: 'text', required: true },
+    { key: 'headline', shape: 'text', required: false, note: '*강조*' },
+    { key: 'messages', shape: 'pair_array', required: true, note: '발화자:메시지, 발화자는 q/a 또는 이름, 2~5' },
+  ],
 }
 
 export function getFieldSchema(templateType: string): FieldSpec[] {
