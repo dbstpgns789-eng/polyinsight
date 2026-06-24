@@ -143,6 +143,20 @@ function EditorPageInner() {
     })
   }, [activeCardIdx, apiData, debouncedSave])
 
+  const handleVisualKindUpdate = useCallback((kind: string) => {
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      const updatedCards = base.cards.map((card, idx) => {
+        if (idx !== activeCardIdx) return card
+        return { ...card, visual_kind: kind as Card['visual_kind'] }
+      })
+      const updated = { ...base, cards: updatedCards }
+      debouncedSave(updated)
+      return updated
+    })
+  }, [activeCardIdx, apiData, debouncedSave])
+
   const handleReorderCard = useCallback((idx: number, dir: -1 | 1) => {
     const target = idx + dir
     setLocalData((prev) => {
@@ -342,6 +356,8 @@ function EditorPageInner() {
           onFieldStyleReset={handleFieldStyleReset}
           currentImageMode={cards[activeCardIdx]?.image_mode ?? 'box'}
           onImageModeChange={handleImageModeUpdate}
+          currentVisualKind={cards[activeCardIdx]?.visual_kind ?? 'photo'}
+          onVisualKindChange={handleVisualKindUpdate}
         />
       </div>
 

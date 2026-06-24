@@ -387,13 +387,16 @@ interface CardSlot {
   image_url?:  string | null     // 이미지 존 보유 뼈대만. 에디터 업로드 시 채움
   focal?:      { x: number; y: number }  // 이미지 초점(0~1). cover 크롭 위치. 없으면 center
   image_fit?:  'cover' | 'contain'       // 존 안 이미지 맞춤. 기본 cover. contain=통째로(잘림0)
+  image_mode?: 'box' | 'backdrop' | 'ghost' | 'none'  // 이미지 레이어 배치. S6/Writer가 결정(기본 'box'). 코드엔 이미 존재했으나 문서 누락 — 2026-06-24 반영
+  visual_kind?: 'photo' | 'illustration'  // 에셋 종류. 에디터 전용(기본 'photo'). §6.1(docs/18) 참고
   field_styles?: { [fieldKey: string]: FieldStyle }  // 요소별 미세조정(선택적)
 }
 
-// 신 8뼈대(skin/skeleton 디자인 시스템). 상세: docs/18_card_design_system.md
+// 14 레이아웃(skin/skeleton 디자인 시스템, 기본 8 + 확장 6). 상세: docs/18_card_design_system.md
 type TemplateType =
   | 'cover_v2' | 'statement' | 'feature' | 'process_v2'
   | 'bigstat_compare' | 'reasons' | 'grid_v2' | 'closing_v2'
+  | 'definition' | 'image_hero' | 'callout' | 'multistat' | 'quote' | 'compare_table'
 
 interface FieldStyle {
   size?:    'S' | 'M' | 'L' | 'XL'
@@ -407,8 +410,11 @@ interface FieldStyle {
 **에디터 편집 범위**:
 - `fields[*].value` — 텍스트 내용 수정 가능
 - `fields[*].verified` — 확인 완료 버튼으로 true 변경 가능
-- `image_url` — 이미지 존 보유 뼈대(cover_v2·feature·statement·closing_v2)에 업로드
+- `image_url` — 이미지 존 보유 뼈대(cover_v2·feature·statement·closing_v2·image_hero)에 업로드
 - `focal` / `image_fit` — 이미지 초점(클릭)·맞춤(채움/전체) 조정
+- `visual_kind` — 사진/일러스트 전환(RightPanel "에셋 종류"). `illustration`이면 focal 클릭 비활성 +
+  backdrop/ghost 배치 옵션 비활성(일러스트는 항상 box 경로). `image_url`과 동일한 신뢰 모델 —
+  S6/LLM은 절대 설정하지 않는 에디터 전용 필드(fidelity 불변 유지, docs/18 §6.1).
 - `bg_color?: string` — 덱 배경 오버라이드(선택). 미설정=세트 기본. `--set-bg`/`--set-bg-gradient`를 덮음.
 - `accent_color?: string` — 덱 강조 오버라이드(선택). 미설정=세트 기본. `--set-accent`를 덮음.
 - `font_pairing?: string` — 덱 글꼴 오버라이드(선택). 미설정=세트 기본. `--set-font`를 덮음. 레지스트리 키(`pretendard`·`serif`·`gothic_a1`).
@@ -520,6 +526,7 @@ interface ExportStatus {
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-06-24 | v2.5 | `CardSlot.visual_kind?`(사진/일러스트, 에디터 전용) 추가. `image_mode`(기존 코드에 있었으나 문서 누락) 문서화. `TemplateType` 14종 전체 반영(8→14, 드리프트 수정). |
 | 2026-06-08 | v2.4 | CardEditorData에 `bg_color?`/`accent_color?` 덱 오버라이드 추가. `--theme-*` 은퇴 명시. 상세: `docs/18_card_design_system.md §3 덱 단위 오버라이드`. |
 | 2026-06-03 | v2.3 | card_count 상한 15→7 (Haiku 출력 한계 안전권). S6 LLM 출력에서 risk_level·verified 제외 (코드 자동 판정). LLMTruncationError 도입 — 출력 천장 도달 시 ERR-S6-002 즉시 반환. |
 | 2026-06-01 | v2.2 | CardEditorData에 `recommended_theme` / `user_theme` 추가. AI 테마 추천 + 사용자 오버라이드 설계 확정. |

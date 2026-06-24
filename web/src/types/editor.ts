@@ -16,6 +16,7 @@ export interface FieldStyle {
 }
 
 export type ImageMode = 'box' | 'backdrop' | 'ghost' | 'none'
+export type VisualKind = 'photo' | 'illustration'
 
 export interface Card {
   card_num: number
@@ -24,6 +25,7 @@ export interface Card {
   focal?: { x: number; y: number }
   image_fit?: 'cover' | 'contain'
   image_mode?: ImageMode
+  visual_kind?: VisualKind
   fields?: Record<string, FieldValue>
   field_styles?: Record<string, FieldStyle>
 }

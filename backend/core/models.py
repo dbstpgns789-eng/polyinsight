@@ -74,6 +74,7 @@ class FieldStyle(BaseModel):
 # ---------------------------------------------------------------------------
 
 IMAGE_MODES = {"box", "backdrop", "ghost", "none"}
+VISUAL_KINDS = {"photo", "illustration"}
 
 VALID_TEMPLATE_TYPES = {
     # 구 12 섬 템플릿 (섬 철거 슬라이스 전까지 공존)
@@ -97,6 +98,7 @@ class CardSlot(BaseModel):
     focal: Dict[str, float] | None = None
     image_fit: str | None = None
     image_mode: str = "box"                    # 신규. 기본 'box' (하위 호환)
+    visual_kind: str = "photo"                 # 에디터 전용(VISUAL_KINDS). S6/LLM은 설정 안 함
     field_styles: Dict[str, FieldStyle] | None = None   # 요소별 override(선택적)
 
 

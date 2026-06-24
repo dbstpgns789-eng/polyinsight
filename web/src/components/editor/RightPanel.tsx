@@ -29,6 +29,8 @@ interface Props {
   onFieldStyleReset: (fieldKey: string) => void
   currentImageMode?: string
   onImageModeChange: (mode: string) => void
+  currentVisualKind?: string
+  onVisualKindChange: (kind: string) => void
 }
 
 // ── 슬롯 위치 다이어그램 ───────────────────────────────────────────────────
@@ -128,6 +130,7 @@ export default function RightPanel({
   currentSetKey, onSetChange,
   focusedField, activeFieldStyle, onFieldStyleChange, onFieldStyleReset,
   currentImageMode, onImageModeChange,
+  currentVisualKind, onVisualKindChange,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -414,6 +417,36 @@ export default function RightPanel({
                 </div>
               )}
 
+              {/* 에셋 종류 — 사진/일러스트(독립 차원). 일러스트는 크롭(focal) 의미 없음 + 풀블리드 비활성 */}
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 8 }}>
+                  에셋 종류
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  {([
+                    { key: 'photo',        label: '사진',    desc: '초점 클릭으로 크롭' },
+                    { key: 'illustration', label: '일러스트', desc: '아이콘·벡터·도식' },
+                  ] as { key: string; label: string; desc: string }[]).map(({ key, label, desc }) => {
+                    const active = (currentVisualKind ?? 'photo') === key
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => onVisualKindChange(key)}
+                        style={{
+                          padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                          border: active ? '1.5px solid var(--brand)' : '1px solid var(--border-subtle)',
+                          background: active ? 'var(--brand-soft)' : 'var(--canvas)',
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: active ? 'var(--brand)' : 'var(--ink)' }}>{label}</div>
+                        <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{desc}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               {/* image_mode 선택 */}
               <div style={{ marginTop: 16 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 8 }}>
@@ -427,13 +460,19 @@ export default function RightPanel({
                     { key: 'none',     label: '이미지 없음', desc: '텍스트만' },
                   ] as { key: string; label: string; desc: string }[]).map(({ key, label, desc }) => {
                     const active = (currentImageMode ?? 'box') === key
+                    const isIllustration = (currentVisualKind ?? 'photo') === 'illustration'
+                    const disabled = isIllustration && (key === 'backdrop' || key === 'ghost')
                     return (
                       <button
                         key={key}
                         type="button"
+                        disabled={disabled}
                         onClick={() => onImageModeChange(key)}
+                        title={disabled ? '일러스트는 박스/이미지 없음만 지원합니다' : undefined}
                         style={{
-                          padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                          padding: '8px 10px', borderRadius: 8, textAlign: 'left',
+                          cursor: disabled ? 'not-allowed' : 'pointer',
+                          opacity: disabled ? 0.4 : 1,
                           border: active ? '1.5px solid var(--brand)' : '1px solid var(--border-subtle)',
                           background: active ? 'var(--brand-soft)' : 'var(--canvas)',
                         }}

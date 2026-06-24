@@ -3,7 +3,7 @@
 'use client'
 
 import { createContext, useContext, type ReactNode } from 'react'
-import type { ImageMode } from '@/types/editor'
+import type { ImageMode, VisualKind } from '@/types/editor'
 
 const ImageModeContext = createContext<ImageMode>('box')
 
@@ -13,4 +13,15 @@ export function ImageModeProvider({ value, children }: { value: ImageMode; child
 
 export function useImageMode(): ImageMode {
   return useContext(ImageModeContext)
+}
+
+// image_mode와 독립된 차원 — 사진/일러스트. focal 클릭 활성 여부만 갈라치는 용도(docs/18 §6.1).
+const VisualKindContext = createContext<VisualKind>('photo')
+
+export function VisualKindProvider({ value, children }: { value: VisualKind; children: ReactNode }) {
+  return <VisualKindContext.Provider value={value}>{children}</VisualKindContext.Provider>
+}
+
+export function useVisualKind(): VisualKind {
+  return useContext(VisualKindContext)
 }

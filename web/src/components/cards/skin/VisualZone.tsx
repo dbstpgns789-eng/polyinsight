@@ -2,7 +2,7 @@
 // focal/fit는 EditableImage로 위임(클릭 초점 + 채움/전체 토글).
 import EditableImage from '../shared/EditableImage'
 import type { Focal } from '@/lib/focal'
-import { useImageMode } from './imageModeContext'
+import { useImageMode, useVisualKind } from './imageModeContext'
 
 interface VisualZoneProps {
   imageUrl?: string
@@ -20,6 +20,7 @@ export default function VisualZone({
   imageUrl, slotKey, mode, focal, fit, radius = true, onImageRequest, onFocalChange, onFitChange,
 }: VisualZoneProps) {
   const imageMode = useImageMode()
+  const visualKind = useVisualKind()
   // box 모드가 아니면 CardFrame이 이미지를 처리 — 이 박스는 숨긴다
   if (imageMode !== 'box') return null
 
@@ -35,6 +36,7 @@ export default function VisualZone({
         mode={mode}
         objectFit={fit ?? 'cover'}
         focal={focal}
+        visualKind={visualKind}
         onImageRequest={onImageRequest}
         onFocalChange={onFocalChange}
         onFitChange={onFitChange}

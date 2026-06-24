@@ -60,9 +60,11 @@
 주입 지점: `CardFrame`. 레거시 `--theme-*`는 **은퇴**(라이브 렌더 미사용). `theme`/`recommended_theme_key`는
 스키마에 잔존하나 신 카드 렌더는 읽지 않는다. 기본값을 그대로 덮으면 전 카드가 회귀하므로 오버라이드는 반드시 선택적.
 
-## 4. 8 뼈대 — `skeletons/`
+## 4. 14 레이아웃 — `skeletons/`
 
-서사 아키타입(실험형 9 beat)을 생김새로 압축한 8개. 5장=압축, 7장=표준으로 부분집합 사용.
+서사 아키타입(실험형 9 beat)을 생김새로 압축한 기본 8개 + 내용모양 진단으로 고르는 확장 6개.
+5장=압축, 7장=표준으로 부분집합 사용. (이 표는 2026-06-08 작성 당시 "8 뼈대"였으나 이후
+6개가 추가됐는데 문서가 갱신되지 않은 드리프트였음 — 2026-06-24 코드 기준으로 갱신.)
 
 | # | 뼈대 (`template_type`) | beat / 용도 | 이미지 |
 |---|---|---|---|
@@ -74,8 +76,17 @@
 | 6 | `reasons` (Reasons) | 왜 이 소재(세로 근거) | 없음 |
 | 7 | `grid_v2` (Grid) | 응용처(아이콘 격자) | 없음 |
 | 8 | `closing_v2` (Closing) | 마무리·협력 | 존(하단 중앙 밴드) |
+| 9 | `definition` (Definition) | 독자가 모를 핵심 용어 1개 풀이 | 없음 |
+| 10 | `image_hero` (ImageHero) | 논문 그림/도식이 핵심 | 존(주역) |
+| 11 | `callout` (Callout) | 한 문장 강한 강조(중앙) | 없음 |
+| 12 | `multistat` (MultiStat) | 핵심 수치 2~4개 병렬 | 없음 |
+| 13 | `quote` (Quote) | 강한 주장/인용 한 문장 | 없음 |
+| 14 | `compare_table` (CompareTable) | 우리 vs 기존 속성 비교 표 | 없음 |
 
 레지스트리 `cards/index.ts`의 `CARD_COMPONENTS`가 `template_type → 컴포넌트` dispatch.
+각 레이아웃의 필드 명세(매니페스트)는 `web/src/lib/cardFieldSchema.ts` —
+`backend/agents/s6/prompts.py`의 `TEMPLATE_SPEC`을 프론트에서 그대로 미러링한 것(추가 전용,
+타입 강제는 아직 안 함). 둘이 갈라지면 `TEMPLATE_SPEC`이 권위.
 
 ## 5. 피부 컴포넌트 라이브러리 — `skin/` (16개)
 
@@ -113,10 +124,27 @@ AI 제안값 위에 얹는 **토큰-바운드** 부분 스타일. 자유 CSS 아
 이미지는 뼈대 설계의 일부다. **고정된 존에만** 들어가고, 사용자는 "올릴까 말까"만 판단한다
 (업로드만 — AI 생성 금지 = fidelity). 상세: `docs/.../2026-06-07-이미지-통합-심화-v2-design.md`.
 
-- **담긴 존 원칙**: 이미지는 항상 둥근 프레임(`VisualZone`) 안에 담기고 **텍스트는 사진 위에 절대 겹치지 않는다** → readability 보호. 배경 풀블리드 금지.
+- **담긴 존 원칙**: 이미지는 항상 둥근 프레임(`VisualZone`) 안에 담기고 **텍스트는 사진 위에 절대 겹치지 않는다** → readability 보호. 배경 풀블리드 금지(단 `image_mode='backdrop'/'ghost'`는 §3 카드 레벨 예외 — `CardFrame`이 처리, VisualZone과 별개 경로).
+- **이미지 존 보유 레이아웃**: `cover_v2`·`statement`·`feature`·`closing_v2`·`image_hero`(`web/src/lib/imageSlots.ts`의 `IMAGE_SLOT_TYPES`).
 - **무이미지 적응**: `showImage = !!image_url || mode==='edit'`. 이미지 없으면 텍스트가 자리를 채움(빈 박스 0). 에디터에선 점선 드롭존만.
 - **focal(초점)**: `Card.focal{x,y}`(0~1). 편집 모드 이미지 본문 클릭 = 초점 설정(cover 크롭 위치). 우상단 ↻ = 교체. `web/src/lib/focal.ts`.
 - **image_fit(맞춤)**: `Card.image_fit: 'cover'|'contain'`(기본 cover). 좌상단 토글. **contain = 이미지 통째로(잘림 0)** — 도식·그래프에 적합, 외부 사전편집 불필요. focal은 cover에서만 의미.
+
+### 6.1 일러스트 지원 (`visual_kind`)
+
+기존 "일러스트·마스코트 없음" 결정([[project-content-quality-initiative]] LAB_NOTE 절)을
+2026-06-24 박사님이 완화 — 아이콘/벡터/콘텐츠 일러스트/장식을 허용한다. 단 **fidelity 불변은 유지**:
+일러스트는 `image_url`과 동일하게 **에디터 전용(사용자 업로드)** 이다. S6/LLM은 절대 생성·결정하지 않는다.
+
+`image_mode`(S6 결정)·`image_fit`/`focal`(에디터 결정)과 같은 **독립 차원** 패턴을 그대로 따른다:
+
+- `Card.visual_kind?: 'photo' | 'illustration'`(기본 `'photo'`, 에디터 전용 필드)
+- 사진(`photo`): 기존 동작 그대로 — focal 클릭 초점 활성.
+- 일러스트(`illustration`): focal 크롭 개념이 의미 없음(잘림 없는 원본 그대로가 목적) →
+  초점 클릭·십자 표식 비활성. `image_fit`(cover/contain) 토글은 둘 다에서 그대로 유효(독립 차원 유지).
+- UI 제약: `backdrop`/`ghost`(풀블리드 모드)는 일러스트에 의미가 약함(사진 전용 그라디언트 오버레이 가정) →
+  `visual_kind==='illustration'`일 때 RightPanel에서 두 옵션을 비활성화, `box`(VisualZone)만 사용.
+  `CardFrame`은 변경하지 않음 — 일러스트는 항상 기존 `box`/VisualZone 경로로만 렌더된다.
 
 ## 7. 렌더 경로
 
