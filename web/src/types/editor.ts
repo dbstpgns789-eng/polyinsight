@@ -18,6 +18,16 @@ export interface FieldStyle {
 export type ImageMode = 'box' | 'backdrop' | 'ghost' | 'none'
 export type VisualKind = 'photo' | 'illustration'
 
+export interface StockImageResult {
+  id: string
+  provider: 'pexels' | 'unsplash'
+  url: string
+  thumb: string
+  alt: string
+  credit: string
+  credit_url: string
+}
+
 export interface Card {
   card_num: number
   template_type: string

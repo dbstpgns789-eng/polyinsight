@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     SESSION_TTL_HOURS: int = 72         # 세션 쿠키/DB 만료
     COOKIE_SECURE: bool = False         # 프로덕션(HTTPS/터널)에서 True
     RENDER_TOKEN: str = ""              # 내부 렌더(Playwright) 서비스 우회 토큰. 프로덕션 필수.
+    PEXELS_API_KEY: str = ""            # 스톡 이미지 검색(선택). 비우면 해당 provider만 skip.
+    UNSPLASH_ACCESS_KEY: str = ""        # Unsplash Access Key (Secret Key는 OAuth용, 검색에는 불필요)
 
 
 settings = Settings()

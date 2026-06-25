@@ -3,7 +3,8 @@
 import { useRef, useEffect, useState } from 'react'
 import { getSlotMeta } from '@/lib/imageSlots'
 import type { SlotType } from '@/lib/imageSlots'
-import type { Card, FieldStyle } from '@/types/editor'
+import type { Card, FieldStyle, StockImageResult } from '@/types/editor'
+import { searchStockImages } from '@/lib/api'
 import ColorPicker from '@/components/ui/ColorPicker'
 import ElementStyleControls from './ElementStyleControls'
 import { FONT_OPTIONS } from '@/components/cards/fontPairings'
@@ -169,6 +170,32 @@ export default function RightPanel({
     setDragOver(false)
     const file = e.dataTransfer.files?.[0]
     if (file?.type.startsWith('image/')) readFile(file)
+  }
+
+  const [stockOpen, setStockOpen] = useState(false)
+  const [stockQuery, setStockQuery] = useState('')
+  const [stockResults, setStockResults] = useState<StockImageResult[]>([])
+  const [stockLoading, setStockLoading] = useState(false)
+  const [stockError, setStockError] = useState<string | null>(null)
+
+  async function runStockSearch() {
+    if (!stockQuery.trim()) return
+    setStockLoading(true)
+    setStockError(null)
+    try {
+      const results = await searchStockImages(stockQuery.trim())
+      setStockResults(results)
+      if (results.length === 0) setStockError('검색 결과가 없습니다 (또는 스톡 이미지 키가 설정되지 않았습니다)')
+    } catch {
+      setStockError('검색에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setStockLoading(false)
+    }
+  }
+
+  function pickStockImage(result: StockImageResult) {
+    onImageUpdate(result.url)
+    setStockOpen(false)
   }
 
   const toggle = (s: Exclude<Section, null>) => setOpenSection((v) => (v === s ? null : s))
@@ -416,6 +443,62 @@ export default function RightPanel({
                   </div>
                 </div>
               )}
+
+              {/* 스톡 이미지 검색 — 업로드 대안. Pexels/Unsplash 백엔드 프록시 */}
+              <div style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setStockOpen((v) => !v)}
+                  style={{ fontSize: 11, fontWeight: 600, color: 'var(--brand)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  {stockOpen ? '스톡 검색 닫기' : '무료 스톡 이미지에서 검색'}
+                </button>
+                {stockOpen && (
+                  <div style={{ marginTop: 8 }}>
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); runStockSearch() }}
+                      style={{ display: 'flex', gap: 6 }}
+                    >
+                      <input
+                        value={stockQuery}
+                        onChange={(e) => setStockQuery(e.target.value)}
+                        placeholder="검색어 (예: laboratory, microscope)"
+                        style={{ flex: 1, height: 30, borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--canvas)', fontSize: 12, padding: '0 8px', color: 'var(--ink)' }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={stockLoading || !stockQuery.trim()}
+                        style={{ height: 30, padding: '0 12px', borderRadius: 8, border: 'none', background: 'var(--brand)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: stockLoading ? 'wait' : 'pointer', opacity: stockLoading ? 0.7 : 1 }}
+                      >
+                        검색
+                      </button>
+                    </form>
+
+                    {stockError && (
+                      <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 8 }}>{stockError}</p>
+                    )}
+
+                    {stockResults.length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 10 }}>
+                        {stockResults.map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => pickStockImage(r)}
+                            title={`사진: ${r.credit} (${r.provider})`}
+                            style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-subtle)', cursor: 'pointer', padding: 0, height: 72 }}
+                          >
+                            <img src={r.thumb} alt={r.alt} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                            <span style={{ position: 'absolute', bottom: 0, left: 0, right: 0, fontSize: 9, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '2px 4px', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.credit}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* 에셋 종류 — 사진/일러스트(독립 차원). 일러스트는 크롭(focal) 의미 없음 + 풀블리드 비활성 */}
               <div style={{ marginTop: 16 }}>

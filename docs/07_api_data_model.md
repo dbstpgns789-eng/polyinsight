@@ -296,6 +296,44 @@ character: File (PNG)
 
 ---
 
+### 1-6. 이미지 검색 API
+
+---
+
+#### `GET /api/images/search`
+무료 스톡 이미지(Pexels + Unsplash)를 검색해 에디터의 "스톡 검색" 탭에 채운다.
+백엔드가 키를 보유한 프록시 — 클라이언트에 API 키를 노출하지 않는다.
+
+**Request** — query string
+```
+q:        string   (필수, 1~200자) — 검색어
+per_page: integer  (선택, 1~40, 기본 20)
+```
+
+**Response** `200 OK`
+```json
+{
+  "results": [
+    {
+      "id": "pexels_123",
+      "provider": "pexels",
+      "url": "https://...",
+      "thumb": "https://...",
+      "alt": "...",
+      "credit": "사진작가명",
+      "credit_url": "https://..."
+    }
+  ]
+}
+```
+
+**동작 규칙**:
+- `PEXELS_API_KEY` / `UNSPLASH_ACCESS_KEY` 둘 다 비어 있으면 `{"results": []}` 반환 (에러 아님 — 업로드만으로 에디터는 정상 동작, degrade-not-fail).
+- 한쪽 provider가 실패(레이트리밋·네트워크 오류)해도 다른 쪽 결과는 정상 반환 — provider 단위로 격리.
+- `credit`/`credit_url`은 Pexels·Unsplash 라이선스의 저자 표시(attribution) 요건 대응용. 프론트는 표시만 하면 되고, Unsplash의 "다운로드 트리거" 엔드포인트 호출은 아직 미구현(실서비스 트래픽 확대 시 추가 필요 — 알려진 갭).
+
+---
+
 ## 2. 핵심 데이터 모델
 
 ### 2-1. Project (SQLite: `jobs` + `card_data`)
