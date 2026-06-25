@@ -10,9 +10,25 @@ import pymupdf4llm
 import fitz
 
 from .base import BaseAgent
-from ..core.models import PaperMetadata, S1Input, S1Output
+from ..core.models import DegradeCode, DegradeEvent, PaperMetadata, S1Input, S1Output
 
 logger = logging.getLogger(__name__)
+
+
+def build_s1_degrade_events(
+    *, word_count: int, min_word_count: int,
+    section_degraded: bool, parse_fallback: bool,
+) -> list[DegradeEvent]:
+    """S1 degrade 사유를 타입드 이벤트로. EXTRACT_FAILED는 execute()의 빈입력/양쪽실패
+    경로에서 직접 emit(여기 인자에 없음)."""
+    events: list[DegradeEvent] = []
+    if parse_fallback:
+        events.append(DegradeEvent(code=DegradeCode.S1_PARSE_FALLBACK))
+    if word_count < min_word_count:
+        events.append(DegradeEvent(code=DegradeCode.S1_LOW_WORDS, detail=f"{word_count} words"))
+    if section_degraded:
+        events.append(DegradeEvent(code=DegradeCode.S1_NO_SECTIONS))
+    return events
 
 
 def _clean_text(text: str) -> str:
@@ -167,11 +183,13 @@ class S1Extractor(BaseAgent[S1Input, S1Output]):
                 word_count=0,
                 degraded=True,
                 warnings=["empty input bytes"],
+                degrade_events=[DegradeEvent(code=DegradeCode.S1_EXTRACT_FAILED)],
             )
 
         warnings: list[str] = []
         page_map: dict[int, str] = {}
         metadata = PaperMetadata(title=None, authors=[], year=None, doi=None)
+        parse_fallback = False
 
         # 1차: pymupdf4llm (헤더/컬럼/하이픈 자동 처리)
         try:
@@ -184,6 +202,7 @@ class S1Extractor(BaseAgent[S1Input, S1Output]):
         except Exception as exc:
             logger.warning("S1: pymupdf4llm failed (%s), falling back to pdfplumber", exc)
             warnings.append(f"S1: pdfplumber fallback -- pymupdf4llm error: {exc}")
+            parse_fallback = True
             page_map, metadata = _try_pdfplumber(pdf_bytes, warnings)
             if not page_map:
                 return S1Output(
@@ -194,6 +213,7 @@ class S1Extractor(BaseAgent[S1Input, S1Output]):
                     word_count=0,
                     degraded=True,
                     warnings=warnings + ["both pymupdf4llm and pdfplumber failed"],
+                    degrade_events=[DegradeEvent(code=DegradeCode.S1_EXTRACT_FAILED)],
                 )
 
         # PAGE 마커 삽입
@@ -224,6 +244,10 @@ class S1Extractor(BaseAgent[S1Input, S1Output]):
             word_count=word_count,
             degraded=degraded,
             warnings=warnings,
+            degrade_events=build_s1_degrade_events(
+                word_count=word_count, min_word_count=self._MIN_WORD_COUNT,
+                section_degraded=section_degraded, parse_fallback=parse_fallback,
+            ),
         )
 
 
