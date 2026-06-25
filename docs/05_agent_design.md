@@ -477,6 +477,12 @@ verified → 항상 False로 초기화 (사용자가 에디터에서만 True).
 > - 출력 잘림 시 `stop_reason=="max_tokens"` → `LLMTruncationError` → S6가 즉시 중단(재시도 안 함) + `ERR-S6-002`. truncation은 동일 입력·저온이라 재시도해도 같은 위치에서 잘리므로.
 > - 미래 등급제: 상위 모델(Sonnet 4.6, 출력 64K)로 card_count 상한 확장.
 
+> **재시도 분류 (2026-06-25, 비용 누수 차단)**: `_with_retries`는 실패를 둘로 나눈다(`_is_transient`).
+> *일시적*(레이트리밋·5xx·타임아웃)만 백오프 재시도하고, *결정론적*(JSON 파싱·pydantic 검증·
+> 커버리지 ValueError·KeyError)은 **1회만에 fail-fast** → `ERR-S6-001`. 후자는 동일 입력·저온이면
+> 재호출해도 같은 실패라, 5회 재시도 = LLM 비용 5배 순손실. 실 호출 job f666b539·9f4bc0b8가
+> 결정론적 실패(스키마·커버리지)를 5회 재시도해 회당 정상 대비 ~2.5배 비용을 태웠다.
+
 ### 5-5. LLM 호출 설정
 
 ```python
