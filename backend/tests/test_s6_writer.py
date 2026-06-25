@@ -121,6 +121,25 @@ async def test_writer_only_beats_filters_to_targets(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_writer_drops_cards_outside_storyboard(monkeypatch):
+    # 실 호출 job 9f4bc0b8: 스토리보드 6비트인데 Writer가 14장을 써서 커버리지 불일치 →
+    # 재시도 5회 소진 후 ERR-S6-001 사망. Writer는 fields만 채우는 역할이고 카드 수는
+    # 설계팀(Architect) 소유다. 스토리보드 밖 card_num은 월권이므로 드롭한다.
+    extra = json.dumps({
+        "meta": _meta_json(),
+        "cards": [{"card_num": i + 1, "template_type": "feature",
+                   "fields": {"headline": _fv(f"h{i + 1}")}} for i in range(5)],  # 5장 반환
+        "mismatch_signals": [],
+    })
+    _patch(monkeypatch, extra)
+    out = await wr_mod.writer.run(WriterInput(
+        section_map={}, paper_metadata=_meta(),
+        storyboard=_sb(["cover_v2", "multistat", "closing_v2"])))  # 3비트만
+    assert [c.card_num for c in out.cards] == [1, 2, 3]                  # 4,5 드롭
+    assert [c.template_type for c in out.cards] == ["cover_v2", "multistat", "closing_v2"]
+
+
+@pytest.mark.asyncio
 async def test_writer_injects_digest_hints_and_keeps_raw(monkeypatch):
     from backend.core.models import PaperDigest, DigestNumber, FieldSource
     call = _patch(monkeypatch, _cards_json(["cover_v2", "multistat", "closing_v2"]))

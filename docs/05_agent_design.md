@@ -302,6 +302,8 @@ S6 코디네이터는 세 LLM 모듈과 코드 검증을 순서대로 중계한�
 콘텐츠팀 Writer (Haiku, raw 권위 + 다이제스트 힌트) — s6/writer.py
   Step 3 WRITE     : storyboard 비트별로 fields를 원문에서 추출·재작성(가독성 규칙).
                      cards[n].template_type == beats[n].template_type 강제.
+                     카드 수는 설계팀 소유 — 스토리보드 밖 card_num은 Writer 월권이므로
+                     드롭한다(실 호출 job 9f4bc0b8: 6비트→14장 커버리지 사망 회귀).
                      뼈대에 grounded 내용이 안 맞으면 mismatch_signals로 보고(억지 생성 금지).
 
 피드백 루프 (코디네이터, 1회 상한) — s6_card_json.py

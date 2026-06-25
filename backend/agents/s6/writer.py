@@ -47,11 +47,15 @@ class Writer:
         parsed = json.loads(extract_json(raw))
 
         beat_types = {b.card_num: b.template_type for b in inp.storyboard.beats}
+        # 허용 card_num: 부분 재작성이면 only, 아니면 스토리보드 비트 전체.
+        # 카드 수는 설계팀(Architect) 소유 — Writer가 스토리보드 밖 카드를 지어내면(월권)
+        # 드롭한다. 실 호출 job 9f4bc0b8(6비트→14장)가 이 누락으로 ERR-S6-001 사망했다.
+        allowed = only if only else set(beat_types)
         cards: list[CardSlot] = []
         for raw_card in parsed.get("cards", []):
             card_num = raw_card["card_num"]
-            if only and card_num not in only:
-                continue                                  # 부분 재작성: 대상만
+            if card_num not in allowed:
+                continue                                  # 스토리보드 밖 / 부분 재작성 비대상
             fields = {k: FieldValue.model_validate(v) for k, v in raw_card.get("fields", {}).items()}
             # 스토리보드가 진실 — 모델이 template_type을 어기면 교정.
             tt = beat_types.get(card_num, raw_card["template_type"])
