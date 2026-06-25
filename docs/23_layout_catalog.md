@@ -288,4 +288,31 @@
 | Date | Change |
 |------|--------|
 | 2026-06-24 | 최초 작성. 기존 14 전사 + 신규 16 명세화(🟡 11 / 🔴 5). 7컬럼 스키마·전사 운영규칙 확정. |
-| 2026-06-24 | 신규 16 **전부 구현 완료**. 피부 15개 + 뼈대 16개 신설, CARD_COMPONENTS·cardFieldSchema·prompts.py(3블록)·VALID_TEMPLATE_TYPES 전사. tsc·eslint·vitest(49)·pytest(17) 통과, 16개 시각검증(`debug_screenshots/layout_catalog/`). 전 레이아웃 ✅. |
+| 2026-06-24 | 신규 16 **전부 구현 완료**. 피부 15개 + 뼈대 16개 신설, CARD_COMPONENTS·cardFieldSchema·prompts.py(3블록)·VALID_TEMPLATE_TYPES 전사. tsc·eslint·vitest(49)·pytest(17) 통과, 16개 시각검증(`debug_screenshots/layout_catalog/`). 전 레이아웃 ✅. 커밋 c6d8726(feat/layout-catalog). |
+| 2026-06-24 | **프로덕션 첫 관찰** (실호출 job db19ada1, 신규 프롬프트 적용 후 16:32 KST). 셀룰로오스 미세구슬 논문 7장 → 선택된 레이아웃: cover_v2·statement·process_v2·multistat·definition·compare_table·closing_v2. **신규 16개 중 0개 선택.** 해석: 이 논문은 고전+확장6에 잘 맞아 "맞을 때만" 원칙상 정당하나, 신규 16의 *실제 선택 가능성은 아직 미검증*. radar_chart가 될 수 있던 자리(다축 비교)를 compare_table로 감 — 트리거 강화 또는 적합 논문 타깃 테스트 필요. (§6 참조) |
+
+---
+
+## 6. 프로덕션 관찰 — 신규 레이아웃 선택률 (미해결)
+
+**문제**: 신규 16개는 빌드·시각검증을 통과했지만, 실호출(job db19ada1)에서 뇌(Architect)가
+하나도 고르지 않았다. "구현됨 ≠ 사용됨".
+
+**진단 — 두 가지가 섞여 있다**:
+1. **정당한 보수성**: 셀룰로오스 미세구슬 논문은 고전 서사(문제→공정→성능→정리)에 잘 맞고,
+   `multistat`/`definition`/`compare_table`(확장6)을 이미 쓰고 있다. 억지로 신규를 끼우지 않는 것은
+   SEQUENCING_RULES의 "맞을 때만" 원칙이 작동하는 것이다 — 이 자체는 옳다.
+2. **미검증 위험**: 그럼에도 *분명한 후보 자리*가 있었다 — 6번 카드는 압축강도/유연/생분해를
+   우리 vs 셀룰로오스 vs PP로 비교하는 다축 데이터다(=`radar_chart` 적격). 뇌는 `compare_table`을 골랐다.
+   정확 수치 표시엔 compare_table이 낫다는 판단일 수도 있으나, 신규 레이아웃이 *선택지에 실제로 올라오는지*는
+   이 한 번으로 증명되지 않았다.
+
+**다음 검증 액션(택1)**:
+- (A) **적합 논문 타깃 테스트**: 한계(tradeoff_matrix)·related work(timeline)·다축(radar)·오해(mythbuster)가
+  뚜렷한 논문 1편으로 실호출 → 뇌가 신규를 고르는지 확인. *가장 깨끗한 증명*.
+- (B) **트리거 강화**: SEQUENCING_RULES에서 신규 레이아웃 우선순위를 명시(예: "다축 수치 비교는
+  compare_table보다 radar_chart 우선 검토"). 단, 과적합 위험 — 고전이 더 나은 자리까지 신규로 끌면 품질 저하.
+- (C) **A/B 게이트**: [[project_multiagent_s6]]의 게이트 방식으로 동일 논문에 신규 허용/금지 두 버전을 비교.
+
+**권장**: (A) 먼저. 트리거를 만지기(B) 전에, 뇌가 *고를 수 있는데 안 고르는지* vs *고를 자리가 없는지*를
+먼저 가른다. 실 API 비용 발생이므로 사전 허락 필요([[feedback_ask_before_paid]]).
