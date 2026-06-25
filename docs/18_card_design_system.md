@@ -5,6 +5,14 @@
 > 배경/근거: `docs/superpowers/specs/2026-06-05-카드-디자인-시스템-design.md`,
 > 이미지: `docs/superpowers/specs/2026-06-07-이미지-통합-심화-v2-design.md`.
 
+> **★ 2026-06-24 어휘 개정 (이 문서의 "세트" 용어 갱신 중)**:
+> - "세트(set)" → **"템플릿(template)"** 으로 리네임. 유저가 고르는 *덱 전체 비주얼 월드*.
+>   코드: `CardSet`→`Template`, `set_key`→`template_key`, `sets.ts`→`templates.ts`, `getSet`→`getTemplate`.
+> - 토큰만 가졌던 빈 5세트(report_light/editorial_light/warm_editorial/dark_tech/deep_teal) **삭제**.
+>   출시 가능한 템플릿은 **lab_note 하나뿐**(기본값). #2·#3은 lab_note를 본으로 추가.
+> - 주의: 카드별 `template_type` 필드는 이름과 달리 **"레이아웃"**(docs/23)을 가리킨다. 향후 `layout_type`로 리네임 예정(tech-debt).
+> - 어휘 정본: docs/23 + 메모리 `reference_design_vocabulary`. 아래 본문의 "세트"는 "템플릿"으로 읽을 것.
+
 ---
 
 ## 1. 왜 이 구조인가 (Problem)

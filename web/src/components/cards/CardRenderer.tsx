@@ -9,7 +9,7 @@ import CardFrame from './CardFrame'
 import { CARD_COMPONENTS } from './index'
 import { FieldStylesProvider } from './skin/fieldStyleContext'
 import { ImageModeProvider, VisualKindProvider } from './skin/imageModeContext'
-import { getSet } from './skin/sets'
+import { getTemplate } from './skin/templates'
 import type { ImageMode } from '@/types/editor'
 import type { CardComponentProps } from './types'
 
@@ -18,10 +18,10 @@ interface CardRendererProps extends CardComponentProps {
   bgColor?: string
   accentColor?: string
   fontPairing?: string
-  setKey?: string
+  templateKey?: string
 }
 
-export default function CardRenderer({ scale = 1, bgColor, accentColor, fontPairing, setKey, ...props }: CardRendererProps) {
+export default function CardRenderer({ scale = 1, bgColor, accentColor, fontPairing, templateKey, ...props }: CardRendererProps) {
   const { card } = props
   const Component = CARD_COMPONENTS[card.template_type]
   const imageMode: ImageMode = card.image_mode ?? 'box'
@@ -32,7 +32,7 @@ export default function CardRenderer({ scale = 1, bgColor, accentColor, fontPair
       <ImageModeProvider value={imageMode}>
         <VisualKindProvider value={visualKind}>
           <CardFrame
-            set={getSet(setKey)}
+            template={getTemplate(templateKey)}
             bgColor={bgColor}
             accentColor={accentColor}
             fontPairing={fontPairing}

@@ -8,7 +8,7 @@ import { searchStockImages } from '@/lib/api'
 import ColorPicker from '@/components/ui/ColorPicker'
 import ElementStyleControls from './ElementStyleControls'
 import { FONT_OPTIONS } from '@/components/cards/fontPairings'
-import { SET_OPTIONS } from '@/components/cards/skin/sets'
+import { TEMPLATE_OPTIONS } from '@/components/cards/skin/templates'
 
 interface Props {
   activeCard?: Card
@@ -22,8 +22,8 @@ interface Props {
   onBgColorChange: (hex: string) => void
   currentFontPairing?: string
   onFontPairingChange: (key: string) => void
-  currentSetKey?: string
-  onSetChange: (key: string) => void
+  currentTemplateKey?: string
+  onTemplateChange: (key: string) => void
   focusedField?: string | null
   activeFieldStyle?: FieldStyle
   onFieldStyleChange: (fieldKey: string, patch: Partial<FieldStyle>) => void
@@ -128,7 +128,7 @@ export default function RightPanel({
   currentAccent, recommendedThemeKey, onAccentColorChange,
   bgColor, onBgColorChange,
   currentFontPairing, onFontPairingChange,
-  currentSetKey, onSetChange,
+  currentTemplateKey, onTemplateChange,
   focusedField, activeFieldStyle, onFieldStyleChange, onFieldStyleReset,
   currentImageMode, onImageModeChange,
   currentVisualKind, onVisualKindChange,
@@ -251,18 +251,18 @@ export default function RightPanel({
 
         {divider}
 
-        {/* §0.5 — 스타일 세트 (덱 단위) */}
+        {/* §0.5 — 템플릿 (덱 비주얼 월드) */}
         <section>
-          <AccordionHead label="스타일 세트" open={openSection === 'set'} onToggle={() => toggle('set')} />
+          <AccordionHead label="템플릿" open={openSection === 'set'} onToggle={() => toggle('set')} />
           {openSection === 'set' && (
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {SET_OPTIONS.map((opt) => {
-                const active = (currentSetKey ?? 'report_light') === opt.key
+              {TEMPLATE_OPTIONS.map((opt) => {
+                const active = (currentTemplateKey ?? 'lab_note') === opt.key
                 return (
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => onSetChange(opt.key)}
+                    onClick={() => onTemplateChange(opt.key)}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
                       padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',

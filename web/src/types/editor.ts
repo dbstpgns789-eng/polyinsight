@@ -52,7 +52,7 @@ export interface CardDataPayload {
   bg_color?: string
   accent_color?: string
   font_pairing?: string
-  set_key?: string
+  template_key?: string
 }
 
 export interface ApiResponse {

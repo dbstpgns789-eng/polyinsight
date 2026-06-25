@@ -7,8 +7,10 @@
 
 import { type CSSProperties, type ReactNode } from 'react'
 import styles from './cards.module.css'
-import { REPORT_LIGHT_SET, type CardSet } from './skin/sets'
+import { DEFAULT_TEMPLATE, type Template } from './skin/templates'
 import { FONT_PAIRINGS } from './fontPairings'
+import NoteBadge from './skin/NoteBadge'
+import TickFrame from './skin/TickFrame'
 import type { ImageMode } from '@/types/editor'
 
 const CARD_SIZE = 1080
@@ -18,14 +20,15 @@ interface CardFrameProps {
   accentColor?: string        // 덱 강조 오버라이드. 미설정 시 세트 기본(--set-accent)
   fontPairing?: string        // 덱 글꼴 오버라이드(레지스트리 키). 미설정 시 세트 기본(--set-font)
   scale?: number              // 1 = 1080px 원본, 0.5 = 540px 표시
-  set?: CardSet               // 피부 토큰(--set-*) 주입. 기본 에디토리얼 라이트.
+  template?: Template         // 템플릿 토큰(--set-*) 주입. 기본 lab_note.
+  cardNum?: number            // template.badge 렌더용(예: lab_note의 "Note 03")
   imageUrl?: string           // 이미지 URL. imageMode가 'backdrop'/'ghost'일 때 렌더
   imageMode?: ImageMode       // 이미지 레이어 모드. 기본 'box'
   children: ReactNode
   className?: string
 }
 
-export default function CardFrame({ bgColor, accentColor, fontPairing, scale = 1, set = REPORT_LIGHT_SET, imageUrl, imageMode = 'box', children, className }: CardFrameProps) {
+export default function CardFrame({ bgColor, accentColor, fontPairing, scale = 1, template = DEFAULT_TEMPLATE, cardNum = 1, imageUrl, imageMode = 'box', children, className }: CardFrameProps) {
   // Wrapper는 시각적 크기 (scaled). overflow:hidden으로 inner의 layout overflow를 클립.
   const wrapperStyle: CSSProperties = {
     width: CARD_SIZE * scale,
@@ -45,7 +48,7 @@ export default function CardFrame({ bgColor, accentColor, fontPairing, scale = 1
 
   // Inner는 1080×1080 원본. 세트 토큰 주입 후 덱 오버라이드를 --set-* 위에 선택적으로 덮음.
   const innerStyle: CSSProperties = {
-    ...set.tokens,                 // --set-* 피부 토큰 주입
+    ...template.tokens,            // --set-* 템플릿 토큰 주입
     ...(bgColor ? { '--set-bg': bgColor, '--set-bg-gradient': bgColor } : {}),
     ...(accentColor ? { '--set-accent': accentColor } : {}),
     ...(fontPairing && FONT_PAIRINGS[fontPairing] ? { '--set-font': FONT_PAIRINGS[fontPairing] } : {}),
@@ -105,6 +108,10 @@ export default function CardFrame({ bgColor, accentColor, fontPairing, scale = 1
         <div style={{ position: 'relative', zIndex: 2, width: '100%', height: '100%' }}>
           {children}
         </div>
+
+        {/* ── 템플릿 시그니처 컴포넌트 — template.badge/frame 정의된 템플릿만(예: lab_note) ── */}
+        {template.badge && <NoteBadge cardNum={cardNum} labelPrefix={template.badge.labelPrefix} />}
+        {template.frame && <TickFrame count={template.frame.tickCount} />}
       </div>
     </div>
   )

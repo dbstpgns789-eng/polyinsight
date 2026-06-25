@@ -1,5 +1,5 @@
-export { DEEP_TEAL_SET, setTokenStyle } from './sets'
-export type { CardSet, SetTokens } from './sets'
+export { LAB_NOTE_TEMPLATE, DEFAULT_TEMPLATE, getTemplate, templateTokenStyle, TEMPLATE_OPTIONS } from './templates'
+export type { Template, TemplateTokens, TemplateOption } from './templates'
 export { parseEmphasis, parseCompareRows, rowsToRaw, parsePairs, pairsToRaw, compareBarValue, parseStats, statsToRaw, parseTableRows, tableRowsToRaw } from './parse'
 export type { CompareRow, Pair, StatItem, TableRow } from './parse'
 export { default as CardSurface } from './CardSurface'
