@@ -66,13 +66,36 @@ def format_report(agg: dict) -> str:
     return "\n".join(lines)
 
 
-def run_mode_a(corpus_dir: str, workers: int = 4, maxtasks: int = 10) -> list[dict]:
-    """폴더의 모든 PDF를 프로세스 격리 Pool로 S1 측정. maxtasksperchild로 fitz OOM 회피."""
+def _profile_safe(pdf_path: str) -> dict:
+    """profile_one을 에러 격리로 감쌈 — 한 편이 깨져도 배치 전체를 죽이지 않는다."""
+    try:
+        return profile_one(pdf_path)
+    except Exception as exc:
+        return {"file": Path(pdf_path).name, "codes": ["harness_error"],
+                "columns": 0, "journal_family": f"ERROR:{type(exc).__name__}"}
+
+
+def run_mode_a(corpus_dir: str, workers: int = 4, maxtasks: int = 10,
+               progress: bool = False) -> list[dict]:
+    """폴더의 모든 PDF를 S1 측정. workers<=1=순차(Windows multiprocessing 우회),
+    그 외=프로세스 격리 Pool(maxtasksperchild로 fitz OOM 회피). 진행상황 stderr."""
     paths = [str(p) for p in sorted(Path(corpus_dir).glob(_PDF_GLOB))]
     if not paths:
         return []
-    with Pool(processes=workers, maxtasksperchild=maxtasks) as pool:
-        return pool.map(profile_one, paths)
+    rows: list[dict] = []
+    total = len(paths)
+    if workers <= 1:
+        for i, p in enumerate(paths, 1):
+            rows.append(_profile_safe(p))
+            if progress:
+                print(f"  [{i}/{total}] {Path(p).name}", file=sys.stderr, flush=True)
+    else:
+        with Pool(processes=workers, maxtasksperchild=maxtasks) as pool:
+            for i, row in enumerate(pool.imap_unordered(_profile_safe, paths), 1):
+                rows.append(row)
+                if progress:
+                    print(f"  [{i}/{total}] {row['file']}", file=sys.stderr, flush=True)
+    return rows
 
 
 def main() -> None:
@@ -93,7 +116,7 @@ def main() -> None:
         print("Mode B(full)는 유료 — Plan 2에서 구현. 지금은 --stage s1만.", file=sys.stderr)
         sys.exit(2)
 
-    rows = run_mode_a(args.corpus, workers=args.workers)
+    rows = run_mode_a(args.corpus, workers=args.workers, progress=True)
     print(format_report(aggregate(rows)))
 
 
