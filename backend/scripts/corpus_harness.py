@@ -4,12 +4,18 @@
 오프라인 개발 도구 — 웹/프로덕션과 무관."""
 from __future__ import annotations
 
+import argparse
 import asyncio
+import sys
+from collections import Counter, defaultdict
+from multiprocessing import Pool
 from pathlib import Path
 
 from backend.agents.s1_extractor import s1_agent
 from backend.core.models import S1Input
 from backend.scripts.input_profile import build_input_profile
+
+_PDF_GLOB = "*.pdf"
 
 
 def profile_one(pdf_path: str) -> dict:
@@ -23,3 +29,73 @@ def profile_one(pdf_path: str) -> dict:
         "columns": profile["columns"],
         "journal_family": profile["journal_family"],
     }
+
+
+def aggregate(rows: list[dict]) -> dict:
+    """rows → code별 카운트 + (degrade code × input_profile) 교차표."""
+    by_code: Counter = Counter()
+    crosstab: dict[str, Counter] = defaultdict(Counter)
+    files_by_code: dict[str, list[str]] = defaultdict(list)
+    clean = 0
+    for r in rows:
+        if not r["codes"]:
+            clean += 1
+        for code in r["codes"]:
+            by_code[code] += 1
+            crosstab[code][(str(r["columns"]), r["journal_family"])] += 1
+            files_by_code[code].append(r["file"])
+    return {
+        "total": len(rows),
+        "clean": clean,
+        "by_code": dict(by_code),
+        "crosstab": {k: dict(v) for k, v in crosstab.items()},
+        "files_by_code": dict(files_by_code),
+    }
+
+
+def format_report(agg: dict) -> str:
+    lines = [f"=== S1 견고성 리포트 ({agg['total']}편) ==="]
+    parts = [f"{c} {n}" for c, n in sorted(agg["by_code"].items())]
+    lines.append("code별: " + " / ".join(parts) + f" / 정상 {agg['clean']}")
+    for code, cells in agg["crosstab"].items():
+        lines.append(f"\n{code} × input_profile (← 핀셋 대상):")
+        for (cols, journal), n in sorted(cells.items(), key=lambda kv: -kv[1]):
+            lines.append(f"  columns={cols} · journal={journal} : {n}편")
+        sample = agg["files_by_code"][code][:5]
+        lines.append("  예: " + ", ".join(sample))
+    return "\n".join(lines)
+
+
+def run_mode_a(corpus_dir: str, workers: int = 4, maxtasks: int = 10) -> list[dict]:
+    """폴더의 모든 PDF를 프로세스 격리 Pool로 S1 측정. maxtasksperchild로 fitz OOM 회피."""
+    paths = [str(p) for p in sorted(Path(corpus_dir).glob(_PDF_GLOB))]
+    if not paths:
+        return []
+    with Pool(processes=workers, maxtasksperchild=maxtasks) as pool:
+        return pool.map(profile_one, paths)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="코퍼스 견고성 하니스")
+    ap.add_argument("--stage", choices=["s1"], default="s1",
+                    help="s1=무료 whack-a-mole(Mode A). full(Mode B)은 Plan 2.")
+    ap.add_argument("--corpus", required=True, help="PDF 폴더 경로")
+    ap.add_argument("--workers", type=int, default=4)
+    args = ap.parse_args()
+
+    for stream in (sys.stdout, sys.stderr):   # Windows cp949 콘솔 유니코드 방지
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
+    if args.stage != "s1":
+        print("Mode B(full)는 유료 — Plan 2에서 구현. 지금은 --stage s1만.", file=sys.stderr)
+        sys.exit(2)
+
+    rows = run_mode_a(args.corpus, workers=args.workers)
+    print(format_report(aggregate(rows)))
+
+
+if __name__ == "__main__":
+    main()

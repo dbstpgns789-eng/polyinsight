@@ -39,3 +39,25 @@ def test_profile_one_returns_serializable_row(monkeypatch, tmp_path):
     # 직렬화 가능(enum 아님 — Pool 전송 안전)
     import json
     json.dumps(row)
+
+
+def test_aggregate_counts_codes_and_crosstab():
+    rows = [
+        {"file": "a.pdf", "codes": ["s1_no_sections"], "columns": 2, "journal_family": "Elsevier"},
+        {"file": "b.pdf", "codes": ["s1_no_sections"], "columns": 2, "journal_family": "Elsevier"},
+        {"file": "c.pdf", "codes": [], "columns": 1, "journal_family": "arXiv"},
+    ]
+    agg = harness.aggregate(rows)
+    assert agg["total"] == 3
+    assert agg["clean"] == 1
+    assert agg["by_code"]["s1_no_sections"] == 2
+    # 교차표: NO_SECTIONS가 (columns=2, Elsevier)에 2건
+    assert agg["crosstab"]["s1_no_sections"][("2", "Elsevier")] == 2
+
+
+def test_format_report_is_nonempty_text():
+    rows = [{"file": "a.pdf", "codes": ["s1_no_sections"], "columns": 2, "journal_family": "Elsevier"}]
+    report = harness.format_report(harness.aggregate(rows))
+    assert "s1_no_sections" in report
+    assert "Elsevier" in report
+    assert "a.pdf" in report
