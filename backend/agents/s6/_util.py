@@ -1,9 +1,32 @@
 """S6 모듈 공유 유틸 — Architect/Writer/코디네이터가 함께 쓰는 순수 함수."""
 from __future__ import annotations
 
+import contextlib
+import logging
 import re
 
+logger = logging.getLogger(__name__)
+
 SECTION_MAX_CHARS = 50000
+RAW_LOG_CHARS = 3000
+
+
+@contextlib.contextmanager
+def log_raw_on_parse_error(stage: str, raw: str):
+    """파싱/검증 실패 시 LLM 원본 응답을 로그에 남기고 재-raise.
+
+    결정론적 실패는 fail-fast(재시도 안 함)라 raw가 사라지면 재현이 불가능하다.
+    실제 논문을 돌려야만 드러나는 에러(예: 모델이 못 채운 필드를 어떻게 인코딩하는지)를
+    다음 디버깅에서 확인하려면 원본이 반드시 필요하다 — 앞 RAW_LOG_CHARS자를 남긴다.
+    """
+    try:
+        yield
+    except Exception as exc:
+        logger.error(
+            "S6 %s 파싱/검증 실패 (%s) — raw 응답[:%d]:\n%s",
+            stage, type(exc).__name__, RAW_LOG_CHARS, (raw or "")[:RAW_LOG_CHARS],
+        )
+        raise
 
 
 def format_section_map(section_map: dict[str, str], max_chars: int = SECTION_MAX_CHARS) -> str:

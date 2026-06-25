@@ -6,8 +6,31 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parents[2]))
 
-from backend.agents.s6._util import extract_json, format_section_map
+import logging
+
+import pytest
+
+from backend.agents.s6._util import extract_json, format_section_map, log_raw_on_parse_error
 from backend.agents.s6 import prompts
+
+
+def test_log_raw_on_parse_error_logs_raw_and_reraises(caplog):
+    # 결정론적 실패는 fail-fast(재시도 안 함)라, raw가 로그에 안 남으면 다음 디버깅에서
+    # 재현이 불가능하다. 파싱 실패 시 원본 응답을 ERROR 로그에 남기고 그대로 재-raise한다.
+    raw = '{"meta": {"dept": {"value": "x", "source": MALFORMED}}}'
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(ValueError):
+            with log_raw_on_parse_error("Writer", raw):
+                raise ValueError("boom")
+    assert "Writer" in caplog.text
+    assert "MALFORMED" in caplog.text          # 원본이 로그에 보존됨
+
+
+def test_log_raw_on_parse_error_passthrough_on_success():
+    # 성공 경로는 그대로 통과(로깅 없음).
+    with log_raw_on_parse_error("Writer", "{}"):
+        result = 42
+    assert result == 42
 
 
 def test_extract_json_strips_codefence():
