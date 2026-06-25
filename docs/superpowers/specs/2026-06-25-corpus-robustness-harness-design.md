@@ -64,6 +64,11 @@ PolyInsight은 결국 **모든 저널에서 발행된 논문**을 입력으로 �
 - 한 스크립트, 플래그 분기. **기본은 모드 A(무료)**. 모드 B는 실 LLM 호출이라
   **항상 사전 허락**([[feedback_ask_before_paid]]) — 스크립트가 실행 전 확인/명시 요구.
 - S7(렌더)은 측정 대상 아님(우리 JSON 렌더 → 야생 민감도 낮음). 모드 B도 S6까지만.
+- **OOM 안정장치**: pymupdf4llm/fitz는 C레벨 할당이라 85편 단일 프로세스 루프 시 메모리가
+  우상향 → 40편쯤 OOM으로 배치 전체가 튕길 수 있다. **`gc.collect()`만으론 native 메모리를
+  회수 못 함**(파이썬 GC 관할 밖). → **`multiprocessing.Pool(maxtasksperchild=N)`로 워커
+  프로세스를 N편마다 재활용**(프로세스 종료 시 OS가 메모리 통째 회수). 오프라인 배치라 스폰
+  오버헤드 감수.
 
 ---
 
@@ -102,8 +107,17 @@ class DegradeEvent(BaseModel):
 - 카드-로컬 실패(Writer 루프의 특정 카드 필드 검증)는 그 순간 `beat_types[card_num]`로
   layout을 안다 → 태깅. 덱-전역 실패(커버리지·meta·전체 JSON)는 layout=None, code 자체가
   자기-위치설명.
-- **필드 추가 금지(미니멀)**: `severity`·`timestamp` 등 미리 X. `code`+`layout`+`detail`이면
-  v1 충분, 필요해지면 그때(박사님 "미리 방어 금지" 철학).
+- **S1 집계축은 별도 차원**: S1 실패(NO_SECTIONS 등)엔 카드 layout이 없다(layout=None).
+  S1 취약성은 *입력 문서 물성*으로 묶어야 핀셋 가치가 산다. 하니스가 **논문당 1회** 결정론
+  계산하는 `input_profile{columns, journal_family}`를 둔다 — `columns`=pdfplumber 단어 x좌표
+  군집(2봉우리=2단), `journal_family`=DOI 접두사(10.1016=Elsevier, 10.1002=Wiley… 없으면
+  unknown). 이벤트가 아니라 *논문* 속성이므로 degrade_events가 아닌 **논문 레벨 메타**.
+  모드 A는 `GROUP BY input_profile`. ← S6의 `layout`축과 **별개 차원**. (자유텍스트 `detail`에
+  안 넣음 — string-ly typed 집계 부활 방지.)
+- **severity는 필드가 아니라 코드 분류**: `HARD_CODES = {S6_TRUNCATED, S6_SCHEMA_INVALID,
+  S6_COVERAGE_MISMATCH, S1_EXTRACT_FAILED}` 모듈 상수. DegradeEvent엔 필드 안 늘림(미니멀 유지).
+  hard 코드가 하나라도 있으면 §7에서 short-circuit FAIL.
+- **그 외 필드 추가 금지(미니멀)**: `timestamp` 등 미리 X. `code`+`layout`+`detail`이면 v1 충분.
 
 ---
 
@@ -136,20 +150,22 @@ class DegradeEvent(BaseModel):
 
 ## 6. Component — 모드 A 리포트 (whack-a-mole)
 
-S1만 85편 실행 → `degrade_events` 집계:
+S1만 85편 실행 → `degrade_events` 집계 + **`input_profile` 교차표**(어느 조판/저널이 범인인지):
 
 ```
 === S1 견고성 리포트 (85편) ===
-EXTRACT_FAILED   : 3편  [scan_a.pdf, scan_b.pdf, ...]
-NO_SECTIONS      : 14편 [2단 조판 다수 — 저널별]
-LOW_WORDS        : 2편
-정상(섹션 추출됨) : 66편 (78%)
+code별:  EXTRACT_FAILED 3 / NO_SECTIONS 14 / LOW_WORDS 2 / 정상 66 (78%)
+
+NO_SECTIONS 14편 × input_profile (← 핀셋 대상이 여기서 드러남):
+  columns=2 · journal=Elsevier : 9편  ← 2단 Elsevier 파서가 최약점
+  columns=2 · journal=Wiley    : 3편
+  columns=1 · journal=unknown  : 2편
 --- 파일별 상세 ---
-1-s2.0-S2666...  : NO_SECTIONS  (Elsevier 2단)
+1-s2.0-S2666...  : NO_SECTIONS  (columns=2, journal=Elsevier)
 ...
 ```
 
-목적: "어느 조판/저널에서 섹션파싱이 가장 많이 깨지나"를 데이터로 보고 **핀셋 수정**.
+목적: "어느 *조판/저널*에서 섹션파싱이 가장 많이 깨지나"를 `input_profile`로 데이터화 → **핀셋 수정**.
 $0이므로 파서 고칠 때마다 무한 반복 실행.
 
 ---
@@ -162,17 +178,27 @@ $0이므로 파서 고칠 때마다 무한 반복 실행.
 
 **모드 B는 골든 논문당 3결과를 구분**(오늘 fail-fast 도입 이후 하드 실패는 *예외*로 옴):
 1. **예외 raise**(ERR-S6-001/002 등 하드 실패: 스키마·커버리지·truncation) → `code`로 환원해 **failure** 기록. 출력 없음 → 불변식 검증 생략.
-2. **반환 + degrade_events 존재**(soft degrade: safe_fallback→callout 등) → degrade 기록 + 불변식 검증.
+2. **반환 + degrade_events 존재** → **hard 코드(`HARD_CODES` §4)가 하나라도 있으면 즉시 FAIL**
+   (카드수·다양성 만족과 무관 — 잘렸는데/스키마 깨졌는데 앞부분만으로 통과하는 오판 방지,
+   short-circuit). soft 코드만(safe_fallback→callout 등)이면 degrade 기록 후 불변식 검증 진행.
 3. **반환 + clean** → 아래 4층 불변식 검증.
+
+> 현재 truncation은 outcome 1(예외 raise)이라 이 short-circuit은 *지금* 발동하진 않는다 —
+> 미래에 truncation을 soft(부분덱 보존)로 재분류할 때를 대비한 보험 + outcome-2 모호함 제거.
 
 **v1 판정 = 4층 결정론적 불변식** (전부 LLM-judge 불필요):
 
 | 층 | 불변식 | 막는 허점 |
 |---|---|---|
 | 구조 | 카드 수 유효·first=cover_v2·last=closing_v2·커버리지=스토리보드·template_type 유효·meta 파싱 | 크래시·스키마 붕괴 |
-| 콘텐츠-새너티 | 필드별 최소 길이·플레이스홀더 블록리스트(`"N/A"`,`"해당 사항 없음"`,`"."`,`"-"`)·**exact 중복 + Jaccard 토큰 중복도** 임계 | 플레이스홀더 쓰레기·동의어 패딩(거친 것) |
+| 콘텐츠-새너티 | 필드별 최소 길이·플레이스홀더 블록리스트(`"N/A"`,`"해당 사항 없음"`,`"."`,`"-"`)·중복(headline=exact만 / 긴 필드(body)=불용어·문장부호 제거 후 **char-shingle Jaccard**) | 플레이스홀더 쓰레기·동의어 패딩(거친 것) |
 | 다양성 바닥선 | distinct 레이아웃 ≥ N (양성 핀 ❌) | Monochrome Syndrome(전부 reasons/callout 도배) |
 | per-golden | `expected_min_cards` 충족 | 카드 수 압축(7→3 정보유실) |
+
+**Jaccard 노이즈 회피(필수)**: 짧은 필드(headline ≤30자)는 기능어(the/is, 은/는/이/가)
+중복만으로 유사도가 치솟아 정상 카드가 오탐 fail한다. → (a) headline엔 퍼지 유사도 **미적용**
+(exact만), (b) body 등 긴 필드만 적용하되 **불용어·문장부호 제거 후** 측정, (c) 한국어는 교착어라
+형태소분석기 의존성 대신 **문자 n-gram(char-shingle)**으로 조사 노이즈를 더 강하게 흡수.
 
 임계값(최소 길이, Jaccard 컷, distinct 바닥선 N)은 **Golden 8에 대해 캘리브레이션** —
 정상 8편이 전부 통과하는 가장 빡빡한 값으로 튜닝.
@@ -205,7 +231,10 @@ $0이므로 파서 고칠 때마다 무한 반복 실행.
 | 위치 필드 | `layout`(template_type) | `page_idx`(위치 인덱스 → 레이아웃 뭉뚱그림) |
 | 회귀 판정 | 4층 결정론 불변식 | 스냅샷 정확비교(LLM 비결정성→false positive 지옥) · 크래시만(품질 붕괴 못 잡음) |
 | 다양성 검증 | property(distinct 바닥선) | identity(`expected_layouts` 못박기 → 긍정적 표류를 회귀로 죽임) |
-| 중복 검증 | exact + Jaccard 토큰중복 | exact만(패러프레이즈에 뚫림) |
+| 중복 검증 | (긴 필드) 불용어제거+char-shingle Jaccard, headline은 exact | raw 토큰 Jaccard(기능어 중복으로 오탐) · exact만(패러프레이즈에 뚫림) |
+| S1 집계축 | 논문레벨 `input_profile{columns,journal}` | `detail`에 자유텍스트(string-ly typed 집계 부활) · `layout`재사용(S1엔 카드 없음) |
+| severity | 코드 분류(`HARD_CODES` 상수) | DegradeEvent에 필드 추가(미니멀 위반) |
+| 배치 안정성 | `Pool(maxtasksperchild)` 프로세스 격리 | `gc.collect()`만(fitz C레벨 메모리 회수 안 됨) |
 
 ---
 
@@ -231,12 +260,13 @@ $0이므로 파서 고칠 때마다 무한 반복 실행.
 
 ## 12. 구현 터치포인트 (writing-plans에서 상세화)
 
-- `core/models.py`: `DegradeCode`(StrEnum) + `DegradeEvent` + S1Output/S6Output에 `degrade_events`
+- `core/models.py`: `DegradeCode`(StrEnum) + `DegradeEvent` + S1Output/S6Output에 `degrade_events` + `HARD_CODES` 상수
 - `agents/s1_extractor.py`: 각 degrade 분기점에서 `DegradeEvent` emit (warnings 정화)
 - `agents/s6_card_json.py` · `s6/writer.py`: S6 degrade 분기점 emit (layout 태깅)
 - `agents/orchestrator.py`: degrade_events passthrough
-- `backend/scripts/corpus_harness.py`(신규): 모드 A/B CLI + 리포트
+- `backend/scripts/corpus_harness.py`(신규): 모드 A/B CLI + 리포트 + **`Pool(maxtasksperchild)` 프로세스 격리**
+- `backend/scripts/input_profile.py`(신규): 논문당 `{columns, journal_family}` 결정론 추출(x좌표 군집 + DOI 접두사)
+- `backend/scripts/invariants.py`(신규): 4층 불변식 + `HARD_CODES` short-circuit + (불용어제거·char-shingle Jaccard)
 - `backend/scripts/golden/expectations.yaml`(신규): Golden 8 기대치
-- 불변식 모듈(신규, 예: `scripts/invariants.py` 또는 하니스 내부): 4층 검증
 - docs/05·07: degrade_events 계약 반영 (docs-before-code)
 - docs/04: 파이프라인 실제 단계(S1→S6, S2 흡수) 드리프트 정정
