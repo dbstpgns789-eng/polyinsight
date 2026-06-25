@@ -34,6 +34,36 @@ class ClaimType(str, Enum):
     CAUSAL = "causal"
 
 
+class DegradeCode(str, Enum):
+    """파이프라인 단계별 degrade 사유. 코퍼스 하니스가 GROUP BY 하는 타입드 코드.
+    StrEnum(3.11)은 못 쓰므로 (str, Enum). 야생 새 실패 모드 = 멤버 추가(린터가 전 참조 검증).
+    유저향 warnings(문장)와 분리된 엔지니어링/측정 채널.
+    설계: docs/superpowers/specs/2026-06-25-corpus-robustness-harness-design.md §4."""
+    S1_NO_SECTIONS    = "s1_no_sections"
+    S1_LOW_WORDS      = "s1_low_words"
+    S1_EXTRACT_FAILED = "s1_extract_failed"
+    S1_PARSE_FALLBACK = "s1_parse_fallback"
+    S6_COVERAGE_MISMATCH = "s6_coverage_mismatch"
+    S6_SCHEMA_INVALID    = "s6_schema_invalid"
+    S6_TRUNCATED         = "s6_truncated"
+
+
+class DegradeEvent(BaseModel):
+    """degrade 한 건. layout=template_type(S6 카드-로컬일 때만), detail=사람용 부연(집계 X)."""
+    code: DegradeCode
+    layout: str | None = None
+    detail: str = ""
+
+
+# severity는 DegradeEvent 필드가 아니라 코드 분류(미니멀). hard = Mode B에서 short-circuit FAIL.
+HARD_CODES: frozenset[DegradeCode] = frozenset({
+    DegradeCode.S1_EXTRACT_FAILED,
+    DegradeCode.S6_COVERAGE_MISMATCH,
+    DegradeCode.S6_SCHEMA_INVALID,
+    DegradeCode.S6_TRUNCATED,
+})
+
+
 class FieldSource(BaseModel):
     # section 기본값 "editor" = "원문 근거 없음" sentinel(FieldValue 기본 source와 동일 의미).
     # LLM이 못 찾은 필드를 source:{} / source 누락으로 내보내도 덱 전체가 죽지 않게 한다.
@@ -226,6 +256,7 @@ class S1Output(BaseModel):
     word_count: int
     degraded: bool = False
     warnings: list[str] = Field(default_factory=list)
+    degrade_events: list[DegradeEvent] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -245,6 +276,7 @@ class S6Output(BaseModel):
     critical_count: int
     high_count: int
     warnings: list[str] = Field(default_factory=list)
+    degrade_events: list[DegradeEvent] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
