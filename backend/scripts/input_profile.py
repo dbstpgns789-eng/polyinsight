@@ -3,6 +3,9 @@ S1 취약성은 카드 layout이 아니라 *입력 문서 물성*(조판·저널
 from __future__ import annotations
 
 import re
+from io import BytesIO
+
+import pdfplumber
 
 # DOI 등록기관 접두사 → 퍼블리셔. 있을 때만 — 없으면 unknown.
 PUBLISHER_BY_DOI_PREFIX = {
@@ -21,3 +24,44 @@ def journal_family_from_doi(doi: str | None) -> str:
         return "unknown"
     prefix = m.group(1)
     return PUBLISHER_BY_DOI_PREFIX.get(prefix, f"other:{prefix}")
+
+
+# 거터(중앙 빈 띠) 판정 파라미터 — Golden/코퍼스로 후속 캘리브레이션 가능.
+_GUTTER_LO, _GUTTER_HI = 0.42, 0.58
+_SIDE_MIN = 0.25     # 좌·우 각 절반이 최소 이만큼 차야 2단 후보
+_GUTTER_MAX = 0.10   # 중앙 거터가 이보다 비어야 2단
+
+
+def columns_from_centers(centers: list[float]) -> int:
+    """정규화 단어 중심좌표(0~1) 분포 → 1 또는 2단. 순수·결정론."""
+    if not centers:
+        return 1
+    n = len(centers)
+    left = sum(1 for c in centers if c < _GUTTER_LO) / n
+    right = sum(1 for c in centers if c > _GUTTER_HI) / n
+    central = sum(1 for c in centers if _GUTTER_LO <= c <= _GUTTER_HI) / n
+    if left > _SIDE_MIN and right > _SIDE_MIN and central < _GUTTER_MAX:
+        return 2
+    return 1
+
+
+def detect_columns(pdf_bytes: bytes) -> int:
+    """앞 5페이지 단어 중심좌표를 모아 columns_from_centers에 위임. 파싱 실패 시 1."""
+    centers: list[float] = []
+    try:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+            for page in pdf.pages[:5]:
+                w = page.width or 1
+                for word in page.extract_words():
+                    centers.append(((word["x0"] + word["x1"]) / 2) / w)
+    except Exception:
+        return 1
+    return columns_from_centers(centers)
+
+
+def build_input_profile(pdf_bytes: bytes, doi: str | None) -> dict:
+    """논문 1편 → {columns, journal_family}. Mode A가 GROUP BY 하는 메타."""
+    return {
+        "columns": detect_columns(pdf_bytes),
+        "journal_family": journal_family_from_doi(doi),
+    }
