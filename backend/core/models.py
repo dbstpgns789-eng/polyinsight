@@ -6,7 +6,7 @@ from typing import Dict, List, Literal
 
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ---------------------------------------------------------------------------
@@ -35,8 +35,24 @@ class ClaimType(str, Enum):
 
 
 class FieldSource(BaseModel):
-    section: str
+    # section 기본값 "editor" = "원문 근거 없음" sentinel(FieldValue 기본 source와 동일 의미).
+    # LLM이 못 찾은 필드를 source:{} / source 누락으로 내보내도 덱 전체가 죽지 않게 한다.
+    # 실 호출 job f666b539: 논문에 없는 dept/month/edition_number를 모델이 source:{}로 보내
+    # section 필수 검증이 깨지며 7장 전체가 ERR-S6-001로 사망 — 경계 강건화로 대응.
+    # 주의: 수치 grounding은 match_quality로 risk를 매기므로(docs/06) 이 기본값이 정량 검증을
+    # 약화시키지 않는다. 크래시(전체 손실)보다 degrade(sentinel)가 항상 낫다.
+    section: str = "editor"
     page: int = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_source(cls, v: object) -> object:
+        """LLM이 source를 비정형으로 내보낼 때(None / 문자열 / 빈 객체) dict로 정규화."""
+        if v is None:
+            return {}
+        if isinstance(v, str):
+            return {"section": v}
+        return v
 
     @field_validator("page", mode="before")
     @classmethod
