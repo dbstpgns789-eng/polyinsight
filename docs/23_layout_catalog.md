@@ -290,12 +290,22 @@
 | 2026-06-24 | 최초 작성. 기존 14 전사 + 신규 16 명세화(🟡 11 / 🔴 5). 7컬럼 스키마·전사 운영규칙 확정. |
 | 2026-06-24 | 신규 16 **전부 구현 완료**. 피부 15개 + 뼈대 16개 신설, CARD_COMPONENTS·cardFieldSchema·prompts.py(3블록)·VALID_TEMPLATE_TYPES 전사. tsc·eslint·vitest(49)·pytest(17) 통과, 16개 시각검증(`debug_screenshots/layout_catalog/`). 전 레이아웃 ✅. 커밋 c6d8726(feat/layout-catalog). |
 | 2026-06-24 | **프로덕션 첫 관찰** (실호출 job db19ada1, 신규 프롬프트 적용 후 16:32 KST). 셀룰로오스 미세구슬 논문 7장 → 선택된 레이아웃: cover_v2·statement·process_v2·multistat·definition·compare_table·closing_v2. **신규 16개 중 0개 선택.** 해석: 이 논문은 고전+확장6에 잘 맞아 "맞을 때만" 원칙상 정당하나, 신규 16의 *실제 선택 가능성은 아직 미검증*. radar_chart가 될 수 있던 자리(다축 비교)를 compare_table로 감 — 트리거 강화 또는 적합 논문 타깃 테스트 필요. (§6 참조) |
+| 2026-06-25 | **§6 해소 — 신규 선택 가능성 검증됨** (실호출 job 4dfda26c, "Attention Is All You Need" 7장, DONE·degraded 0·3 LLM콜·~$0.10). 선택: cover_v2·reasons·definition·**datapath**·compare_table·multistat·closing_v2. **신규 16개 중 `datapath` 1개 선택** — Transformer 입력→인코더→디코더→출력 흐름이 datapath 적격이었고 뇌가 골랐다. 결론: 신규 레이아웃은 죽은 코드가 아니다, 뇌는 논문이 맞으면 신규를 고른다. db19ada1의 0개는 트리거 버그가 아니라 정당한 보수성. (§6 §A 타깃 테스트 통과.) 부수: 이 논문이 노출한 S6 3대 버그 수정 완료 — [[project_s6_pipeline_hardening]]. |
 
 ---
 
-## 6. 프로덕션 관찰 — 신규 레이아웃 선택률 (미해결)
+## 6. 프로덕션 관찰 — 신규 레이아웃 선택률 (✅ 해소 2026-06-25)
 
-**문제**: 신규 16개는 빌드·시각검증을 통과했지만, 실호출(job db19ada1)에서 뇌(Architect)가
+> **결론(2026-06-25)**: (A) 적합 논문 타깃 테스트 통과. "Attention Is All You Need"(job 4dfda26c)
+> 실호출에서 뇌가 신규 `datapath`를 선택 — Transformer 데이터 흐름(입력→인코더→디코더→출력)이
+> datapath 적격이었고 뇌가 골랐다. **신규 레이아웃은 죽은 코드가 아니다. 뇌는 논문이 맞으면 신규를
+> 고른다.** 따라서 db19ada1(셀룰로오스)의 0개 선택은 *트리거 버그가 아니라* 그 논문엔 맞는 자리가
+> 없던 정당한 보수성. → 트리거 강화(B)는 불필요(과적합 위험만). 아래는 해소 전 진단 기록(역사).
+>
+> ※ 이 검증 과정에서 Attention 논문이 S6 3대 버그(경계강건화·Writer커버리지·재시도분류)를 노출,
+> 수정 완료 후 재호출로 성공. [[project_s6_pipeline_hardening]].
+
+**문제(해소 전)**: 신규 16개는 빌드·시각검증을 통과했지만, 첫 실호출(job db19ada1)에서 뇌(Architect)가
 하나도 고르지 않았다. "구현됨 ≠ 사용됨".
 
 **진단 — 두 가지가 섞여 있다**:
@@ -314,5 +324,7 @@
   compare_table보다 radar_chart 우선 검토"). 단, 과적합 위험 — 고전이 더 나은 자리까지 신규로 끌면 품질 저하.
 - (C) **A/B 게이트**: [[project_multiagent_s6]]의 게이트 방식으로 동일 논문에 신규 허용/금지 두 버전을 비교.
 
-**권장**: (A) 먼저. 트리거를 만지기(B) 전에, 뇌가 *고를 수 있는데 안 고르는지* vs *고를 자리가 없는지*를
-먼저 가른다. 실 API 비용 발생이므로 사전 허락 필요([[feedback_ask_before_paid]]).
+**권장(당시)**: (A) 먼저. 트리거를 만지기(B) 전에, 뇌가 *고를 수 있는데 안 고르는지* vs *고를 자리가
+없는지*를 먼저 가른다. → **2026-06-25 (A) 실행·통과**(위 결론 박스). 뇌가 고를 자리가 있으면 고른다가
+입증돼 (B)는 보류(고전이 더 나은 자리까지 신규로 끌면 품질 저하). 다음 후보 검증: 한계 뚜렷한 논문으로
+tradeoff_matrix, related work 논문으로 timeline 등 *다른* 신규가 트리거되는지 확인(누적 관찰).
