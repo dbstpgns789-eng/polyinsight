@@ -64,12 +64,14 @@ backend/scripts/gate/
 debug_*.png
 debug_*.py
 debug_*.mjs
+debug_screenshots/
 screenshot_*.png
 gemini-code-*.html
 web/debug_*
 web/screenshot_*
 web/take_screenshot.py
 web/src/components/editor/extract_assignments.py
+test_upload.pdf
 
 # Next.js
 web/.next/
