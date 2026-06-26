@@ -11,6 +11,7 @@
 
 import { type CSSProperties, type MouseEvent, useState } from 'react'
 import { clickToFocal, focalToObjectPosition, type Focal } from '@/lib/focal'
+import type { VisualKind } from '@/types/editor'
 
 type Mode = 'edit' | 'render' | 'thumbnail'
 
@@ -23,6 +24,7 @@ interface EditableImageProps {
   style?: CSSProperties
   objectFit?: 'cover' | 'contain'
   focal?: Focal
+  visualKind?: VisualKind
   onImageRequest?: (slotKey: string) => void
   onFocalChange?: (focal: Focal) => void
   onFitChange?: (fit: 'cover' | 'contain') => void
@@ -37,17 +39,19 @@ export default function EditableImage({
   style,
   objectFit = 'cover',
   focal,
+  visualKind = 'photo',
   onImageRequest,
   onFocalChange,
   onFitChange,
 }: EditableImageProps) {
   const [hovered, setHovered] = useState(false)
   const isEditable = mode === 'edit'
+  const isPhoto = visualKind === 'photo'
   const objectPosition = objectFit === 'cover' ? focalToObjectPosition(focal) : 'center'
 
   if (imageUrl) {
     const handleFocalClick = (e: MouseEvent<HTMLDivElement>) => {
-      if (!isEditable || !onFocalChange || objectFit !== 'cover') return
+      if (!isEditable || !onFocalChange || objectFit !== 'cover' || !isPhoto) return
       const rect = e.currentTarget.getBoundingClientRect()
       onFocalChange(clickToFocal(e.clientX, e.clientY, rect))
     }
@@ -59,7 +63,7 @@ export default function EditableImage({
           position: 'relative',
           width: '100%',
           height: '100%',
-          cursor: isEditable ? 'crosshair' : 'default',
+          cursor: isEditable && isPhoto && objectFit === 'cover' ? 'crosshair' : 'default',
           ...style,
         }}
         onMouseEnter={isEditable ? () => setHovered(true) : undefined}
@@ -74,8 +78,8 @@ export default function EditableImage({
 
         {isEditable && (
           <>
-            {/* 현재 초점 십자 표식 (클릭 통과) */}
-            {objectFit === 'cover' && (
+            {/* 현재 초점 십자 표식 (클릭 통과). 일러스트는 크롭 개념이 없어 비표시 */}
+            {objectFit === 'cover' && isPhoto && (
               <div
                 style={{
                   position: 'absolute',

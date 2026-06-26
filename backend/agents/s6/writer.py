@@ -10,10 +10,10 @@ import logging
 
 from ...core.llm_client import llm_client
 from ...core.models import (
-    CardMeta, CardSlot, FieldValue, MismatchSignal, Storyboard,
+    CardMeta, CardSlot, FieldValue, IMAGE_MODES, MismatchSignal, Storyboard,
     WriterInput, WriterOutput,
 )
-from ._util import extract_json, format_section_map, format_digest
+from ._util import extract_json, format_section_map, format_digest, log_raw_on_parse_error
 from . import prompts
 
 logger = logging.getLogger(__name__)
@@ -44,24 +44,36 @@ class Writer:
             temperature=0.2,
             timeout_s=120,
         )
-        parsed = json.loads(extract_json(raw))
+        with log_raw_on_parse_error("Writer", raw):
+            parsed = json.loads(extract_json(raw))
 
-        beat_types = {b.card_num: b.template_type for b in inp.storyboard.beats}
-        cards: list[CardSlot] = []
-        for raw_card in parsed.get("cards", []):
-            card_num = raw_card["card_num"]
-            if only and card_num not in only:
-                continue                                  # 부분 재작성: 대상만
-            fields = {k: FieldValue.model_validate(v) for k, v in raw_card.get("fields", {}).items()}
-            # 스토리보드가 진실 — 모델이 template_type을 어기면 교정.
-            tt = beat_types.get(card_num, raw_card["template_type"])
-            cards.append(CardSlot(card_num=card_num, template_type=tt, fields=fields))
+            beat_types = {b.card_num: b.template_type for b in inp.storyboard.beats}
+            # 허용 card_num: 부분 재작성이면 only, 아니면 스토리보드 비트 전체.
+            # 카드 수는 설계팀(Architect) 소유 — Writer가 스토리보드 밖 카드를 지어내면(월권)
+            # 드롭한다. 실 호출 job 9f4bc0b8(6비트→14장)가 이 누락으로 ERR-S6-001 사망했다.
+            allowed = only if only else set(beat_types)
+            cards: list[CardSlot] = []
+            for raw_card in parsed.get("cards", []):
+                card_num = raw_card["card_num"]
+                if card_num not in allowed:
+                    continue                              # 스토리보드 밖 / 부분 재작성 비대상
+                fields = {k: FieldValue.model_validate(v) for k, v in raw_card.get("fields", {}).items()}
+                # 스토리보드가 진실 — 모델이 template_type을 어기면 교정.
+                tt = beat_types.get(card_num, raw_card["template_type"])
+                raw_mode = raw_card.get("image_mode", "box")
+                safe_mode = raw_mode if isinstance(raw_mode, str) and raw_mode in IMAGE_MODES else "box"
+                cards.append(CardSlot(
+                    card_num=card_num,
+                    template_type=tt,
+                    fields=fields,
+                    image_mode=safe_mode,
+                ))
 
-        meta_out = CardMeta.model_validate(parsed["meta"])
-        signals = [MismatchSignal.model_validate(s) for s in parsed.get("mismatch_signals", [])]
-        if only:
-            signals = [s for s in signals if s.card_num in only]
-        return WriterOutput(cards=cards, meta=meta_out, mismatch_signals=signals)
+            meta_out = CardMeta.model_validate(parsed["meta"])
+            signals = [MismatchSignal.model_validate(s) for s in parsed.get("mismatch_signals", [])]
+            if only:
+                signals = [s for s in signals if s.card_num in only]
+            return WriterOutput(cards=cards, meta=meta_out, mismatch_signals=signals)
 
 
 def _storyboard_text(sb: Storyboard, only: set[int]) -> str:

@@ -18,6 +18,23 @@ import Callout from './skeletons/Callout'
 import MultiStat from './skeletons/MultiStat'
 import Quote from './skeletons/Quote'
 import CompareTable from './skeletons/CompareTable'
+// 확장 레이아웃 (15~30) — docs/23_layout_catalog.md
+import RadarChartCard from './skeletons/RadarChart'
+import TradeOffMatrix from './skeletons/TradeOffMatrix'
+import TerminalBlock from './skeletons/TerminalBlock'
+import TimelineCard from './skeletons/Timeline'
+import ChecklistCard from './skeletons/Checklist'
+import Mythbuster from './skeletons/Mythbuster'
+import GrowthChart from './skeletons/GrowthChart'
+import ABSplit from './skeletons/ABSplit'
+import Funnel from './skeletons/Funnel'
+import DataPath from './skeletons/DataPath'
+import TechGrid from './skeletons/TechGrid'
+import DecisionTree from './skeletons/DecisionTree'
+import TickerCard from './skeletons/Ticker'
+import DoDont from './skeletons/DoDont'
+import SwipeBait from './skeletons/SwipeBait'
+import Chat from './skeletons/Chat'
 
 export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> = {
   cover_v2:        Cover,
@@ -35,6 +52,23 @@ export const CARD_COMPONENTS: Record<string, ComponentType<CardComponentProps>> 
   multistat:       MultiStat,
   quote:           Quote,
   compare_table:   CompareTable,
+  // 확장 레이아웃 (15~30) — docs/23_layout_catalog.md
+  radar_chart:     RadarChartCard,
+  tradeoff_matrix: TradeOffMatrix,
+  terminal_block:  TerminalBlock,
+  timeline:        TimelineCard,
+  checklist:       ChecklistCard,
+  mythbuster:      Mythbuster,
+  growth_chart:    GrowthChart,
+  ab_split:        ABSplit,
+  funnel:          Funnel,
+  datapath:        DataPath,
+  tech_grid:       TechGrid,
+  decision_tree:   DecisionTree,
+  ticker:          TickerCard,
+  do_dont:         DoDont,
+  swipe_bait:      SwipeBait,
+  chat:            Chat,
 }
 
 export { default as CardRenderer } from './CardRenderer'

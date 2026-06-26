@@ -35,6 +35,15 @@ async def _playwright_render_via_url_async(urls: list[str], timeout_s: float) ->
             extra_http_headers=extra_headers,
         )
 
+        # Next.js dev server cold start 방지: 첫 카드 전에 베이스 URL 워밍업.
+        # 워밍업 실패해도 렌더 시도는 계속한다.
+        try:
+            warmup = await browser_ctx.new_page()
+            await warmup.goto(settings.WEB_BASE_URL, wait_until="domcontentloaded", timeout=timeout_ms)
+            await warmup.close()
+        except Exception:
+            pass
+
         for i, url in enumerate(urls, start=1):
             try:
                 page = await browser_ctx.new_page()

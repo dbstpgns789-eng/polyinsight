@@ -26,6 +26,22 @@ TEMPLATE_PURPOSES = """
 [multistat]       핵심 수치 2~4개 병렬
 [quote]           강한 주장/인용 한 문장
 [compare_table]   우리 vs 기존 여러 속성 비교 표
+[radar_chart]     3축 이상 다각도 성능 비교(우리 vs 기존)
+[tradeoff_matrix] 장점과 한계/단점이 짝으로 존재(논문 limitation)
+[terminal_block]  코드/프롬프트 스니펫이 핵심
+[timeline]        단계/연도별 진화 과정
+[checklist]       실행 행동강령 체크리스트
+[mythbuster]      오해 vs 진실(통념 깨기)
+[growth_chart]    우상향 추세/성장 지표(꺾은선)
+[ab_split]        A/B 둘 중 승자 증명
+[funnel]          단계별 좁아지는 퍼널/병목
+[datapath]        모듈·연결선 시스템 흐름
+[tech_grid]       활용 기술/도구 생태계
+[decision_tree]   예/아니오 분기 의사결정
+[ticker]          거시지표/등락 전광판
+[do_dont]         행동 교정(O/X 대비)
+[swipe_bait]      다음 장 넘기기 유도(중간 카드 한정)
+[chat]            대화형 메신저 메타포
 """
 
 # 콘텐츠팀용: 필드명·포맷까지 전부
@@ -83,12 +99,80 @@ TEMPLATE_SPEC = """
   필드: eyebrow, headline(*별표* 강조), col_a(A 컬럼명=우리/제안), col_b(B 컬럼명=기존),
         rows("속성:A값:B값" — |로 행, :로 구분; 2~4행), source_ref(선택)
 
+[radar_chart]    다축 성능 비교(우리 vs 기존)
+  필드: eyebrow, headline(*별표* 강조),
+        axes("축라벨:우리값:기존값" — |로 축, :로 구분; 값은 숫자만; 3~6축), source_ref(축마다 출처 필요)
+
+[tradeoff_matrix]  장점 vs 한계
+  필드: eyebrow, headline(*별표* 강조),
+        pros("제목:본문|..." 2~3), cons("제목:본문|..." 2~3)
+
+[terminal_block]  코드/프롬프트 스니펫
+  필드: eyebrow, headline(*별표* 강조), code(모노스페이스 본문, 줄바꿈 허용), lang(언어 라벨, 선택)
+
+[timeline]       진화 타임라인
+  필드: eyebrow, headline(*별표* 강조), events("연도:제목:설명|..." — |로 항목, :로 구분; 3~5)
+
+[checklist]      실행 체크리스트
+  필드: eyebrow, headline(*별표* 강조), items("항목1|항목2|..." — |로 구분; 3~6)
+
+[mythbuster]     오해 vs 진실
+  필드: eyebrow, headline(*별표* 강조), pairs("오해:진실|..." — |로 항목, :로 구분; 2~3)
+
+[growth_chart]   우상향 추세 꺾은선
+  필드: eyebrow, headline(*별표* 강조),
+        series("x라벨:y값|..." — |로 점, :로 구분; y는 숫자만; 3~6점), source_ref(점마다 출처 필요)
+
+[ab_split]       A/B 승자 증명
+  필드: eyebrow, headline(*별표* 강조),
+        variant_a("라벨:값"), variant_b("라벨:값"), winner("a" 또는 "b")
+
+[funnel]         단계별 퍼널/병목
+  필드: eyebrow, headline(*별표* 강조),
+        stages("단계:값:단위|..." — 위→아래, 값은 숫자만; 3~5), bottleneck(병목 단계명, 선택), source_ref
+
+[datapath]       모듈 시스템 흐름
+  필드: eyebrow, headline(*별표* 강조), nodes("노드1|노드2|..."), edges("from:to|..." 선택)
+
+[tech_grid]      기술/도구 생태계
+  필드: eyebrow, headline(*별표* 강조), items("기술명:아이콘ID|..." — |로 항목, :로 구분; 3~6)
+
+[decision_tree]  예/아니오 분기
+  필드: eyebrow, headline(*별표* 강조), root(첫 조건), branches("조건:예결과:아니오결과|..." 1~3)
+
+[ticker]         지표 전광판
+  필드: eyebrow, headline(*별표* 강조),
+        items("지표명:값:등락|..." — 등락은 up/down/flat; 3~6), source_ref
+
+[do_dont]        행동 교정 O/X
+  필드: eyebrow, headline(*별표* 강조), dont("제목:본문|..." 1~3), do("제목:본문|..." 1~3)
+
+[swipe_bait]     다음 장 유도(중간 카드 한정)
+  필드: eyebrow, headline(*별표* 강조), teaser(다음 장 예고 한 줄), cut_items("항목1|항목2" 선택)
+  주의: 잘리는 쪽에 핵심 수치/결론을 두지 말 것(다음 카드에서 공개).
+
+[chat]           대화형 메신저
+  필드: eyebrow, headline(선택, *별표*), messages("발화자:메시지|..." — 발화자는 q/a 또는 이름; 2~5)
+
 [포맷 규칙 — 엄수]
 - headline 강조: 핵심어를 *별표*로 감싼다 (예: 기존보다 *더 단단*하다). 1곳 권장.
 - 다항목 필드: 항목 구분 |, 쌍 구분 :. 라벨/값 내부에 |·: 사용 금지.
 - bars 3번째 토큰은 1(강조행, 보통 최댓값/우리 방식) 또는 0.
 - **bars·stats의 '값'은 순수 숫자만** (단위·%·텍스트 금지. 예: "20.78" O / "20.78%"·"우수" X). 막대 너비 계산용.
 - 수치(stat_value·bars·stats)는 원문에서만, source 필수.
+
+[image_mode 선택 — 카드마다 필수]
+각 카드의 "image_mode" 필드를 반드시 출력하라.
+
+  "backdrop" — 사진·현장 이미지가 있고 시각 임팩트가 핵심인 카드 (표지, 강한 훅)
+  "ghost"    — 데이터/수치 카드에 이미지가 있지만 텍스트 가독성이 우선일 때
+  "none"     — 이미지가 없거나 텍스트 전용 카드 (process, reasons, bigstat_compare 등)
+  "box"      — 이미지를 박스 안에 담아 텍스트와 구분할 때 (폴백 기본값)
+
+이미지 없는 카드(bigstat_compare·process_v2·reasons·grid_v2·callout·multistat·definition·compare_table
+및 확장 레이아웃 radar_chart·tradeoff_matrix·terminal_block·timeline·checklist·mythbuster·growth_chart·
+ab_split·funnel·datapath·tech_grid·decision_tree·ticker·do_dont·swipe_bait·chat)는 반드시 "none".
+이미지 있는 표지/statement/feature 카드는 "backdrop" 우선 검토.
 """
 
 # ===========================================================================
@@ -105,18 +189,48 @@ SEQUENCING_RULES = """
 - card_count에 맞춰 역할을 배치. 같은 뼈대 연속·중복 지양.
 
 [2층] ★중간 비트의 뼈대는 *내용 모양*으로 정한다 — 역할에 고정된 기본 뼈대는 없다.
-각 중간 비트마다 반드시 콘텐츠가 어떻게 생겼는지 진단한 뒤 고른다:
+
+★0단계 — 가장 먼저, 역할은 잊고 항목 개수만 본다:
+이 비트의 내용이 서로 독립된 항목 2개 이상으로 쪼개지는가? (한계 3가지, 장점 2가지, 적용분야 4가지 등)
+- 그렇다 → 역할이 '문제 제기'든 '핵심 혁신'이든 상관없이 항목형 뼈대를 우선한다
+  (수치면 [multistat]/[bigstat_compare], 비교표면 [compare_table], 그 외 일반 항목이면 [reasons]/[grid_v2]).
+  항목을 줄이거나 버려서 단일 문장으로 합치지 마라 — 줄글로 합치는 순간 정보가 사라진다.
+- 항목이 1개뿐이거나 처음부터 단일 흐름의 설명·주장이면 → 아래 진단으로 내려간다.
+
+그 다음, 콘텐츠가 어떻게 생겼는지 진단한 뒤 고른다:
 - 핵심 수치 1개 압도적            → [bigstat_compare]
 - 핵심 수치 2~4개 병렬            → [multistat]
 - 우리 vs 기존 여러 속성 비교     → [compare_table]
 - 독자가 모를 핵심 용어 1개       → [definition] (그 용어 한 장)
 - 한 문장 강한 주장·철학          → [quote] / [callout]
 - 인상적 그림·도식이 핵심         → [image_hero]
-- 단계 공정 → [process_v2]  ·  병렬 근거 → [reasons]  ·  응용 나열 → [grid_v2]  ·  문제 제기 → [statement]
+- 단계 공정(순서 있음)            → [process_v2]
+- 병렬 항목(순서 없음, 수치 아님)  → [reasons] (근거형) / [grid_v2] (나열형)
+- 항목화 안 되는 단일 흐름의 문제 제기·한계 설명 → [statement]
+- 항목화 안 되는 단일 흐름의 혁신 설명           → [feature]
+
+[확장 레이아웃 — 내용이 아래 모양일 때만 (맞을 때만, 억지 금지)]
+- 3축 이상 다각도 성능을 우리 vs 기존으로 비교   → [radar_chart] (수치 여러 축, 각 축 출처 필요)
+- 장점과 한계/단점이 짝으로 존재(limitation)     → [tradeoff_matrix]
+- 코드·프롬프트·명령 스니펫이 핵심               → [terminal_block]
+- 연도/단계별 기술 발전·진화 과정                → [timeline]
+- 독자가 따라 할 실행 항목 리스트                → [checklist]
+- 흔한 오해를 바로잡는 통념 깨기                 → [mythbuster]
+- 시간에 따른 우상향 추세·성장 곡선              → [growth_chart] (각 점 출처 필요)
+- A안 vs B안 중 하나가 명확히 이김(ablation)      → [ab_split]
+- 단계별로 수가 줄어드는 퍼널/병목 구간          → [funnel] (각 단계 출처 필요)
+- 모듈→모듈 시스템/파이프라인 흐름               → [datapath]
+- 활용한 기술·도구 스택 나열                     → [tech_grid]
+- 예/아니오 조건으로 갈라지는 의사결정           → [decision_tree]
+- 여러 거시지표를 등락과 함께 전광판처럼          → [ticker] (각 지표 출처 필요)
+- 잘못된 방법 vs 올바른 방법(행동 교정)          → [do_dont]
+- 딱딱한 내용을 대화체로 풀기                     → [chat]
+- (swipe_bait는 중간 카드에서 다음 장 유도용 — 핵심 정보를 잘리는 쪽에 두지 말 것)
 
 원칙(엄수):
 - "성능 역할이니까 무조건 bigstat" 같은 캐논 기본값으로 가지 마라. 같은 '근거·성능' 역할도
   수치가 여러 개면 [multistat], 표 비교면 [compare_table]다. 역할→뼈대를 1:1로 고정하지 마라.
+- '문제 제기' 역할이라고 무조건 [statement]로 가지 마라 — 위 0단계에서 항목 2개 이상이면 [reasons]/[grid_v2]다.
 - 내용이 맞지 않으면 억지로 끼우지 말 것(맞을 때만). 그러나 맞으면 클래식 대신 반드시 그 레이아웃을 골라라.
 - 각 비트마다 content_shape_reason에 '왜 이 뼈대인지'를 내용 모양 근거로 한 줄 적어라.
 """

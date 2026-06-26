@@ -10,9 +10,25 @@ import pymupdf4llm
 import fitz
 
 from .base import BaseAgent
-from ..core.models import PaperMetadata, S1Input, S1Output
+from ..core.models import DegradeCode, DegradeEvent, PaperMetadata, S1Input, S1Output
 
 logger = logging.getLogger(__name__)
+
+
+def build_s1_degrade_events(
+    *, word_count: int, min_word_count: int,
+    section_degraded: bool, parse_fallback: bool,
+) -> list[DegradeEvent]:
+    """S1 degrade 사유를 타입드 이벤트로. EXTRACT_FAILED는 execute()의 빈입력/양쪽실패
+    경로에서 직접 emit(여기 인자에 없음)."""
+    events: list[DegradeEvent] = []
+    if parse_fallback:
+        events.append(DegradeEvent(code=DegradeCode.S1_PARSE_FALLBACK))
+    if word_count < min_word_count:
+        events.append(DegradeEvent(code=DegradeCode.S1_LOW_WORDS, detail=f"{word_count} words"))
+    if section_degraded:
+        events.append(DegradeEvent(code=DegradeCode.S1_NO_SECTIONS))
+    return events
 
 
 def _clean_text(text: str) -> str:
@@ -24,6 +40,7 @@ def _clean_text(text: str) -> str:
 
 # 번호 없는 종결 섹션 (numbered 아니어도 실제 섹션으로 인정)
 _TERMINAL_SECTIONS = {
+    # 영어
     "abstract", "introduction", "background",
     "methods", "method", "methodology", "materials and methods",
     "results", "results and discussion", "discussion",
@@ -31,6 +48,14 @@ _TERMINAL_SECTIONS = {
     "references", "acknowledgments", "acknowledgements",
     "declaration of competing interest",
     "credit authorship contribution statement", "data availability",
+    # 한국어
+    "초록", "요약",
+    "서론", "배경",
+    "방법", "방법론", "연구 방법", "재료 및 방법", "실험 방법",
+    "결과", "연구 결과", "결과 및 고찰",
+    "고찰", "논의",
+    "결론", "결론 및 제언",
+    "참고문헌", "감사의 말", "감사의 글",
 }
 
 
@@ -65,10 +90,14 @@ def _parse_sections(raw_text: str) -> tuple[dict[str, str], bool]:
             is_numbered = bool(re.match(r"^\d+[\.\s]", raw_hdr))
             key = re.sub(r"^\d+(\.\d+)*\.?\s*", "", raw_hdr).strip().lower()
 
-            is_real = is_numbered or key in _TERMINAL_SECTIONS
+            # pymupdf4llm이 한글 자간을 공백으로 출력하는 경우 대응 ("서  론" → "서론")
+            key_compact = key.replace(" ", "")
+            is_real = is_numbered or key in _TERMINAL_SECTIONS or key_compact in _TERMINAL_SECTIONS
             if not is_real or not key:
                 # 저널명·제목 등 → 스킵
                 continue
+            if key_compact in _TERMINAL_SECTIONS and key not in _TERMINAL_SECTIONS:
+                key = key_compact  # 공백 정규화된 키로 저장
 
             # 이전 섹션 저장
             if current_key is not None:
@@ -86,6 +115,32 @@ def _parse_sections(raw_text: str) -> tuple[dict[str, str], bool]:
             current_key = key
             current_lines = []
             continue
+
+        # ── ## 평문 헤더 폴백 (bold 없음: bioRxiv/arXiv/ChemSusChem 스타일) ─────
+        # bold_m이 이미 처리했으므로 여기는 bold 없는 경우만. 번호 섹션 or TERMINAL만 허용.
+        if not bold_m:
+            plain_m = re.match(r"^#{1,3}\s+(.+?)\s*$", stripped)
+            if plain_m:
+                raw_hdr = plain_m.group(1).strip()
+                is_numbered = bool(re.match(r"^\d+[\.\s]", raw_hdr))
+                key = re.sub(r"^\d+(\.\d+)*\.?\s*", "", raw_hdr).strip().lower()
+                key_compact = key.replace(" ", "")
+                is_real = is_numbered or key in _TERMINAL_SECTIONS or key_compact in _TERMINAL_SECTIONS
+                if key_compact in _TERMINAL_SECTIONS and key not in _TERMINAL_SECTIONS:
+                    key = key_compact
+                if is_real and key:
+                    if current_key is not None:
+                        body = "\n".join(current_lines).strip()
+                        if body:
+                            sections.setdefault(current_key, body)
+                    if not found_first_section and is_numbered:
+                        found_first_section = True
+                        ab = "\n".join(pre_body).strip()
+                        if len(ab) > 80:
+                            sections["abstract"] = ab
+                    current_key = key
+                    current_lines = []
+                    continue
 
         # ── ## _이탤릭_ 소목차 ──────────────────────────────────────────────
         italic_m = re.match(r"^#{1,3}\s+_(.+?)_\s*$", stripped)
@@ -167,11 +222,13 @@ class S1Extractor(BaseAgent[S1Input, S1Output]):
                 word_count=0,
                 degraded=True,
                 warnings=["empty input bytes"],
+                degrade_events=[DegradeEvent(code=DegradeCode.S1_EXTRACT_FAILED)],
             )
 
         warnings: list[str] = []
         page_map: dict[int, str] = {}
         metadata = PaperMetadata(title=None, authors=[], year=None, doi=None)
+        parse_fallback = False
 
         # 1차: pymupdf4llm (헤더/컬럼/하이픈 자동 처리)
         try:
@@ -184,6 +241,7 @@ class S1Extractor(BaseAgent[S1Input, S1Output]):
         except Exception as exc:
             logger.warning("S1: pymupdf4llm failed (%s), falling back to pdfplumber", exc)
             warnings.append(f"S1: pdfplumber fallback -- pymupdf4llm error: {exc}")
+            parse_fallback = True
             page_map, metadata = _try_pdfplumber(pdf_bytes, warnings)
             if not page_map:
                 return S1Output(
@@ -194,6 +252,7 @@ class S1Extractor(BaseAgent[S1Input, S1Output]):
                     word_count=0,
                     degraded=True,
                     warnings=warnings + ["both pymupdf4llm and pdfplumber failed"],
+                    degrade_events=[DegradeEvent(code=DegradeCode.S1_EXTRACT_FAILED)],
                 )
 
         # PAGE 마커 삽입
@@ -224,6 +283,10 @@ class S1Extractor(BaseAgent[S1Input, S1Output]):
             word_count=word_count,
             degraded=degraded,
             warnings=warnings,
+            degrade_events=build_s1_degrade_events(
+                word_count=word_count, min_word_count=self._MIN_WORD_COUNT,
+                section_degraded=section_degraded, parse_fallback=parse_fallback,
+            ),
         )
 
 

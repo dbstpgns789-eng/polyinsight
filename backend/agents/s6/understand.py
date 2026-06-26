@@ -8,7 +8,7 @@ import logging
 
 from ...core.llm_client import llm_client
 from ...core.models import PaperDigest, UnderstandInput
-from ._util import extract_json, format_section_map
+from ._util import extract_json, format_section_map, log_raw_on_parse_error
 from . import prompts
 
 logger = logging.getLogger(__name__)
@@ -32,8 +32,9 @@ class Understand:
             temperature=0.1,
             timeout_s=120,
         )
-        parsed = json.loads(extract_json(raw))
-        return PaperDigest.model_validate(parsed)
+        with log_raw_on_parse_error("Understand", raw):
+            parsed = json.loads(extract_json(raw))
+            return PaperDigest.model_validate(parsed)
 
 
 understand = Understand()

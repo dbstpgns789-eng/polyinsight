@@ -1,4 +1,5 @@
 import axios from 'axios'
+import type { StockImageResult } from '@/types/editor'
 
 const api = axios.create({
   baseURL: '/api',
@@ -75,5 +76,10 @@ export const getCardImageUrl = (jobId: string, cardNum: number) =>
 
 export const triggerExport = (jobId: string) =>
   api.post(`/cards/${jobId}/export`, {}, { timeout: 180_000 })  // Playwright 렌더링 대기 (최대 3분)
+
+export const searchStockImages = async (q: string): Promise<StockImageResult[]> => {
+  const res = await api.get('/images/search', { params: { q } })
+  return res.data.results as StockImageResult[]
+}
 
 export default api

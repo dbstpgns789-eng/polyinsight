@@ -10,7 +10,7 @@ from .s6.writer import writer
 from .s6.understand import understand
 from .s6.mock import mock_storyboard, mock_cards
 from ..core.config import settings
-from ..core.llm_client import LLMTruncationError
+from ..core.llm_client import LLMTruncationError, LLMRateLimitError, LLMAPIError
 from ..core.models import (
     ArchitectInput, ArchitectOutput, WriterInput, WriterOutput,
     UnderstandInput,
@@ -208,11 +208,31 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
         new_cards = [card_by[c.card_num] for c in cards]
         return new_sb, new_cards, warns
 
+    @staticmethod
+    def _is_transient(exc: Exception) -> bool:
+        """재시도하면 결과가 달라질 수 있는 *일시적* 실패만 True.
+
+        일시적(재시도 가치 있음): 레이트리밋, 5xx 서버오류, 타임아웃/연결오류
+            (LLMAPIError status_code None=타임아웃/연결, ≥500=서버과부하).
+        결정론적(False → 즉시 중단): JSON 파싱(JSONDecodeError), 스키마 검증
+            (pydantic ValidationError), 커버리지(ValueError), KeyError, 인증오류,
+            4xx 등 — 동일 입력·저온이면 재호출해도 같은 실패. 재시도 = 비용만 N배.
+        """
+        if isinstance(exc, LLMRateLimitError):
+            return True
+        if isinstance(exc, LLMAPIError):
+            return exc.status_code is None or exc.status_code >= 500
+        return False
+
     async def _with_retries(
         self, factory, *, stage: str,
         truncation_is_card_overload: bool, card_count: int = 0,
     ):
-        """각 모듈 호출을 개별 래핑 — Writer 503이 비싼 Architect를 재실행하지 않게."""
+        """각 모듈 호출을 개별 래핑 — Writer 503이 비싼 Architect를 재실행하지 않게.
+
+        일시적 실패만 백오프 재시도하고, 결정론적 실패는 1회만에 fail-fast 한다
+        (실 호출 job f666b539·9f4bc0b8: 결정론적 실패를 5회 재시도해 LLM 비용 5배 누수).
+        """
         last_exc: Exception | None = None
         for attempt in range(self.MAX_RETRIES):
             try:
@@ -238,11 +258,21 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
                     f"ERR-S6-003: {stage} 출력이 천장에서 잘림 — 프롬프트 점검 필요."
                 ) from exc
             except Exception as exc:
+                if not self._is_transient(exc):
+                    # 결정론적 실패 — 재시도해도 동일 입력→동일 실패. 즉시 중단(비용 누수 차단).
+                    logger.error(
+                        "S6 %s: 결정론적 실패 — 재시도 안 함 (%s): %s",
+                        stage, type(exc).__name__, exc,
+                    )
+                    raise RuntimeError(f"ERR-S6-001: {exc}") from exc
                 last_exc = exc
-                logger.warning("S6 %s: attempt %d failed — %s", stage, attempt + 1, exc)
-                if "503" in str(exc) and attempt < self.MAX_RETRIES - 1:
+                logger.warning(
+                    "S6 %s: 일시적 실패 attempt %d/%d — %s",
+                    stage, attempt + 1, self.MAX_RETRIES, exc,
+                )
+                if attempt < self.MAX_RETRIES - 1:
                     wait = self._503_BACKOFF[min(attempt, len(self._503_BACKOFF) - 1)]
-                    logger.info("S6 %s: 503 서버 과부하 — %ds 대기 후 재시도", stage, wait)
+                    logger.info("S6 %s: 서버 과부하 — %ds 대기 후 재시도", stage, wait)
                     await asyncio.sleep(wait)
 
         raise RuntimeError(f"ERR-S6-001: {last_exc}")

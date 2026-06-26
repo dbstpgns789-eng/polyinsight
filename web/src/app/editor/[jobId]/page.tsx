@@ -10,7 +10,7 @@ import MidCanvas from '@/components/editor/MidCanvas'
 import RightPanel from '@/components/editor/RightPanel'
 import FactDrawer from '@/components/editor/FactDrawer'
 import ExportModal from '@/components/export/ExportModal'
-import type { CardDataPayload, ApiResponse, FieldStyle } from '@/types/editor'
+import type { CardDataPayload, ApiResponse, FieldStyle, Card } from '@/types/editor'
 import { MOCK_EDITOR_DATA } from '@/lib/mockData'
 import { renameJob, downloadCard } from '@/lib/api'
 import AuthGuard from '@/components/auth/AuthGuard'
@@ -129,6 +129,34 @@ function EditorPageInner() {
     })
   }, [activeCardIdx, apiData, debouncedSave])
 
+  const handleImageModeUpdate = useCallback((mode: string) => {
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      const updatedCards = base.cards.map((card, idx) => {
+        if (idx !== activeCardIdx) return card
+        return { ...card, image_mode: mode as Card['image_mode'] }
+      })
+      const updated = { ...base, cards: updatedCards }
+      debouncedSave(updated)
+      return updated
+    })
+  }, [activeCardIdx, apiData, debouncedSave])
+
+  const handleVisualKindUpdate = useCallback((kind: string) => {
+    setLocalData((prev) => {
+      const base = prev ?? apiData?.cardData
+      if (!base) return prev
+      const updatedCards = base.cards.map((card, idx) => {
+        if (idx !== activeCardIdx) return card
+        return { ...card, visual_kind: kind as Card['visual_kind'] }
+      })
+      const updated = { ...base, cards: updatedCards }
+      debouncedSave(updated)
+      return updated
+    })
+  }, [activeCardIdx, apiData, debouncedSave])
+
   const handleReorderCard = useCallback((idx: number, dir: -1 | 1) => {
     const target = idx + dir
     setLocalData((prev) => {
@@ -178,11 +206,11 @@ function EditorPageInner() {
     })
   }, [apiData, saveNow])
 
-  const handleSetChange = useCallback((key: string) => {
+  const handleTemplateChange = useCallback((key: string) => {
     setLocalData((prev) => {
       const base = prev ?? apiData?.cardData
       if (!base) return prev
-      const updated = { ...base, set_key: key }
+      const updated = { ...base, template_key: key }
       saveNow(updated)
       return updated
     })
@@ -284,7 +312,7 @@ function EditorPageInner() {
           bgColor={cardData?.bg_color}
           accentColor={cardData?.accent_color}
           fontPairing={cardData?.font_pairing}
-          setKey={cardData?.set_key}
+          templateKey={cardData?.template_key}
         />
 
         <MidCanvas
@@ -296,7 +324,7 @@ function EditorPageInner() {
           bgColor={cardData?.bg_color}
           accentColor={cardData?.accent_color}
           fontPairing={cardData?.font_pairing}
-          setKey={cardData?.set_key}
+          templateKey={cardData?.template_key}
           isDemo={isDemo}
           focusedField={focusedField}
           onFieldFocus={(field) => setFocusedField(field)}
@@ -320,12 +348,16 @@ function EditorPageInner() {
           onBgColorChange={handleBgColorChange}
           currentFontPairing={cardData?.font_pairing}
           onFontPairingChange={handleFontPairingChange}
-          currentSetKey={cardData?.set_key}
-          onSetChange={handleSetChange}
+          currentTemplateKey={cardData?.template_key}
+          onTemplateChange={handleTemplateChange}
           focusedField={focusedField}
           activeFieldStyle={focusedField ? cards[activeCardIdx]?.field_styles?.[focusedField] : undefined}
           onFieldStyleChange={handleFieldStyleChange}
           onFieldStyleReset={handleFieldStyleReset}
+          currentImageMode={cards[activeCardIdx]?.image_mode ?? 'box'}
+          onImageModeChange={handleImageModeUpdate}
+          currentVisualKind={cards[activeCardIdx]?.visual_kind ?? 'photo'}
+          onVisualKindChange={handleVisualKindUpdate}
         />
       </div>
 

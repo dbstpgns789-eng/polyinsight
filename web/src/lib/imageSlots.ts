@@ -12,6 +12,7 @@ export const IMAGE_SLOT_TYPES: Record<string, SlotType> = {
   feature:    'zone',
   statement:  'zone',
   closing_v2: 'zone',
+  image_hero: 'zone',
 }
 
 export const SLOT_META: Record<SlotType, SlotMeta> = {

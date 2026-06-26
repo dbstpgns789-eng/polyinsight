@@ -62,16 +62,19 @@ async def test_coordinator_assembles_architect_and_writer(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_coordinator_coverage_mismatch_retries_then_raises(monkeypatch):
-    # Writer가 비트(3)보다 적은 카드(2) 반환 → 커버리지 불일치 → 재시도 소진 → ERR-S6-001
+async def test_coordinator_coverage_mismatch_fails_fast(monkeypatch):
+    # Writer가 비트(3)보다 적은 카드(2) 반환 → 커버리지 불일치(ValueError, 결정론적) →
+    # 재시도 없이 1회만에 ERR-S6-001 (재시도해도 같은 입력→같은 실패, 비용 누수 차단).
+    monkeypatch.setattr(s6mod.asyncio, "sleep", AsyncMock())
     monkeypatch.setattr(s6mod.architect, "run", AsyncMock(
         return_value=ArchitectOutput(storyboard=_sb(["cover_v2", "multistat", "closing_v2"]),
                                      recommended_theme="forest_green")))
-    monkeypatch.setattr(s6mod.writer, "run", AsyncMock(
-        return_value=WriterOutput(cards=_cards(["cover_v2", "closing_v2"]), meta=_meta())))
+    wr = AsyncMock(return_value=WriterOutput(cards=_cards(["cover_v2", "closing_v2"]), meta=_meta()))
+    monkeypatch.setattr(s6mod.writer, "run", wr)
 
     with pytest.raises(RuntimeError, match="ERR-S6-001"):
         await s6mod.s6_agent.execute(_input(3))
+    assert wr.await_count == 1          # ★ 결정론적 실패 — 재시도 없음
 
 
 @pytest.mark.asyncio

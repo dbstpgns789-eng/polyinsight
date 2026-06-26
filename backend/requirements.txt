@@ -3,6 +3,7 @@ uvicorn[standard]==0.29.0
 pydantic==2.7.1
 pydantic-settings==2.2.1
 anthropic>=0.40.0
+httpx>=0.28.1,<0.29
 PyMuPDF==1.27.2.3
 pymupdf4llm==1.27.2.3
 pdfplumber==0.11.0

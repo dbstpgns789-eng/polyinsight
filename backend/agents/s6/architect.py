@@ -13,7 +13,7 @@ from ...core.models import (
     ArchitectInput, ArchitectOutput, CardStorybeat, Storyboard,
     THEME_PRESETS, VALID_TEMPLATE_TYPES,
 )
-from ._util import extract_json, format_section_map, format_digest
+from ._util import extract_json, format_section_map, format_digest, log_raw_on_parse_error
 from . import prompts
 
 logger = logging.getLogger(__name__)
@@ -52,19 +52,20 @@ class Architect:
             timeout_s=120,
             model=settings.LLM_MODEL_ARCHITECT,
         )
-        parsed = json.loads(extract_json(raw))
-        storyboard = _parse_storyboard(parsed)
+        with log_raw_on_parse_error("Architect", raw):
+            parsed = json.loads(extract_json(raw))
+            storyboard = _parse_storyboard(parsed)
 
-        # 피드백 루프: 지목된 비트만 바뀌도록 방어적 복원(나머지는 원본 유지).
-        if inp.revise_beats and inp.current_storyboard:
-            storyboard = _restore_untargeted(
-                storyboard, inp.current_storyboard,
-                targeted={s.card_num for s in inp.revise_beats},
-            )
+            # 피드백 루프: 지목된 비트만 바뀌도록 방어적 복원(나머지는 원본 유지).
+            if inp.revise_beats and inp.current_storyboard:
+                storyboard = _restore_untargeted(
+                    storyboard, inp.current_storyboard,
+                    targeted={s.card_num for s in inp.revise_beats},
+                )
 
-        raw_theme = parsed.get("recommended_theme", "tech_blue")
-        theme = raw_theme if raw_theme in THEME_PRESETS else "tech_blue"
-        return ArchitectOutput(storyboard=storyboard, recommended_theme=theme)
+            raw_theme = parsed.get("recommended_theme", "tech_blue")
+            theme = raw_theme if raw_theme in THEME_PRESETS else "tech_blue"
+            return ArchitectOutput(storyboard=storyboard, recommended_theme=theme)
 
 
 def _parse_storyboard(parsed: dict) -> Storyboard:

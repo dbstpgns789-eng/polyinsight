@@ -36,9 +36,12 @@ def _meta_json():
     return {k: _fv("x") for k in ("org", "dept", "researcher", "month", "edition_number")}
 
 
-def _cards_json(types_, signals=None):
+def _cards_json(types_, signals=None, image_modes=None):
     cards = [{"card_num": i + 1, "template_type": t, "fields": {"headline": _fv(f"h{i+1}")}}
              for i, t in enumerate(types_)]
+    if image_modes:
+        for c, mode in zip(cards, image_modes):
+            c["image_mode"] = mode
     return json.dumps({"meta": _meta_json(), "cards": cards,
                        "mismatch_signals": signals or []})
 
@@ -74,6 +77,29 @@ async def test_writer_coerces_template_type_to_storyboard(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_writer_coerces_invalid_image_mode_to_box(monkeypatch):
+    # 화이트리스트 밖 문자열, 그리고 비문자열(list) 모두 box로 안전하게 강하.
+    _patch(monkeypatch, _cards_json(
+        ["cover_v2", "multistat", "closing_v2"],
+        image_modes=["fullscreen", ["backdrop"], "box"]))
+    out = await wr_mod.writer.run(WriterInput(
+        section_map={}, paper_metadata=_meta(),
+        storyboard=_sb(["cover_v2", "multistat", "closing_v2"])))
+    assert [c.image_mode for c in out.cards] == ["box", "box", "box"]
+
+
+@pytest.mark.asyncio
+async def test_writer_keeps_valid_image_mode(monkeypatch):
+    _patch(monkeypatch, _cards_json(
+        ["cover_v2", "multistat", "closing_v2"],
+        image_modes=["backdrop", "ghost", "none"]))
+    out = await wr_mod.writer.run(WriterInput(
+        section_map={}, paper_metadata=_meta(),
+        storyboard=_sb(["cover_v2", "multistat", "closing_v2"])))
+    assert [c.image_mode for c in out.cards] == ["backdrop", "ghost", "none"]
+
+
+@pytest.mark.asyncio
 async def test_writer_parses_mismatch_signals(monkeypatch):
     sig = [{"card_num": 2, "mismatch": True, "reason": "숫자 1개뿐", "suggested_shape": "bigstat_compare"}]
     _patch(monkeypatch, _cards_json(["cover_v2", "multistat", "closing_v2"], signals=sig))
@@ -92,6 +118,25 @@ async def test_writer_only_beats_filters_to_targets(monkeypatch):
         section_map={}, paper_metadata=_meta(),
         storyboard=_sb(["cover_v2", "multistat", "closing_v2"]), only_beats=[2]))
     assert [c.card_num for c in out.cards] == [2]
+
+
+@pytest.mark.asyncio
+async def test_writer_drops_cards_outside_storyboard(monkeypatch):
+    # 실 호출 job 9f4bc0b8: 스토리보드 6비트인데 Writer가 14장을 써서 커버리지 불일치 →
+    # 재시도 5회 소진 후 ERR-S6-001 사망. Writer는 fields만 채우는 역할이고 카드 수는
+    # 설계팀(Architect) 소유다. 스토리보드 밖 card_num은 월권이므로 드롭한다.
+    extra = json.dumps({
+        "meta": _meta_json(),
+        "cards": [{"card_num": i + 1, "template_type": "feature",
+                   "fields": {"headline": _fv(f"h{i + 1}")}} for i in range(5)],  # 5장 반환
+        "mismatch_signals": [],
+    })
+    _patch(monkeypatch, extra)
+    out = await wr_mod.writer.run(WriterInput(
+        section_map={}, paper_metadata=_meta(),
+        storyboard=_sb(["cover_v2", "multistat", "closing_v2"])))  # 3비트만
+    assert [c.card_num for c in out.cards] == [1, 2, 3]                  # 4,5 드롭
+    assert [c.template_type for c in out.cards] == ["cover_v2", "multistat", "closing_v2"]
 
 
 @pytest.mark.asyncio

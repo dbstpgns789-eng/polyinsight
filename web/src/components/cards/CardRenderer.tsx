@@ -8,7 +8,9 @@
 import CardFrame from './CardFrame'
 import { CARD_COMPONENTS } from './index'
 import { FieldStylesProvider } from './skin/fieldStyleContext'
-import { getSet } from './skin/sets'
+import { ImageModeProvider, VisualKindProvider } from './skin/imageModeContext'
+import { getTemplate } from './skin/templates'
+import type { ImageMode } from '@/types/editor'
 import type { CardComponentProps } from './types'
 
 interface CardRendererProps extends CardComponentProps {
@@ -16,18 +18,33 @@ interface CardRendererProps extends CardComponentProps {
   bgColor?: string
   accentColor?: string
   fontPairing?: string
-  setKey?: string
+  templateKey?: string
 }
 
-export default function CardRenderer({ scale = 1, bgColor, accentColor, fontPairing, setKey, ...props }: CardRendererProps) {
+export default function CardRenderer({ scale = 1, bgColor, accentColor, fontPairing, templateKey, ...props }: CardRendererProps) {
   const { card } = props
   const Component = CARD_COMPONENTS[card.template_type]
+  const imageMode: ImageMode = card.image_mode ?? 'box'
+  const visualKind = card.visual_kind ?? 'photo'
 
   return (
     <FieldStylesProvider value={card.field_styles ?? {}}>
-      <CardFrame set={getSet(setKey)} bgColor={bgColor} accentColor={accentColor} fontPairing={fontPairing} scale={scale}>
-        {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
-      </CardFrame>
+      <ImageModeProvider value={imageMode}>
+        <VisualKindProvider value={visualKind}>
+          <CardFrame
+            template={getTemplate(templateKey)}
+            bgColor={bgColor}
+            accentColor={accentColor}
+            fontPairing={fontPairing}
+            scale={scale}
+            cardNum={card.card_num}
+            imageUrl={card.image_url}
+            imageMode={imageMode}
+          >
+            {Component ? <Component {...props} /> : <UnimplementedTemplate templateType={card.template_type} />}
+          </CardFrame>
+        </VisualKindProvider>
+      </ImageModeProvider>
     </FieldStylesProvider>
   )
 }

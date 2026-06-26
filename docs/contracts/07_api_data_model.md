@@ -296,6 +296,44 @@ character: File (PNG)
 
 ---
 
+### 1-6. 이미지 검색 API
+
+---
+
+#### `GET /api/images/search`
+무료 스톡 이미지(Pexels + Unsplash)를 검색해 에디터의 "스톡 검색" 탭에 채운다.
+백엔드가 키를 보유한 프록시 — 클라이언트에 API 키를 노출하지 않는다.
+
+**Request** — query string
+```
+q:        string   (필수, 1~200자) — 검색어
+per_page: integer  (선택, 1~40, 기본 20)
+```
+
+**Response** `200 OK`
+```json
+{
+  "results": [
+    {
+      "id": "pexels_123",
+      "provider": "pexels",
+      "url": "https://...",
+      "thumb": "https://...",
+      "alt": "...",
+      "credit": "사진작가명",
+      "credit_url": "https://..."
+    }
+  ]
+}
+```
+
+**동작 규칙**:
+- `PEXELS_API_KEY` / `UNSPLASH_ACCESS_KEY` 둘 다 비어 있으면 `{"results": []}` 반환 (에러 아님 — 업로드만으로 에디터는 정상 동작, degrade-not-fail).
+- 한쪽 provider가 실패(레이트리밋·네트워크 오류)해도 다른 쪽 결과는 정상 반환 — provider 단위로 격리.
+- `credit`/`credit_url`은 Pexels·Unsplash 라이선스의 저자 표시(attribution) 요건 대응용. 프론트는 표시만 하면 되고, Unsplash의 "다운로드 트리거" 엔드포인트 호출은 아직 미구현(실서비스 트래픽 확대 시 추가 필요 — 알려진 갭).
+
+---
+
 ## 2. 핵심 데이터 모델
 
 ### 2-1. Project (SQLite: `jobs` + `card_data`)
@@ -387,13 +425,16 @@ interface CardSlot {
   image_url?:  string | null     // 이미지 존 보유 뼈대만. 에디터 업로드 시 채움
   focal?:      { x: number; y: number }  // 이미지 초점(0~1). cover 크롭 위치. 없으면 center
   image_fit?:  'cover' | 'contain'       // 존 안 이미지 맞춤. 기본 cover. contain=통째로(잘림0)
+  image_mode?: 'box' | 'backdrop' | 'ghost' | 'none'  // 이미지 레이어 배치. S6/Writer가 결정(기본 'box'). 코드엔 이미 존재했으나 문서 누락 — 2026-06-24 반영
+  visual_kind?: 'photo' | 'illustration'  // 에셋 종류. 에디터 전용(기본 'photo'). §6.1(docs/18) 참고
   field_styles?: { [fieldKey: string]: FieldStyle }  // 요소별 미세조정(선택적)
 }
 
-// 신 8뼈대(skin/skeleton 디자인 시스템). 상세: docs/18_card_design_system.md
+// 14 레이아웃(skin/skeleton 디자인 시스템, 기본 8 + 확장 6). 상세: docs/18_card_design_system.md
 type TemplateType =
   | 'cover_v2' | 'statement' | 'feature' | 'process_v2'
   | 'bigstat_compare' | 'reasons' | 'grid_v2' | 'closing_v2'
+  | 'definition' | 'image_hero' | 'callout' | 'multistat' | 'quote' | 'compare_table'
 
 interface FieldStyle {
   size?:    'S' | 'M' | 'L' | 'XL'
@@ -407,8 +448,11 @@ interface FieldStyle {
 **에디터 편집 범위**:
 - `fields[*].value` — 텍스트 내용 수정 가능
 - `fields[*].verified` — 확인 완료 버튼으로 true 변경 가능
-- `image_url` — 이미지 존 보유 뼈대(cover_v2·feature·statement·closing_v2)에 업로드
+- `image_url` — 이미지 존 보유 뼈대(cover_v2·feature·statement·closing_v2·image_hero)에 업로드
 - `focal` / `image_fit` — 이미지 초점(클릭)·맞춤(채움/전체) 조정
+- `visual_kind` — 사진/일러스트 전환(RightPanel "에셋 종류"). `illustration`이면 focal 클릭 비활성 +
+  backdrop/ghost 배치 옵션 비활성(일러스트는 항상 box 경로). `image_url`과 동일한 신뢰 모델 —
+  S6/LLM은 절대 설정하지 않는 에디터 전용 필드(fidelity 불변 유지, docs/18 §6.1).
 - `bg_color?: string` — 덱 배경 오버라이드(선택). 미설정=세트 기본. `--set-bg`/`--set-bg-gradient`를 덮음.
 - `accent_color?: string` — 덱 강조 오버라이드(선택). 미설정=세트 기본. `--set-accent`를 덮음.
 - `font_pairing?: string` — 덱 글꼴 오버라이드(선택). 미설정=세트 기본. `--set-font`를 덮음. 레지스트리 키(`pretendard`·`serif`·`gothic_a1`).
@@ -466,13 +510,14 @@ interface FieldValue {
 
 ```typescript
 interface PipelineStatus {
-  jobId:     string
-  status:    'PENDING' | 'RUNNING' | 'DONE' | 'ERROR'
-  stage:     'S1' | 'S2' | 'S3' | 'S4' | 'S6' | 'S7' | 'S8' | null
-  progress:  number       // 0~100
-  degraded:  boolean
-  warnings:  string[]
-  updatedAt: string       // ISO 8601
+  jobId:          string
+  status:         'PENDING' | 'RUNNING' | 'DONE' | 'ERROR'
+  stage:          'S1' | 'S6' | 'S7' | 'S8' | null  // S2~S5 없음 — S1에 흡수 또는 제거
+  progress:       number       // 0~100
+  degraded:       boolean
+  warnings:       string[]     // 유저향 경고 문장
+  degrade_events: DegradeEvent[]  // 엔지니어링 텔레메트리(하니스 집계용). warnings와 분리.
+  updatedAt:      string       // ISO 8601
 }
 
 interface ExportStatus {
@@ -488,6 +533,34 @@ interface ExportStatus {
   errorCard:    number | null
   errorMessage: string | null
 }
+```
+
+### 2-7. DegradeEvent (엔지니어링 텔레메트리)
+
+S1Output / S6Output의 `degrade_events: list[DegradeEvent]`는 **엔지니어링/측정 채널**이다.
+코퍼스 하니스가 `code`를 GROUP BY해 야생 취약성을 집계한다. 유저향 `warnings`(문장)와 분리.
+
+```typescript
+interface DegradeEvent {
+  code:    DegradeCode      // 타입드 코드 — 하니스 집계 키
+  layout?: string           // S6 카드-로컬일 때만 (template_type)
+  detail?: string           // 사람용 부연 — 집계 대상 아님
+}
+
+type DegradeCode =
+  // S1 soft (파이프라인 계속)
+  | 's1_no_sections'        // 섹션 헤딩 검출 실패 → section_map 빔
+  | 's1_low_words'          // word_count < 100
+  | 's1_parse_fallback'     // pymupdf4llm 실패 → pdfplumber 폴백
+  // S1 hard (즉시 중단)
+  | 's1_extract_failed'     // 텍스트 추출 자체 불가
+  // S6 hard (Mode B 회귀 대상)
+  | 's6_coverage_mismatch'
+  | 's6_schema_invalid'
+  | 's6_truncated'
+
+// HARD_CODES = { s1_extract_failed, s6_coverage_mismatch, s6_schema_invalid, s6_truncated }
+// severity는 DegradeEvent 필드가 아니라 코드 분류. 설계: specs/2026-06-25-corpus-robustness-harness-design.md
 ```
 
 ---
@@ -520,6 +593,7 @@ interface ExportStatus {
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-06-24 | v2.5 | `CardSlot.visual_kind?`(사진/일러스트, 에디터 전용) 추가. `image_mode`(기존 코드에 있었으나 문서 누락) 문서화. `TemplateType` 14종 전체 반영(8→14, 드리프트 수정). |
 | 2026-06-08 | v2.4 | CardEditorData에 `bg_color?`/`accent_color?` 덱 오버라이드 추가. `--theme-*` 은퇴 명시. 상세: `docs/18_card_design_system.md §3 덱 단위 오버라이드`. |
 | 2026-06-03 | v2.3 | card_count 상한 15→7 (Haiku 출력 한계 안전권). S6 LLM 출력에서 risk_level·verified 제외 (코드 자동 판정). LLMTruncationError 도입 — 출력 천장 도달 시 ERR-S6-002 즉시 반환. |
 | 2026-06-01 | v2.2 | CardEditorData에 `recommended_theme` / `user_theme` 추가. AI 테마 추천 + 사용자 오버라이드 설계 확정. |

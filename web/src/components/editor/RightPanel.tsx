@@ -3,11 +3,12 @@
 import { useRef, useEffect, useState } from 'react'
 import { getSlotMeta } from '@/lib/imageSlots'
 import type { SlotType } from '@/lib/imageSlots'
-import type { Card, FieldStyle } from '@/types/editor'
+import type { Card, FieldStyle, StockImageResult } from '@/types/editor'
+import { searchStockImages } from '@/lib/api'
 import ColorPicker from '@/components/ui/ColorPicker'
 import ElementStyleControls from './ElementStyleControls'
 import { FONT_OPTIONS } from '@/components/cards/fontPairings'
-import { SET_OPTIONS } from '@/components/cards/skin/sets'
+import { TEMPLATE_OPTIONS } from '@/components/cards/skin/templates'
 
 interface Props {
   activeCard?: Card
@@ -21,12 +22,16 @@ interface Props {
   onBgColorChange: (hex: string) => void
   currentFontPairing?: string
   onFontPairingChange: (key: string) => void
-  currentSetKey?: string
-  onSetChange: (key: string) => void
+  currentTemplateKey?: string
+  onTemplateChange: (key: string) => void
   focusedField?: string | null
   activeFieldStyle?: FieldStyle
   onFieldStyleChange: (fieldKey: string, patch: Partial<FieldStyle>) => void
   onFieldStyleReset: (fieldKey: string) => void
+  currentImageMode?: string
+  onImageModeChange: (mode: string) => void
+  currentVisualKind?: string
+  onVisualKindChange: (kind: string) => void
 }
 
 // ── 슬롯 위치 다이어그램 ───────────────────────────────────────────────────
@@ -123,8 +128,10 @@ export default function RightPanel({
   currentAccent, recommendedThemeKey, onAccentColorChange,
   bgColor, onBgColorChange,
   currentFontPairing, onFontPairingChange,
-  currentSetKey, onSetChange,
+  currentTemplateKey, onTemplateChange,
   focusedField, activeFieldStyle, onFieldStyleChange, onFieldStyleReset,
+  currentImageMode, onImageModeChange,
+  currentVisualKind, onVisualKindChange,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -132,7 +139,7 @@ export default function RightPanel({
   const [openColorRow, setOpenColorRow] = useState<'bg' | 'theme' | null>(null)
 
   const slotMeta = activeCard ? getSlotMeta(activeCard.template_type) : null
-  const hasSlot  = slotMeta?.type !== 'none'
+  const hasSlot = true
   const imageUrl = activeCard?.image_url
 
   useEffect(() => {
@@ -163,6 +170,32 @@ export default function RightPanel({
     setDragOver(false)
     const file = e.dataTransfer.files?.[0]
     if (file?.type.startsWith('image/')) readFile(file)
+  }
+
+  const [stockOpen, setStockOpen] = useState(false)
+  const [stockQuery, setStockQuery] = useState('')
+  const [stockResults, setStockResults] = useState<StockImageResult[]>([])
+  const [stockLoading, setStockLoading] = useState(false)
+  const [stockError, setStockError] = useState<string | null>(null)
+
+  async function runStockSearch() {
+    if (!stockQuery.trim()) return
+    setStockLoading(true)
+    setStockError(null)
+    try {
+      const results = await searchStockImages(stockQuery.trim())
+      setStockResults(results)
+      if (results.length === 0) setStockError('검색 결과가 없습니다 (또는 스톡 이미지 키가 설정되지 않았습니다)')
+    } catch {
+      setStockError('검색에 실패했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setStockLoading(false)
+    }
+  }
+
+  function pickStockImage(result: StockImageResult) {
+    onImageUpdate(result.url)
+    setStockOpen(false)
   }
 
   const toggle = (s: Exclude<Section, null>) => setOpenSection((v) => (v === s ? null : s))
@@ -218,18 +251,18 @@ export default function RightPanel({
 
         {divider}
 
-        {/* §0.5 — 스타일 세트 (덱 단위) */}
+        {/* §0.5 — 템플릿 (덱 비주얼 월드) */}
         <section>
-          <AccordionHead label="스타일 세트" open={openSection === 'set'} onToggle={() => toggle('set')} />
+          <AccordionHead label="템플릿" open={openSection === 'set'} onToggle={() => toggle('set')} />
           {openSection === 'set' && (
             <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {SET_OPTIONS.map((opt) => {
-                const active = (currentSetKey ?? 'report_light') === opt.key
+              {TEMPLATE_OPTIONS.map((opt) => {
+                const active = (currentTemplateKey ?? 'lab_note') === opt.key
                 return (
                   <button
                     key={opt.key}
                     type="button"
-                    onClick={() => onSetChange(opt.key)}
+                    onClick={() => onTemplateChange(opt.key)}
                     style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
                       padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
@@ -356,68 +389,184 @@ export default function RightPanel({
           <AccordionHead label="이미지" open={openSection === 'image'} onToggle={() => toggle('image')} />
           {openSection === 'image' && (
             <div style={{ marginTop: 12 }}>
-              {!hasSlot ? (
-                <div className="flex flex-col items-center gap-2" style={{ padding: '16px 0' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--canvas-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 18, color: 'var(--ink-3)' }}>hide_image</span>
-                  </div>
-                  <p style={{ fontSize: 11, color: 'var(--ink-3)', textAlign: 'center', lineHeight: 1.6 }}>
-                    이 템플릿은<br />이미지 슬롯이 없습니다
-                  </p>
-                </div>
-              ) : (
+              {/* 레거시 박스 슬롯이 등록된 템플릿만 다이어그램 표시 — 없어도 image_mode로 이미지 가능 */}
+              {slotMeta && slotMeta.type !== 'none' && (
                 <>
-                  <SlotDiagram type={slotMeta!.type} />
+                  <SlotDiagram type={slotMeta.type} />
                   <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 6, marginBottom: 12, lineHeight: 1.5 }}>
-                    <strong style={{ color: 'var(--ink-2)' }}>{slotMeta!.label}</strong>
-                    {' '}— {slotMeta!.description}
+                    <strong style={{ color: 'var(--ink-2)' }}>{slotMeta.label}</strong>
+                    {' '}— {slotMeta.description}
                   </p>
-                  {imageUrl ? (
-                    <div>
-                      <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
-                        <img src={imageUrl} alt="카드 이미지" style={{ width: '100%', height: 96, objectFit: 'cover', display: 'block' }} />
-                        <button
-                          onClick={() => onImageUpdate(null)}
-                          aria-label="이미지 제거"
-                          style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: 13 }}>close</span>
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => fileInputRef.current?.click()}
-                        style={{ width: '100%', height: 34, borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--canvas-subtle)', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}
-                      >
-                        이미지 교체
-                      </button>
-                    </div>
-                  ) : (
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => fileInputRef.current?.click()}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click() }}
-                      onDrop={handleDrop}
-                      onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-                      onDragLeave={() => setDragOver(false)}
-                      style={{
-                        borderRadius: 12, cursor: 'pointer', padding: '22px 16px',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                        border: `2px dashed ${dragOver ? 'var(--brand)' : 'var(--border-soft)'}`,
-                        background: dragOver ? 'var(--brand-soft)' : 'transparent', transition: 'all 0.15s',
-                      }}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: 30, color: dragOver ? 'var(--brand)' : 'var(--ink-3)' }}>
-                        add_photo_alternate
-                      </span>
-                      <div style={{ textAlign: 'center' }}>
-                        <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 2 }}>이미지 추가</p>
-                        <p style={{ fontSize: 11, color: 'var(--ink-3)' }}>클릭 또는 드래그</p>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
+              {imageUrl ? (
+                <div>
+                  <div style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', marginBottom: 8, border: '1px solid var(--border-subtle)' }}>
+                    <img src={imageUrl} alt="카드 이미지" style={{ width: '100%', height: 96, objectFit: 'cover', display: 'block' }} />
+                    <button
+                      onClick={() => onImageUpdate(null)}
+                      aria-label="이미지 제거"
+                      style={{ position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: '50%', background: 'rgba(0,0,0,0.55)', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 13 }}>close</span>
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{ width: '100%', height: 34, borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--canvas-subtle)', fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', cursor: 'pointer' }}
+                  >
+                    이미지 교체
+                  </button>
+                </div>
+              ) : (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click() }}
+                  onDrop={handleDrop}
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                  onDragLeave={() => setDragOver(false)}
+                  style={{
+                    borderRadius: 12, cursor: 'pointer', padding: '22px 16px',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                    border: `2px dashed ${dragOver ? 'var(--brand)' : 'var(--border-soft)'}`,
+                    background: dragOver ? 'var(--brand-soft)' : 'transparent', transition: 'all 0.15s',
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 30, color: dragOver ? 'var(--brand)' : 'var(--ink-3)' }}>
+                    add_photo_alternate
+                  </span>
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 2 }}>이미지 추가</p>
+                    <p style={{ fontSize: 11, color: 'var(--ink-3)' }}>클릭 또는 드래그</p>
+                  </div>
+                </div>
+              )}
+
+              {/* 스톡 이미지 검색 — 업로드 대안. Pexels/Unsplash 백엔드 프록시 */}
+              <div style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setStockOpen((v) => !v)}
+                  style={{ fontSize: 11, fontWeight: 600, color: 'var(--brand)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  {stockOpen ? '스톡 검색 닫기' : '무료 스톡 이미지에서 검색'}
+                </button>
+                {stockOpen && (
+                  <div style={{ marginTop: 8 }}>
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); runStockSearch() }}
+                      style={{ display: 'flex', gap: 6 }}
+                    >
+                      <input
+                        value={stockQuery}
+                        onChange={(e) => setStockQuery(e.target.value)}
+                        placeholder="검색어 (예: laboratory, microscope)"
+                        style={{ flex: 1, height: 30, borderRadius: 8, border: '1px solid var(--border-soft)', background: 'var(--canvas)', fontSize: 12, padding: '0 8px', color: 'var(--ink)' }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={stockLoading || !stockQuery.trim()}
+                        style={{ height: 30, padding: '0 12px', borderRadius: 8, border: 'none', background: 'var(--brand)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: stockLoading ? 'wait' : 'pointer', opacity: stockLoading ? 0.7 : 1 }}
+                      >
+                        검색
+                      </button>
+                    </form>
+
+                    {stockError && (
+                      <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 8 }}>{stockError}</p>
+                    )}
+
+                    {stockResults.length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 10 }}>
+                        {stockResults.map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => pickStockImage(r)}
+                            title={`사진: ${r.credit} (${r.provider})`}
+                            style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-subtle)', cursor: 'pointer', padding: 0, height: 72 }}
+                          >
+                            <img src={r.thumb} alt={r.alt} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                            <span style={{ position: 'absolute', bottom: 0, left: 0, right: 0, fontSize: 9, color: '#fff', background: 'rgba(0,0,0,0.5)', padding: '2px 4px', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {r.credit}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 에셋 종류 — 사진/일러스트(독립 차원). 일러스트는 크롭(focal) 의미 없음 + 풀블리드 비활성 */}
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 8 }}>
+                  에셋 종류
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  {([
+                    { key: 'photo',        label: '사진',    desc: '초점 클릭으로 크롭' },
+                    { key: 'illustration', label: '일러스트', desc: '아이콘·벡터·도식' },
+                  ] as { key: string; label: string; desc: string }[]).map(({ key, label, desc }) => {
+                    const active = (currentVisualKind ?? 'photo') === key
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => onVisualKindChange(key)}
+                        style={{
+                          padding: '8px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+                          border: active ? '1.5px solid var(--brand)' : '1px solid var(--border-subtle)',
+                          background: active ? 'var(--brand-soft)' : 'var(--canvas)',
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: active ? 'var(--brand)' : 'var(--ink)' }}>{label}</div>
+                        <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{desc}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* image_mode 선택 */}
+              <div style={{ marginTop: 16 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--ink-3)', textTransform: 'uppercase', marginBottom: 8 }}>
+                  이미지 배치 방식
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                  {([
+                    { key: 'box',      label: '박스',     desc: '기존 영역 안에' },
+                    { key: 'backdrop', label: '풀블리드',  desc: '카드 전체 배경' },
+                    { key: 'ghost',    label: '고스트',    desc: '흐릿하게 배경에' },
+                    { key: 'none',     label: '이미지 없음', desc: '텍스트만' },
+                  ] as { key: string; label: string; desc: string }[]).map(({ key, label, desc }) => {
+                    const active = (currentImageMode ?? 'box') === key
+                    const isIllustration = (currentVisualKind ?? 'photo') === 'illustration'
+                    const disabled = isIllustration && (key === 'backdrop' || key === 'ghost')
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => onImageModeChange(key)}
+                        title={disabled ? '일러스트는 박스/이미지 없음만 지원합니다' : undefined}
+                        style={{
+                          padding: '8px 10px', borderRadius: 8, textAlign: 'left',
+                          cursor: disabled ? 'not-allowed' : 'pointer',
+                          opacity: disabled ? 0.4 : 1,
+                          border: active ? '1.5px solid var(--brand)' : '1px solid var(--border-subtle)',
+                          background: active ? 'var(--brand-soft)' : 'var(--canvas)',
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: active ? 'var(--brand)' : 'var(--ink)' }}>{label}</div>
+                        <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{desc}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           )}
         </section>

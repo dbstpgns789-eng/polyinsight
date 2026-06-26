@@ -191,8 +191,8 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_cou
         await s8_packaging.run(state)
         return
 
-    # S2
-    state = await s2_parser.run(state)
+    # S2 → 실제 코드는 이 단계 없음. 섹션파싱은 S1._parse_sections에 흡수됨(2026-06-25 정정).
+    # state = await s2_parser.run(state)  # 제거 완료
 
     # S6 — 원문 우선, 내부 chain-of-thought로 기여/요약 흡수
     state = await s6_card_json.run(state)
@@ -270,7 +270,8 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_cou
 |---|---|---|
 | 파이프라인 전체 | S1부터 재실행 | 대시보드 "재시도" 버튼 |
 | PNG 렌더링 (S7) | 실패 카드만 재렌더링 | 내보내기 모달 "실패 카드 재시도" |
-| LLM API 호출 | 지수 백오프 (0.5s, 1s, 2s) | 자동 (최대 3회) |
+| LLM API 호출 (S6, **일시적**) | 백오프 후 재시도 (30/60/120/180s, 최대 5회) | 레이트리밋·5xx·타임아웃 자동 |
+| LLM API 호출 (S6, **결정론적**) | **재시도 안 함 (1회 fail-fast)** | 파싱·스키마검증·커버리지 실패 — 재호출해도 동일 실패라 비용만 N배 |
 
 ---
 

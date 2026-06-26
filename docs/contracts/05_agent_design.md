@@ -272,6 +272,18 @@ RULE 6: 원문에 없는 내용을 value로 생성하지 않는다.
 RULE 7: verified는 항상 False로 초기화한다. 사용자가 에디터에서만 True로 변경한다.
 ```
 
+**파싱 강건성 (경계 방어 — 2026-06-25)**: 위 규칙은 *프롬프트가 요구하는* 출력 형태다.
+LLM은 못 찾은 필드의 `source`를 `{}`(빈 객체)·`null`·문자열 등 비정형으로 내보낼 수 있다.
+`FieldSource`는 이를 크래시 없이 `section` 기본값("editor" = 원문 근거 없음 sentinel)으로
+정규화한다 — **한 필드의 비정형 source가 덱 전체를 죽이지 않는다**(실 호출 job f666b539 회귀).
+정량 fidelity는 `match_quality`로 risk를 매기므로(RULE 5) 이 기본값이 검증을 약화시키지 않는다.
+
+**degrade 텔레메트리 (2026-06-25)**: 각 단계 출력의 `degrade_events: list[DegradeEvent]`는
+*엔지니어링/측정* 채널이다(타입드 `DegradeCode`). 유저향 `warnings`(문장)와 분리 — 코퍼스
+하니스가 `degrade_events[].code`를 GROUP BY해 야생 취약성을 집계한다. severity는 필드가
+아니라 코드 분류(`HARD_CODES` — s1_extract_failed/s6_coverage_mismatch/s6_schema_invalid/s6_truncated).
+스키마: `docs/07_api_data_model.md § 2-7`. 설계: `specs/2026-06-25-corpus-robustness-harness-design.md`.
+
 ### 5-3. 처리 흐름 (멀티에이전트, Storyboard-first)
 
 S6 코디네이터는 세 LLM 모듈과 코드 검증을 순서대로 중계한다. 레이아웃 판단(설계팀)만
@@ -296,6 +308,8 @@ S6 코디네이터는 세 LLM 모듈과 코드 검증을 순서대로 중계한�
 콘텐츠팀 Writer (Haiku, raw 권위 + 다이제스트 힌트) — s6/writer.py
   Step 3 WRITE     : storyboard 비트별로 fields를 원문에서 추출·재작성(가독성 규칙).
                      cards[n].template_type == beats[n].template_type 강제.
+                     카드 수는 설계팀 소유 — 스토리보드 밖 card_num은 Writer 월권이므로
+                     드롭한다(실 호출 job 9f4bc0b8: 6비트→14장 커버리지 사망 회귀).
                      뼈대에 grounded 내용이 안 맞으면 mismatch_signals로 보고(억지 생성 금지).
 
 피드백 루프 (코디네이터, 1회 상한) — s6_card_json.py
@@ -468,6 +482,12 @@ verified → 항상 False로 초기화 (사용자가 에디터에서만 True).
 > - `card_count` 상한 **7** (`backend/routers/jobs.py`) — Haiku 안전권
 > - 출력 잘림 시 `stop_reason=="max_tokens"` → `LLMTruncationError` → S6가 즉시 중단(재시도 안 함) + `ERR-S6-002`. truncation은 동일 입력·저온이라 재시도해도 같은 위치에서 잘리므로.
 > - 미래 등급제: 상위 모델(Sonnet 4.6, 출력 64K)로 card_count 상한 확장.
+
+> **재시도 분류 (2026-06-25, 비용 누수 차단)**: `_with_retries`는 실패를 둘로 나눈다(`_is_transient`).
+> *일시적*(레이트리밋·5xx·타임아웃)만 백오프 재시도하고, *결정론적*(JSON 파싱·pydantic 검증·
+> 커버리지 ValueError·KeyError)은 **1회만에 fail-fast** → `ERR-S6-001`. 후자는 동일 입력·저온이면
+> 재호출해도 같은 실패라, 5회 재시도 = LLM 비용 5배 순손실. 실 호출 job f666b539·9f4bc0b8가
+> 결정론적 실패(스키마·커버리지)를 5회 재시도해 회당 정상 대비 ~2.5배 비용을 태웠다.
 
 ### 5-5. LLM 호출 설정
 

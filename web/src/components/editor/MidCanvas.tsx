@@ -29,7 +29,7 @@ interface Props {
   bgColor?: string
   accentColor?: string
   fontPairing?: string
-  setKey?: string
+  templateKey?: string
   isDemo?: boolean
   focusedField?: string | null
   onFieldFocus?: (field: string) => void
@@ -43,7 +43,7 @@ interface Props {
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────
 export default function MidCanvas({
-  cards, activeCardIdx, onSelectCard, theme, bgColor, accentColor, fontPairing, setKey, focusedField,
+  cards, activeCardIdx, onSelectCard, theme, bgColor, accentColor, fontPairing, templateKey, focusedField,
   onFieldFocus, onFieldChange, onImageUploadRequest, onFocalChange, onFitChange,
   onDownloadCard, downloadingCardNum,
 }: Props) {
@@ -104,7 +104,7 @@ export default function MidCanvas({
             bgColor={bgColor}
             accentColor={accentColor}
             fontPairing={fontPairing}
-            setKey={setKey}
+            templateKey={templateKey}
             mode="edit"
             scale={scale}
             focusedField={focusedField}
