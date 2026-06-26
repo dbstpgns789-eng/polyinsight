@@ -1,8 +1,18 @@
-# CLAUDE.md
-> PolyInsight v2.0 | 2025-05-05
-> This file is the execution protocol for Claude Code in this repository.
-> Treat every rule here as mandatory, not optional guidance.
-> This file will be updated as design decisions evolve.
+# CLAUDE.md — CEO (전사 절대원칙)
+> PolyInsight | 루트에서 Claude를 열면 전사 컨텍스트.
+> 모든 부서(CPO·CTO·COO·CMO)가 공유하는 절대 원칙.
+
+## 부서 구조
+| 부서 | 폴더 | 담당 |
+|---|---|---|
+| CEO | `/` (루트) | 전사 원칙·비전·최종 결정 |
+| CPO | `cpo/` | 제품 기획·로드맵·ROI |
+| CTO | `backend/` `web/` | 파이프라인·개발·인프라 |
+| COO | `coo/` | 운영·서버·DB·회원·비용 |
+| CMO | `cmo/` | 마케팅·채널·클릭률·SNS |
+
+> 부서 세션 시작 시 해당 폴더에서 Claude를 연다.
+> 부서간 핸드오프는 `docs/`를 경유한다.
 
 ---
 
