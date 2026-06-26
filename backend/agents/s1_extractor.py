@@ -90,10 +90,14 @@ def _parse_sections(raw_text: str) -> tuple[dict[str, str], bool]:
             is_numbered = bool(re.match(r"^\d+[\.\s]", raw_hdr))
             key = re.sub(r"^\d+(\.\d+)*\.?\s*", "", raw_hdr).strip().lower()
 
-            is_real = is_numbered or key in _TERMINAL_SECTIONS
+            # pymupdf4llm이 한글 자간을 공백으로 출력하는 경우 대응 ("서  론" → "서론")
+            key_compact = key.replace(" ", "")
+            is_real = is_numbered or key in _TERMINAL_SECTIONS or key_compact in _TERMINAL_SECTIONS
             if not is_real or not key:
                 # 저널명·제목 등 → 스킵
                 continue
+            if key_compact in _TERMINAL_SECTIONS and key not in _TERMINAL_SECTIONS:
+                key = key_compact  # 공백 정규화된 키로 저장
 
             # 이전 섹션 저장
             if current_key is not None:
@@ -120,7 +124,10 @@ def _parse_sections(raw_text: str) -> tuple[dict[str, str], bool]:
                 raw_hdr = plain_m.group(1).strip()
                 is_numbered = bool(re.match(r"^\d+[\.\s]", raw_hdr))
                 key = re.sub(r"^\d+(\.\d+)*\.?\s*", "", raw_hdr).strip().lower()
-                is_real = is_numbered or key in _TERMINAL_SECTIONS
+                key_compact = key.replace(" ", "")
+                is_real = is_numbered or key in _TERMINAL_SECTIONS or key_compact in _TERMINAL_SECTIONS
+                if key_compact in _TERMINAL_SECTIONS and key not in _TERMINAL_SECTIONS:
+                    key = key_compact
                 if is_real and key:
                     if current_key is not None:
                         body = "\n".join(current_lines).strip()
