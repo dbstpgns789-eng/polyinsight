@@ -53,3 +53,22 @@ def test_mixed_bold_and_plain_headings():
     assert "introduction" in sections
     assert "methods" in sections
     assert "results" in sections
+
+
+def test_korean_terminal_sections():
+    # 한국어 논문: bold 없는 ## 한국어 섹션명.
+    text = "## 서론\n서론 내용.\n## 방법\n방법 내용.\n## 결론\n결론 내용."
+    sections, degraded = _parse_sections(text)
+    assert not degraded, f"한국어 섹션 파싱 실패: {list(sections.keys())}"
+    assert "서론" in sections
+    assert "방법" in sections
+    assert "결론" in sections
+
+
+def test_korean_numbered_sections():
+    # 한국어 논문 번호 섹션: "## 1. 서론" — is_numbered라 TERMINAL 불문 인식됨.
+    text = "## 1. 서론\n서론 내용.\n## 2. 연구 방법\n방법 내용.\n## 3. 결론\n결론 내용."
+    sections, degraded = _parse_sections(text)
+    assert not degraded
+    assert "서론" in sections
+    assert "연구 방법" in sections

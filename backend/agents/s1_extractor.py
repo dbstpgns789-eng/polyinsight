@@ -40,6 +40,7 @@ def _clean_text(text: str) -> str:
 
 # 번호 없는 종결 섹션 (numbered 아니어도 실제 섹션으로 인정)
 _TERMINAL_SECTIONS = {
+    # 영어
     "abstract", "introduction", "background",
     "methods", "method", "methodology", "materials and methods",
     "results", "results and discussion", "discussion",
@@ -47,6 +48,14 @@ _TERMINAL_SECTIONS = {
     "references", "acknowledgments", "acknowledgements",
     "declaration of competing interest",
     "credit authorship contribution statement", "data availability",
+    # 한국어
+    "초록", "요약",
+    "서론", "배경",
+    "방법", "방법론", "연구 방법", "재료 및 방법", "실험 방법",
+    "결과", "연구 결과", "결과 및 고찰",
+    "고찰", "논의",
+    "결론", "결론 및 제언",
+    "참고문헌", "감사의 말", "감사의 글",
 }
 
 
