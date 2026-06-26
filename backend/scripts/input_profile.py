@@ -29,7 +29,10 @@ def journal_family_from_doi(doi: str | None) -> str:
 # 거터(중앙 빈 띠) 판정 파라미터 — Golden/코퍼스로 후속 캘리브레이션 가능.
 _GUTTER_LO, _GUTTER_HI = 0.42, 0.58
 _SIDE_MIN = 0.25     # 좌·우 각 절반이 최소 이만큼 차야 2단 후보
-_GUTTER_MAX = 0.10   # 중앙 거터가 이보다 비어야 2단
+# 0.35로 완화: 실제 2단 논문은 제목/초록이 full-width라 중앙 단어 비율이 ~30%까지 올라감.
+_GUTTER_MAX = 0.35
+
+_DOI_RE = re.compile(r"\b(10\.\d{4,}/[^\s,;)\"'<>]+)", re.IGNORECASE)
 
 
 def columns_from_centers(centers: list[float]) -> int:
@@ -59,8 +62,24 @@ def detect_columns(pdf_bytes: bytes) -> int:
     return columns_from_centers(centers)
 
 
+def doi_from_text(pdf_bytes: bytes) -> str | None:
+    """첫 2페이지 본문에서 DOI 패턴 검색. 메타데이터에 없을 때 폴백."""
+    try:
+        with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+            for page in pdf.pages[:2]:
+                text = page.extract_text() or ""
+                m = _DOI_RE.search(text)
+                if m:
+                    return m.group(1).rstrip(".,)")
+    except Exception:
+        pass
+    return None
+
+
 def build_input_profile(pdf_bytes: bytes, doi: str | None) -> dict:
     """논문 1편 → {columns, journal_family}. Mode A가 GROUP BY 하는 메타."""
+    if not doi:
+        doi = doi_from_text(pdf_bytes)
     return {
         "columns": detect_columns(pdf_bytes),
         "journal_family": journal_family_from_doi(doi),
