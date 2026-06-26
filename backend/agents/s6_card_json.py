@@ -138,7 +138,15 @@ class S6CardJsonAgent(BaseAgent[S6Input, S6Output]):
         self, input_data: S6Input, arch_out: ArchitectOutput, wr_out: WriterOutput,
     ) -> tuple[Storyboard, WriterOutput, list[str]]:
         """Writer 불일치 신호 → 설계팀 지목 비트 재설계 → Writer 부분 재작성 → 병합/안전뼈대."""
-        signals = wr_out.mismatch_signals
+        # LLM이 0-index card_num을 쓰는 경우 방어: 유효한 card_num만 통과시킨다.
+        valid_nums = {b.card_num for b in arch_out.storyboard.beats}
+        signals = [s for s in wr_out.mismatch_signals if s.card_num in valid_nums]
+        if not signals:
+            logger.warning(
+                "S6 피드백 루프: 불일치 신호 card_num %s 모두 무효(유효=%s) — 루프 스킵",
+                [s.card_num for s in wr_out.mismatch_signals], sorted(valid_nums),
+            )
+            return arch_out.storyboard, wr_out, []
         bad = [s.card_num for s in signals]
         logger.info("S6 피드백 루프: 불일치 카드 %s — 재설계 1회", bad)
 

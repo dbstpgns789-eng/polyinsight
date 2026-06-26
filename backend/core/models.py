@@ -105,6 +105,14 @@ class FieldValue(BaseModel):
     risk_level: RiskLevel = RiskLevel.LOW
     verified: bool = False
 
+    @field_validator("match_quality", mode="before")
+    @classmethod
+    def _normalize_match_quality(cls, v: object) -> object:
+        """LLM이 'mixed' 같은 enum 외 값을 반환할 때 FAILED로 안전 폴백."""
+        if isinstance(v, str) and v not in {mq.value for mq in MatchQuality}:
+            return MatchQuality.FAILED
+        return v
+
 
 class FieldStyle(BaseModel):
     """요소별 토큰-바운드 미세조정. 전 필드 선택적."""
