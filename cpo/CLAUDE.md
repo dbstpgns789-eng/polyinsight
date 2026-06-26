@@ -1,6 +1,20 @@
-# CPO — Chief Product Officer
+﻿# CPO — Chief Product Officer
 > 제품 기획 · 로드맵 · 유저플로우 · ROI
 > 이 폴더에서 Claude를 열면 기획 전용 컨텍스트. 코드 얘기 없음.
+
+---
+
+## 세션 시작 필독 (읽기 전 답변 시작 금지)
+
+```
+../NORTH_STAR.md              ← 북극성·ROI 목표
+../PRODUCT.md                 ← 브랜드·유저·제품 목적
+../WORKFLOW.md                ← 부서간 핸드오프 계약
+../docs/constitution/19_engagement_principles.md  ← 저장률 공학
+../docs/constitution/20_mirra_benchmark_strategy.md  ← 포지셔닝
+PRD.md                        ← 현재 제품 요구사항
+ROADMAP.md                    ← 마일스톤·연기 목록
+```
 
 ---
 

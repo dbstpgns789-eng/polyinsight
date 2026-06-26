@@ -1,6 +1,17 @@
-# COO — Chief Operating Officer
+﻿# COO — Chief Operating Officer
 > 운영 · 서버 · DB · 회원관리 · 비용
 > 이 폴더에서 Claude를 열면 운영 전용 컨텍스트.
+
+---
+
+## 세션 시작 필독 (읽기 전 답변 시작 금지)
+
+```
+../NORTH_STAR.md              ← 북극성·현재 Phase 확인
+../cpo/ROADMAP.md             ← 배포 일정·Phase 목표
+../docs/contracts/04_architecture.md    ← 파이프라인·서버 구조
+../docs/contracts/07_api_data_model.md  ← DB 스키마
+```
 
 ---
 
@@ -33,6 +44,6 @@
 - 모니터링: 미구축
 
 ## 참조
-- `../docs/04_architecture.md` — 파이프라인 구조
-- `../docs/07_api_data_model.md` — DB 스키마
+- `../docs/contracts/04_architecture.md` — 파이프라인 구조
+- `../docs/contracts/07_api_data_model.md` — DB 스키마
 - `../memory/project_lab_deployment.md` — 배포 런북

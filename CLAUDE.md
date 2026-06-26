@@ -1,13 +1,15 @@
-# CLAUDE.md — CEO (전사 절대원칙)
+﻿# CLAUDE.md — CEO (전사 절대원칙)
 > PolyInsight | 루트에서 Claude를 열면 전사 컨텍스트.
 > 모든 부서(CPO·CTO·COO·CMO)가 공유하는 절대 원칙.
 
 ## 부서 구조
+
 | 부서 | 폴더 | 담당 |
 |---|---|---|
 | CEO | `/` (루트) | 전사 원칙·비전·최종 결정 |
 | CPO | `cpo/` | 제품 기획·로드맵·ROI |
-| CTO | `backend/` `web/` | 파이프라인·개발·인프라 |
+| CTO | `backend/` `web/` | 코드 소유 (파이프라인·API·프론트 구현) |
+| CDO | `cdo/` | 디자인 스펙 소유 (시스템·컴포넌트 명세·UX 결정) |
 | COO | `coo/` | 운영·서버·DB·회원·비용 |
 | CMO | `cmo/` | 마케팅·채널·클릭률·SNS |
 
@@ -33,105 +35,109 @@ Design philosophy:
 
 ---
 
-## 2. Pipeline Structure (v2.0 — Current)
+## 2. Pipeline Structure (v2.0)
 
 ```
 S1  Text Extraction     pdfplumber / PyMuPDF
 S2  Section Parsing     regex + LLM fallback
   ↓
-S6  Card News JSON      원문 direct read + 내부 chain-of-thought으로 기여/요약 추출
+S6  Card News JSON      원문 direct read + chain-of-thought으로 기여/요약 추출
 S7  PNG Rendering       Playwright (NOT Pillow)
 S8  Output Packaging    SQLite persistence
 ```
 
 **Breaking changes from v1.0:**
-- S3/S4 are **removed** — absorbed into S6 chain-of-thought
-- S5 (Promotional Sentences) is **removed** from KITECH pipeline
-- S6 treats the source text as primary — internal reasoning only
-- S7 uses **Playwright** screenshot, not Pillow template renderer
+- S3/S4 **removed** — absorbed into S6 chain-of-thought
+- S5 **removed** — Promotional Sentences 단계 폐기
+- S7 uses **Playwright** screenshot (NOT Pillow)
 - Storage is **SQLite** (permanent), not in-memory dict (TTL 30min)
 
----
-
-## 3. S6 Grounding Rules (Most Critical)
-
-S6 is the stage most vulnerable to hallucination.
-These rules are non-negotiable:
-
-```
-RULE 1: section_map (source text) is the ONLY source of facts
-RULE 2: S3/S4 outputs are hints — if they conflict with source, source wins
-RULE 3: Every numeric value MUST include source field: {section, page}
-RULE 4: Never add content not present in the source paper
-RULE 5: If grounding cannot be demonstrated, surface it as low confidence
-```
-
-Each field in S6 JSON output must carry:
-```json
-{
-  "value": "...",
-  "confidence": "high|medium|low",
-  "match_quality": "exact|normalized|fuzzy|semantic|failed",
-  "claim_type": "quantitative|qualitative|causal",
-  "source": { "section": "Results", "page": 7 },
-  "risk_level": "CRITICAL|HIGH|MEDIUM|LOW"
-}
-```
-
-CRITICAL = quantitative + match_quality failed → always flag for human review.
-
-**Risk escalates only on NUMBERS (claim_type = quantitative).** Qualitative/causal
-paraphrase caps at MEDIUM — rewriting prose for readability is not a fidelity risk.
-```
-quantitative + failed              → CRITICAL
-quantitative + (fuzzy|semantic)    → HIGH
-quantitative + normalized          → MEDIUM
-qualitative|causal + (failed|fuzzy|semantic) → MEDIUM  (cap)
-else (exact, qualitative normalized)         → LOW
-```
+> S6 세부 규칙 → `backend/CLAUDE.md`
 
 ---
 
-## 4. Architecture Invariants
+## 3. Architecture Invariants
 
-These structural rules do not change without explicit decision:
+변경하려면 명시적 결정 필요:
 
-- The Orchestrator is the **only controller** of pipeline execution
-- Agents do not call each other directly
-- Each stage receives **validated input** and returns **typed output**
-- S8 always runs, even when upstream stages fail
-- S5 does not exist in this pipeline
-- S3 and S4 do not exist in this pipeline
-
----
-
-## 5. Stage Contract Discipline
-
-Treat each stage as a strict boundary.
-
-Do not:
-- pass raw LLM output to the next stage without validation
-- skip schema validation because a response "looks correct"
-- patch downstream stages to compensate for upstream failures
-- hide degraded inputs behind normal-looking outputs
-
-If a stage is degraded, surface it explicitly in RunState and output status.
+- Orchestrator는 **유일한 파이프라인 컨트롤러**
+- Agent끼리 직접 호출 금지 — Orchestrator 경유만
+- 각 stage는 **validated input** 수신 → **typed output** 반환
+- S8은 upstream 실패 시에도 항상 실행
+- S3, S4, S5는 이 파이프라인에 존재하지 않음
 
 ---
 
-## 6. Degraded Mode Rules
+## 4. Working Style
 
-Degraded mode ≠ success.
-
-When degraded_mode triggers:
-- do not silently present outputs as normal quality
-- preserve degraded state in RunState.warnings
-- reflect degraded quality in final status
-- do not fabricate section-level confidence from arbitrary text splitting
+- **one task = one change** — 무관한 변경 동시 금지
+- stage contract를 보존하는 최소 변경 우선
+- bug fix는 해당 stage에만 국한
+- spec 불일치 발견 시 → 불일치 먼저 명시, 그 다음 fix
+- commit format: `[S1-S8 | FE | BE | DOCS] brief description`
+- docs 변경 → 코드 변경 순서 엄수
 
 ---
 
-## 7. What Never to Do
+## 5. Monorepo Structure (v2.4)
+
+```
+polyinsight/
+  CLAUDE.md          ← 전사 규칙 (이 파일)
+  NORTH_STAR.md      ← 북극성 지표 + ROI 목표
+  WORKFLOW.md        ← 부서간 핸드오프 컨트랙트
+  PRODUCT.md         ← 브랜드/제품 정의
+  DESIGN.md          ← 디자인 시스템 토큰
+  package.json       ← npm workspaces 루트
+  docs/              ← canonical 공유 문서 — 복사본 생성 금지
+  cpo/
+    CLAUDE.md        ← CPO 역할 규칙
+    PRD.md           ← 제품 요구사항 정의서
+    ROADMAP.md       ← 마일스톤 + 연기 목록
+  cdo/
+    CLAUDE.md        ← CDO 역할 규칙 (디자인 + 프론트엔드)
+    DESIGN_SYSTEM.md ← 브랜드 시각적 정체성 + 토큰
+    UI_COMPONENTS.md ← 컴포넌트 명세
+  backend/
+    CLAUDE.md        ← CTO 백엔드 규칙 (S6·stage contract·degrade)
+    ARCHITECTURE.md  ← 파이프라인 + DB 스키마
+    TESTING_HARNESS.md ← 코퍼스 하네스 + 불변식
+  web/
+    CLAUDE.md        ← Next.js 구현 규칙 (화면구조·CSS)
+  cmo/
+    CLAUDE.md        ← CMO 역할 규칙
+    COPYWRITING_GUIDE.md ← 톤앤매너 + 카피 원칙
+    GTM_STRATEGY.md  ← 시장 진출 전략
+  coo/
+    CLAUDE.md        ← COO 역할 규칙 (운영·서버·비용)
+```
+
+**포트 할당**: `backend` 8000 / `web` 3000
+
+**각 역할별 필수 읽기**:
+
+| 역할 | 필수 파일 |
+|---|---|
+| 모든 Claude | 루트 `CLAUDE.md` |
+| Backend | `backend/CLAUDE.md`, `docs/contracts/04_architecture.md`, `docs/contracts/07_api_data_model.md` |
+| Web | `web/CLAUDE.md`, `docs/contracts/10_screen_design.md`, `docs/contracts/12_card_editor_content.md`, `docs/contracts/18_card_design_system.md` |
+
+---
+
+## 6. Source of Truth
+
+코드 변경 전 항상 읽어야 할 파일:
+```
+docs/contracts/04_architecture.md        Pipeline structure
+docs/contracts/05_agent_design.md        Agent contracts + S6 prompt rules
+docs/contracts/07_api_data_model.md      API endpoints + data schemas
+docs/contracts/18_card_design_system.md  Card skin/skeleton, tokens, focal/image_fit
+```
+코드 ↔ docs 충돌 → **docs가 의도된 설계**. 불일치를 명시 후 수정.
+
+---
+
+## 7. NEVER
 
 ```
 NEVER  invent fields not in the defined schema
@@ -146,111 +152,26 @@ NEVER  skip docs/ update before code change
 
 ---
 
-## 8. Frontend Screen Structure
+## 8. Change Log
 
-```
-/dashboard          Project list, stats, activity feed
-/editor/:jobId      3-panel card editor (Content | Preview | Design)
-upload modal        Upload & processing overlay (no separate route)
-export modal        Export & download overlay (no separate route)
-```
-
-Key frontend rules:
-- Upload and Export are **modals** (React Portal), not pages
-- Export preflight **warns** on unreviewed/CRITICAL items but does **not** hard-block —
-  user has final judgment ("최종 판단은 사용자가"). (Earlier "CTA disabled on CRITICAL/HIGH"
-  was never implemented and is retired by decision 2026-06-06.)
-- Image slots are **optional** — export is allowed without images
-- Auto-save every 5 seconds idle
+| Date | Version | Summary |
+|------|---------|---------|
+| 2026-06-26 | v2.4 | CLAUDE.md 부서별 분리 (root=CEO only, backend/web 전용 파일 신설) |
+| 2026-06-06 | v2.3 | risk 분류 정직화 + export 경고-후-진행(하드블록 폐기) |
+| 2026-05-19 | v2.2 | web/ 단독 프론트엔드 확정, PRODUCT.md/DESIGN.md 루트 이동 |
+| 2026-05-19 | v2.1 | Monorepo 통합, CSS 이식 실패 회고 |
+| 2025-05-05 | v2.0 | S3/S4/S5 removed, Playwright, SQLite |
 
 ---
 
-## 9. Source of Truth for Decisions
+## ⚠️ Learned Mistakes
+> 실전에서 발생한 치명적 실수. 세션 중 즉시 추가. 절대 삭제 안 함.
 
-Before changing code, always read:
-
-```
-docs/04_architecture.md   Pipeline structure and component design
-docs/05_agent_design.md   Agent contracts and S6 prompt rules
-docs/07_api_data_model.md API endpoints and data schemas
-docs/18_card_design_system.md  Card skin/skeleton system, tokens, 8 skeletons, focal/image_fit
-```
-
-If code conflicts with docs → treat docs as intended design.
-Note the mismatch explicitly before fixing.
-
----
-
-## 10. Working Style
-
-When making changes:
-- **one task = one change** — do not combine unrelated changes
-- prefer minimal changes that preserve stage contracts
-- keep fixes local to the responsible stage
-- if a bug exposes a spec mismatch, note both the fix and the drift
-- commit format: `[S1-S8 | FE | BE | DOCS] brief description`
-
-When writing docs:
-- write in technical, decision-oriented tone
-- prefer sections: Problem / Decision / Rationale / Risks
-- document trade-offs explicitly
-- avoid long tutorials
-
----
-
-## 12. Monorepo Structure (v2.2 — Current)
-
-```
-polyinsight/
-  CLAUDE.md          ← 모든 Claude가 읽는 공통 규칙 (이 파일)
-  PRODUCT.md         ← 브랜드/제품 정의 (impeccable 스킬 참조)
-  DESIGN.md          ← 디자인 시스템 토큰 (impeccable 스킬 참조)
-  package.json       ← npm workspaces 루트
-  docs/              ← canonical 공유 문서 — 복사본 생성 금지
-  backend/           ← FastAPI + S1-S8 파이프라인 (Python, 포트 8000)
-  web/               ← Next.js 15 프로덕션 프론트엔드 (포트 3000)
-    CLAUDE.md        ← web 전용 추가 규칙
-```
-
-**포트 할당 (충돌 없음)**:
-- `backend`: 8000 (FastAPI uvicorn)
-- `web`:     3000 (Next.js dev server)
-
-**각 Claude 역할별 필수 읽기 파일**:
-
-| Claude 역할 | 필수 파일 |
-|---|---|
-| 모든 Claude | 루트 `CLAUDE.md` |
-| Backend/Full-stack | `docs/04_architecture.md`, `docs/07_api_data_model.md` |
-| Web Claude | `web/CLAUDE.md`, `docs/10_screen_design.md`, `docs/12_card_editor_content.md`, `docs/18_card_design_system.md` |
-
-**docs/ 원칙**: 파일 하나, 위치 하나. 각 workspace에 복사본 생성 금지.
-docs 변경 → 코드 변경 순서를 지킨다.
-
----
-
-## 11. Change Log
-
-| Date       | Version | Change Summary                                              |
-|------------|---------|-------------------------------------------------------------|
-| 2026-06-06 | v2.3    | risk 분류 정직화 (정량만 HIGH/CRITICAL, 정성 의역 MEDIUM 상한) + export는 경고-후-진행(하드 차단 폐기). docs/superpowers/specs/2026-06-06-risk-taxonomy-design.md |
-| 2026-05-19 | v2.2    | frontend/, landing/ 삭제 (deprecated 프로토타입), web/ 단독 프론트엔드로 확정, PRODUCT.md/DESIGN.md 루트로 이동 |
-| 2026-05-19 | v2.1    | Monorepo 통합 (landing/, web/ 추가), CSS 이식 실패 회고 → web/CLAUDE.md 규칙 추가 |
-| 2025-05-05 | v2.0    | S3/S4 removed (absorbed into S6), S5 removed, Playwright, SQLite, S6 rewrite |
-| (previous) | v1.0    | Sequential S1-S8, Pillow, in-memory dict, S5 included       |
-
-## 13. CSS 이식 공통 규칙
-
-복수의 CSS 시스템을 하나로 합칠 때 발생하는 토큰 불일치 방지 규칙.
-`web/CLAUDE.md` 섹션 6에서 구체적 매핑 테이블 확인.
-
-**핵심 원칙**: 이식(코드 옮기기) 전에 통합(디자인 언어 통일)이 선행되어야 한다.
-
-```
-NEVER  @theme 블록에 hex/rgb 색상값을 직접 쓴다 — 반드시 var() 참조
-NEVER  "빌드 성공"을 이식 완료 기준으로 삼는다
-ALWAYS 이식 전 토큰 매핑 테이블을 작성한다
-ALWAYS 이식 후 브라우저에서 두 영역의 색상이 동일한지 시각 검증한다
-```
-
-자세한 사례 분석: `docs/14_migration_retrospective.md`
+| 날짜 | 상황 | 실수 | 규칙 |
+|------|------|------|------|
+| 2025-05-05 | S6 리팩터 | S3/S4를 S6에 암묵 병합 → stage contract 파괴 | stage 합병은 docs 결정 후에만. 암묵 흡수 금지 |
+| 2026-05-19 | CSS 이식 | frontend/ hex 토큰을 web/ OKLCH에 직접 복사 → 브랜드 색 불일치 | 이식 전 토큰 매핑 테이블 필수. 완료 기준 = 시각 검증 |
+| 2026-06-06 | Export UX | CRITICAL 리스크 항목 CTA 하드블록 구현 → 사용자 판단권 침해 | export는 경고 후 진행. 하드블록 없음. 최종 판단은 사용자 |
+| 2026-06-11 | 성능 최적화 | ROI 검증 없이 프롬프트 캐싱 구조 선설계 → 프리픽스 제약으로 폐기 | 비용 최적화는 실측 후. 선제 구조 변경 금지 |
+| 2026-06-26 | 다중 문서 동시 작성 | 병렬 작성 시 문서 간 cross-check 없이 commit → 역할 충돌·누락 다수 | 다중 문서 작성 후 반드시 상호 일관성 검증. 뼈대 ≠ 완성 |
+| 2026-06-26 | CMO 문서 작성 | docs/19·20·PRODUCT.md 읽기 전에 "인용수/H-index" 프레임 발명 → 확립된 컨텍스트 덮어씀 | 부서 문서 작성 전 해당 도메인의 기존 docs/ 전부 읽기. 발명 금지 |
