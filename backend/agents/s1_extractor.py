@@ -103,6 +103,29 @@ def _parse_sections(raw_text: str) -> tuple[dict[str, str], bool]:
             current_lines = []
             continue
 
+        # ── ## 평문 헤더 폴백 (bold 없음: bioRxiv/arXiv/ChemSusChem 스타일) ─────
+        # bold_m이 이미 처리했으므로 여기는 bold 없는 경우만. 번호 섹션 or TERMINAL만 허용.
+        if not bold_m:
+            plain_m = re.match(r"^#{1,3}\s+(.+?)\s*$", stripped)
+            if plain_m:
+                raw_hdr = plain_m.group(1).strip()
+                is_numbered = bool(re.match(r"^\d+[\.\s]", raw_hdr))
+                key = re.sub(r"^\d+(\.\d+)*\.?\s*", "", raw_hdr).strip().lower()
+                is_real = is_numbered or key in _TERMINAL_SECTIONS
+                if is_real and key:
+                    if current_key is not None:
+                        body = "\n".join(current_lines).strip()
+                        if body:
+                            sections.setdefault(current_key, body)
+                    if not found_first_section and is_numbered:
+                        found_first_section = True
+                        ab = "\n".join(pre_body).strip()
+                        if len(ab) > 80:
+                            sections["abstract"] = ab
+                    current_key = key
+                    current_lines = []
+                    continue
+
         # ── ## _이탤릭_ 소목차 ──────────────────────────────────────────────
         italic_m = re.match(r"^#{1,3}\s+_(.+?)_\s*$", stripped)
         if italic_m and current_key is not None:
