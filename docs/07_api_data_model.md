@@ -510,13 +510,14 @@ interface FieldValue {
 
 ```typescript
 interface PipelineStatus {
-  jobId:     string
-  status:    'PENDING' | 'RUNNING' | 'DONE' | 'ERROR'
-  stage:     'S1' | 'S2' | 'S3' | 'S4' | 'S6' | 'S7' | 'S8' | null
-  progress:  number       // 0~100
-  degraded:  boolean
-  warnings:  string[]
-  updatedAt: string       // ISO 8601
+  jobId:          string
+  status:         'PENDING' | 'RUNNING' | 'DONE' | 'ERROR'
+  stage:          'S1' | 'S6' | 'S7' | 'S8' | null  // S2~S5 없음 — S1에 흡수 또는 제거
+  progress:       number       // 0~100
+  degraded:       boolean
+  warnings:       string[]     // 유저향 경고 문장
+  degrade_events: DegradeEvent[]  // 엔지니어링 텔레메트리(하니스 집계용). warnings와 분리.
+  updatedAt:      string       // ISO 8601
 }
 
 interface ExportStatus {
@@ -532,6 +533,34 @@ interface ExportStatus {
   errorCard:    number | null
   errorMessage: string | null
 }
+```
+
+### 2-7. DegradeEvent (엔지니어링 텔레메트리)
+
+S1Output / S6Output의 `degrade_events: list[DegradeEvent]`는 **엔지니어링/측정 채널**이다.
+코퍼스 하니스가 `code`를 GROUP BY해 야생 취약성을 집계한다. 유저향 `warnings`(문장)와 분리.
+
+```typescript
+interface DegradeEvent {
+  code:    DegradeCode      // 타입드 코드 — 하니스 집계 키
+  layout?: string           // S6 카드-로컬일 때만 (template_type)
+  detail?: string           // 사람용 부연 — 집계 대상 아님
+}
+
+type DegradeCode =
+  // S1 soft (파이프라인 계속)
+  | 's1_no_sections'        // 섹션 헤딩 검출 실패 → section_map 빔
+  | 's1_low_words'          // word_count < 100
+  | 's1_parse_fallback'     // pymupdf4llm 실패 → pdfplumber 폴백
+  // S1 hard (즉시 중단)
+  | 's1_extract_failed'     // 텍스트 추출 자체 불가
+  // S6 hard (Mode B 회귀 대상)
+  | 's6_coverage_mismatch'
+  | 's6_schema_invalid'
+  | 's6_truncated'
+
+// HARD_CODES = { s1_extract_failed, s6_coverage_mismatch, s6_schema_invalid, s6_truncated }
+// severity는 DegradeEvent 필드가 아니라 코드 분류. 설계: specs/2026-06-25-corpus-robustness-harness-design.md
 ```
 
 ---

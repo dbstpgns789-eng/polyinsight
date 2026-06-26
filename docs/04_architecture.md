@@ -191,8 +191,8 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_cou
         await s8_packaging.run(state)
         return
 
-    # S2
-    state = await s2_parser.run(state)
+    # S2 → 실제 코드는 이 단계 없음. 섹션파싱은 S1._parse_sections에 흡수됨(2026-06-25 정정).
+    # state = await s2_parser.run(state)  # 제거 완료
 
     # S6 — 원문 우선, 내부 chain-of-thought로 기여/요약 흡수
     state = await s6_card_json.run(state)
