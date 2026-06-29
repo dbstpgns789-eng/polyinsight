@@ -61,7 +61,10 @@ async def author_deck(
         system_prompt=system,
         user_prompt=user,
         model=settings.LLM_MODEL_AUTHOR,
-        max_tokens=64000,                 # 비-Haiku ceiling. 대용량 HTML 덱.
+        # 7장 덱 ≈ 20K자 ≈ ~8K 토큰. 16000이면 2배 여유 + 비스트리밍 허용 범위.
+        # (SDK는 max_tokens가 너무 커서 >10분 가능하면 streaming을 강제 → 그 임계 아래로.)
+        # 카드 수를 크게 늘리는 premium 티어에선 streaming 지원이 필요(향후).
+        max_tokens=settings.AUTHOR_MAX_TOKENS,
         temperature=0.5,
         timeout_s=settings.AUTHOR_TIMEOUT_S,
     )
