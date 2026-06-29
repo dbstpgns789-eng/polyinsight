@@ -108,6 +108,15 @@ async def migrate() -> None:
                 payload TEXT,
                 created_at TEXT NOT NULL
             );
+
+            -- 헌법 v3.0 단일 저작 경로(레거시 card_data와 분리). HTML 덱 전문 + 충실성 검증 결과.
+            CREATE TABLE IF NOT EXISTS authored_deck (
+                job_id TEXT PRIMARY KEY REFERENCES jobs(job_id),
+                html TEXT,
+                verify_json TEXT,
+                card_count INT,
+                updated_at TEXT
+            );
             """
         )
         await conn.commit()
@@ -245,6 +254,39 @@ async def get_card_data(job_id: str) -> str | None:
             return row[0] if row else None
 
 
+# ── 단일 저작 덱 (헌법 v3.0) ───────────────────────────────────────────────
+
+async def save_authored_deck(
+    job_id: str, html: str, verify_json: str, card_count: int
+) -> None:
+    now = _utc_now_iso()
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute(
+            """
+            INSERT INTO authored_deck (job_id, html, verify_json, card_count, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(job_id) DO UPDATE SET
+                html = excluded.html,
+                verify_json = excluded.verify_json,
+                card_count = excluded.card_count,
+                updated_at = excluded.updated_at
+            """,
+            (job_id, html, verify_json, card_count, now),
+        )
+        await conn.commit()
+
+
+async def get_authored_deck(job_id: str) -> dict | None:
+    async with aiosqlite.connect(_db_path()) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT html, verify_json, card_count, updated_at FROM authored_deck WHERE job_id = ?",
+            (job_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
 async def update_job_title(job_id: str, title: str) -> bool:
     """job 표시명(title) 갱신. 존재하면 True."""
     async with aiosqlite.connect(_db_path()) as conn:
@@ -257,11 +299,12 @@ async def update_job_title(job_id: str, title: str) -> bool:
 
 
 async def delete_job(job_id: str) -> bool:
-    """job과 연관 데이터(card_data·card_images·exports) 일괄 삭제. job 존재 시 True."""
+    """job과 연관 데이터(card_data·card_images·exports·authored_deck) 일괄 삭제. job 존재 시 True."""
     async with aiosqlite.connect(_db_path()) as conn:
         await conn.execute("DELETE FROM card_images WHERE job_id = ?", (job_id,))
         await conn.execute("DELETE FROM card_data WHERE job_id = ?", (job_id,))
         await conn.execute("DELETE FROM exports WHERE job_id = ?", (job_id,))
+        await conn.execute("DELETE FROM authored_deck WHERE job_id = ?", (job_id,))
         cursor = await conn.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))
         await conn.commit()
         return (cursor.rowcount or 0) > 0

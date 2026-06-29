@@ -1,12 +1,13 @@
 // Mythbuster — 오해 vs 진실 핑퐁(FaceoffRows). 통념 깨기. 피부만 조립.
 'use client'
-import { CardSurface, BrandMark, Eyebrow, Headline, FaceoffRows, parsePairs, pairsToRaw } from '../skin'
+import { CardSurface, BrandMark, Eyebrow, Headline, FaceoffRows, parsePairs, pairsToRaw, repairFaceoffPairs } from '../skin'
 import type { CardComponentProps } from '../types'
 import { fieldValue } from '../types'
 
 export default function Mythbuster(props: CardComponentProps) {
   const { card, mode, onFieldChange, onFieldFocus, focusedField } = props
-  const pairs = parsePairs(fieldValue(card, 'pairs'))
+  // S6가 "오해:내용|진실:내용" 라벨접두로 오염시켜도 좌측칸에 라벨만 박히지 않도록 복구.
+  const pairs = repairFaceoffPairs(parsePairs(fieldValue(card, 'pairs')))
   const onRow = (i: number, field: 'a' | 'b', text: string) => {
     const next = pairs.map((p, idx) => (idx === i ? { ...p, [field]: text } : p))
     onFieldChange?.('pairs', pairsToRaw(next))

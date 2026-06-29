@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.core.auth import get_current_user
 from backend.core.db import cleanup_expired_blobs, migrate
-from backend.routers import auth, export, images, jobs, projects
+from backend.routers import auth, deck, export, images, jobs, projects
 
 
 def _setup_file_logging() -> None:
@@ -62,3 +62,4 @@ app.include_router(jobs.router, dependencies=[Depends(get_current_user)])
 app.include_router(projects.router, dependencies=[Depends(get_current_user)])
 app.include_router(export.router, dependencies=[Depends(get_current_user)])
 app.include_router(images.router, dependencies=[Depends(get_current_user)])
+app.include_router(deck.router)  # 단일 저작 경로 (헌법 v3.0) — 자체 get_current_user 의존

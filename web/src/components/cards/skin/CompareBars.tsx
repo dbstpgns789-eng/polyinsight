@@ -19,7 +19,10 @@ export default function CompareBars({ rows, mode, onRowChange, onFieldFocus, foc
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, fontFamily: 'var(--set-font)' }}>
       {rows.map((r, i) => {
-        const pct = Math.max(4, compareBarValue(r.value) / max * 100)
+        // fidelity: 값이 0(또는 비수치)이면 막대 너비 0 — 0을 양수처럼 보이게 하지 않는다.
+        // 4% 바닥은 '작지만 실재하는 양수'에만 적용(시각적 가시성).
+        const raw = compareBarValue(r.value)
+        const pct = raw <= 0 ? 0 : Math.max(4, raw / max * 100)
         return (
           <div key={i}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>

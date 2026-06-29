@@ -30,7 +30,8 @@ export default function FaceoffRows({ rows, leftLabel, rightLabel, mode, onRowCh
               style={{ display: 'block', fontSize: 'var(--set-body)', fontWeight: 600, lineHeight: 1.45, color: 'var(--set-ink-muted)', wordBreak: 'keep-all', textDecoration: 'line-through', textDecorationColor: 'var(--set-ink-faint)' }}
             />
           </div>
-          <div aria-hidden style={{ alignSelf: 'center', fontSize: 'var(--set-subhead)', fontWeight: 900, color: 'var(--set-accent)', flexShrink: 0 }}>→</div>
+          {/* 오해↔진실은 대립 관계 — 인과(→)가 아니라 대립(VS) 표기 */}
+          <div aria-hidden style={{ alignSelf: 'center', fontSize: 'var(--set-caption)', fontWeight: 900, letterSpacing: '0.02em', color: 'var(--set-ink-faint)', flexShrink: 0 }}>VS</div>
           <div style={{
             flex: 1, minWidth: 0, background: 'var(--set-surface)',
             border: '1.5px solid var(--set-accent)', borderRadius: 'var(--set-radius-box)', padding: '18px 22px',

@@ -14,6 +14,14 @@ interface Props {
   focused?: boolean
 }
 
+function renderEm(value: string) {
+  return parseEmphasis(value).map((seg, i) =>
+    seg.em
+      ? <em key={i} style={{ color: 'var(--set-accent)', fontStyle: 'normal', fontWeight: 700 }}>{seg.text}</em>
+      : <span key={i}>{seg.text}</span>
+  )
+}
+
 export default function Subhead({ value, fieldKey, mode, onFieldChange, onFieldFocus, focused }: Props) {
   const style = applyFieldStyle({
     display: 'block', fontFamily: 'var(--set-font)', fontSize: 'var(--set-subhead)',
@@ -25,16 +33,9 @@ export default function Subhead({ value, fieldKey, mode, onFieldChange, onFieldF
         fieldKey={fieldKey} value={value} mode={mode}
         onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focused}
         style={style}
+        renderDisplay={renderEm}
       />
     )
   }
-  return (
-    <div style={style}>
-      {parseEmphasis(value).map((seg, i) =>
-        seg.em
-          ? <em key={i} style={{ color: 'var(--set-accent)', fontStyle: 'normal', fontWeight: 700 }}>{seg.text}</em>
-          : <span key={i}>{seg.text}</span>
-      )}
-    </div>
-  )
+  return <div style={style}>{renderEm(value)}</div>
 }

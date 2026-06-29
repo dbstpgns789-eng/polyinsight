@@ -259,10 +259,27 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_cou
 | 스테이지 | 실패 유형 | 파이프라인 영향 |
 |---|---|---|
 | S1 Text Extraction | **블로킹** | 즉시 중단. S8만 실행 (상태 기록). |
+| S1 입력 가드레일 (thin input) | **블로킹** | 추출은 성공했으나 `word_count < ABORT_WORD_FLOOR`(80) → S6 호출 전 즉시 중단. ERROR + 사용자 사유 메시지. |
 | S2 Section Parsing | **논블로킹** | degraded_mode=True 플래그. 빈 section_map으로 계속. |
 | S6 Card News JSON | **논블로킹** | 필드별 CRITICAL 마킹. 빈 카드로 에디터 진입 허용. |
 | S7 PNG Rendering | **논블로킹** | 카드별 독립. 일부 실패 시 나머지 계속. 부분 ZIP 허용. |
 | S8 Output Packaging | **항상 실행** | 실패해도 상태만 ERROR 기록. 파이프라인 종료. |
+
+#### 5-1-1. 입력 가드레일 (thin input → 조기 차단)
+
+**배경**: 논문이 아닌 PDF(문서 발췌 31단어), 스캔본(텍스트 레이어 없음)이
+degraded 플래그만 달고 S6까지 통과 → 모든 필드가 빈 카드 7장을 생성.
+사용자는 "빈 껍데기"를 보고 파이프라인 장애로 오인(서비스 신뢰 훼손).
+
+**규칙**: Orchestrator는 S1 직후 `word_count`를 검사한다.
+- `word_count < ABORT_WORD_FLOOR`(80) → **S6 호출 없이** 즉시 ERROR 종료.
+  - 근거: 정상 논문은 최소 800단어 이상, 초록만 있어도 ~150단어. 80 미만은
+    스캔본·비논문으로 카드 생성 불가. (실측: 0096-0098.pdf = 31단어 → 빈 카드)
+  - S6 LLM을 호출하지 않으므로 **비용 0**으로 차단.
+- `ABORT_WORD_FLOOR ≤ word_count < 100` → 기존대로 degraded 플래그 후 진행
+  (살릴 여지가 있는 경계 구간은 차단하지 않음 — 과차단 방지).
+- 차단 시 `warnings`에 `ABORT-S1:` 프리픽스로 사용자용 사유 문자열을 적재 →
+  프론트 에디터가 generic "불러올 수 없습니다" 대신 구체 사유를 표면화.
 
 ### 5-2. 재시도 정책
 

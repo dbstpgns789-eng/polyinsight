@@ -1,0 +1,103 @@
+# -*- coding: utf-8 -*-
+"""단일 저작 파이프라인(헌법 v3.0) 테스트 — LLM 없이 mock으로 전 배관 검증."""
+from __future__ import annotations
+
+import json
+import pathlib
+
+import pytest
+
+from backend.core import db
+from backend.core.config import settings
+from backend.core.fidelity import verify_deck
+from backend.core.models import PaperMetadata
+from backend.agents.deck import authoring, deck_renderer, mock
+from backend.agents.deck.pipeline import run_authoring_pipeline
+
+_ATTN_PDF = pathlib.Path(
+    r"C:\Users\User\Desktop\한국생산기술연구원_근로장학"
+    r"\poly_claude_code\논문\golden_22\NIPS-2017-attention-is-all-you-need-Paper.pdf"
+)
+
+
+@pytest.fixture
+def mock_llm(monkeypatch):
+    monkeypatch.setattr(settings, "DEV_MOCK_LLM", True)
+
+
+def test_verify_deck_classifies_provenance():
+    """콘텐츠 수치는 원문 대조, CSS(인라인 스타일)는 제외."""
+    paper = "The model scored 28.4 BLEU on EN-DE. Trained in 3.5 days."
+    html = (
+        '<div data-screen-label="01" style="color:oklch(95.5% 0.012 152)">'
+        '<h1>28.4 BLEU</h1><p>3.5일</p><p>2018 BERT</p></div>'
+    )
+    claims = verify_deck(html, paper)
+    by_val = {c.value.strip(): c.verified for c in claims}
+    assert by_val.get("28.4") is True       # 'BLEU'의 B를 단위로 오인하지 않음
+    assert any(c.verified and c.value.strip().startswith("3.5") for c in claims)
+    # 논문에 없는 맥락(2018)은 UNVERIFIED로 표면화
+    assert any((not c.verified) and "2018" in c.value for c in claims)
+    # CSS 토큰(95.5/0.012/152)은 검증 대상에서 제외(오탐 없음)
+    assert "95.5" not in by_val and "152" not in by_val
+
+
+def test_mock_deck_html_has_cards():
+    html = mock.mock_deck_html(7)
+    assert "data-screen-label" in html
+    assert html.lstrip().startswith("<!DOCTYPE") or "<html" in html
+
+
+async def test_author_deck_mock_mode(mock_llm):
+    html = await authoring.author_deck(
+        raw_text="Attention is all you need. BLEU 28.4.",
+        metadata=PaperMetadata(title="Attention", authors=["Vaswani"], year=2017, doi=None),
+        card_count=7,
+    )
+    assert "data-screen-label" in html
+
+
+def test_strip_code_fence():
+    assert authoring._strip_code_fence("```html\n<div>x</div>\n```") == "<div>x</div>"
+    assert authoring._strip_code_fence("<div>y</div>") == "<div>y</div>"
+
+
+async def test_render_deck_produces_pngs():
+    html = mock.mock_deck_html(7)
+    images, warnings = await deck_renderer.render_deck(html, scale=1)
+    assert len(images) >= 1
+    assert all(png[:8] == b"\x89PNG\r\n\x1a\n" for png in images)  # PNG 시그니처
+
+
+@pytest.mark.skipif(not _ATTN_PDF.exists(), reason="attention pdf 없음")
+async def test_authoring_pipeline_mock_e2e(mock_llm):
+    """S1 추출 → 저작(mock) → 검증 → 저장 → 렌더 → 이미지 저장 전 구간."""
+    jid = "test-deck-e2e"
+    await db.delete_job(jid)
+    await db.create_job(jid, title="attention.pdf")
+    try:
+        await run_authoring_pipeline(jid, _ATTN_PDF.read_bytes(), card_count=7)
+        job = await db.get_job(jid)
+        deck = await db.get_authored_deck(jid)
+        imgs = await db.get_card_images(jid)
+        assert job["status"] == "DONE"
+        assert deck and "data-screen-label" in deck["html"]
+        v = json.loads(deck["verify_json"])
+        assert v["verified"] >= 1
+        assert len(imgs) >= 1
+    finally:
+        await db.delete_job(jid)
+
+
+async def test_deck_db_roundtrip():
+    jid = "test-deck-rt2"
+    await db.delete_job(jid)
+    await db.create_job(jid, title="rt.pdf")
+    try:
+        await db.save_authored_deck(jid, "<div data-screen-label='01'>x</div>",
+                                    json.dumps({"verified": 2, "unverified": 1}), 7)
+        got = await db.get_authored_deck(jid)
+        assert got["card_count"] == 7
+        assert json.loads(got["verify_json"])["verified"] == 2
+    finally:
+        await db.delete_job(jid)

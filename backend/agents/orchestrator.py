@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 
 _job_semaphore = asyncio.Semaphore(5)  # settings.MAX_CONCURRENT_JOBS
 
+# 입력 가드레일: S1 추출은 성공했으나 word_count가 이 값 미만이면 S6 호출 없이 즉시 차단.
+# 비논문 발췌(0096-0098.pdf=31단어)·스캔본이 빈 카드 7장을 만들어 신뢰를 훼손하는 것을 방지.
+# 근거: 정상 논문 ≥800단어, 초록만 있어도 ~150단어. 80 미만은 카드 생성 불가.
+# 계약: docs/contracts/04_architecture.md §5-1-1.
+_ABORT_WORD_FLOOR = 80
+
 
 async def run_pipeline(
     job_id: str,
@@ -91,6 +97,25 @@ async def _execute(
             stage="S1",
             progress=10,
             warnings=warnings + [f"ERR-S1: {exc}"],
+        )
+        await _log_pipeline_done(job_id, user_id, started, card_count)
+        return
+
+    # ── 입력 가드레일: thin input → S6 호출 없이 조기 차단 (계약 §5-1-1) ──────────
+    if s1_out.word_count < _ABORT_WORD_FLOOR:
+        msg = (
+            f"ABORT-S1: PDF에서 충분한 텍스트를 추출하지 못했습니다 "
+            f"({s1_out.word_count}단어). 스캔본이거나 논문이 아닐 수 있습니다."
+        )
+        logger.warning("S1 thin-input abort: %d words < %d (job %s)",
+                       s1_out.word_count, _ABORT_WORD_FLOOR, job_id)
+        await db.update_job(
+            job_id,
+            status=JobStatus.ERROR,
+            stage="S1",
+            progress=10,
+            degraded=True,
+            warnings=warnings + [msg],
         )
         await _log_pipeline_done(job_id, user_id, started, card_count)
         return

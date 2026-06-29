@@ -27,7 +27,22 @@ function Panel({ data, side, win, mode, onChange, onFieldFocus, focusedField }: 
       borderRadius: 'var(--set-radius-box)', padding: '40px 28px',
       boxShadow: win ? '0 8px 30px rgba(0,0,0,0.10)' : 'none',
     }}>
-      {win && <div aria-hidden style={{ position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)', fontSize: 40 }}>👑</div>}
+      {win && (
+        <div aria-hidden style={{
+          position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)',
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          background: 'var(--set-accent)', color: '#fff',
+          fontSize: 14, fontWeight: 800, letterSpacing: '0.01em',
+          padding: '5px 13px', borderRadius: 999, whiteSpace: 'nowrap',
+          boxShadow: '0 3px 10px rgba(0,0,0,0.14)',
+        }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          우세
+        </div>
+      )}
       <EditableText
         fieldKey={`variant_${side}_label`} value={data.label} mode={mode}
         onFieldChange={onChange ? (_fk, v) => onChange(side, 'label', v) : undefined}

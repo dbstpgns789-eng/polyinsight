@@ -1,0 +1,142 @@
+# -*- coding: utf-8 -*-
+"""단일 저작 파이프라인 (헌법 v3.0) — 레거시 run_pipeline과 공존하는 별도 함수.
+
+S1 추출(재사용) → S6 저작 → V 검증(fidelity, 재사용) → 저장 → 렌더 → 카드 PNG 저장.
+가드레일·단계 update_job·usage 집계 패턴은 orchestrator.py를 복제(원본 무수정).
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import time
+
+from ...core import db
+from ...core.config import settings
+from ...core.fidelity import verify_deck
+from ...core.llm_client import get_usage, start_usage_capture
+from ...core.models import JobStatus, S1Input
+from ..s1_extractor import s1_agent
+from .authoring import author_deck
+from .deck_renderer import render_deck
+
+logger = logging.getLogger(__name__)
+
+_job_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_JOBS)
+
+# 입력 가드레일 — orchestrator._ABORT_WORD_FLOOR와 동일(비논문·스캔본 조기 차단).
+_ABORT_WORD_FLOOR = 80
+
+
+async def run_authoring_pipeline(
+    job_id: str,
+    pdf_bytes: bytes,
+    card_count: int = 7,
+    persona: str | None = None,
+    user_id: int | None = None,
+) -> None:
+    async with _job_semaphore:
+        await _execute(job_id, pdf_bytes, card_count, persona, user_id)
+
+
+async def _log_done(job_id: str, user_id: int | None, started: float, card_count: int) -> None:
+    usage = get_usage() or {}
+    final = await db.get_job(job_id)
+    try:
+        await db.log_event(
+            "deck_pipeline_complete",
+            user_id=user_id,
+            job_id=job_id,
+            payload={
+                "status": final["status"] if final else None,
+                "duration_s": round(time.monotonic() - started, 2),
+                "card_count": card_count,
+                "input_tokens": usage.get("input_tokens", 0),
+                "output_tokens": usage.get("output_tokens", 0),
+                "llm_calls": usage.get("calls", 0),
+                "model": settings.LLM_MODEL_AUTHOR,
+            },
+        )
+    except Exception:
+        logger.exception("deck_pipeline_complete 이벤트 기록 실패")
+
+
+async def _execute(
+    job_id: str,
+    pdf_bytes: bytes,
+    card_count: int,
+    persona: str | None,
+    user_id: int | None,
+) -> None:
+    start_usage_capture()
+    started = time.monotonic()
+    warnings: list[str] = []
+
+    # ── S1: 추출 (재사용) ──────────────────────────────────────────────────
+    try:
+        await db.update_job(job_id, status=JobStatus.RUNNING, stage="S1", progress=10)
+        s1_out = await s1_agent.execute(S1Input(job_id=job_id, pdf_bytes=pdf_bytes))
+        warnings.extend(s1_out.warnings)
+        logger.info("deck S1: %d words", s1_out.word_count)
+    except Exception as exc:
+        logger.error("deck S1 fatal: %s", exc)
+        await db.update_job(job_id, status=JobStatus.ERROR, stage="S1", progress=10,
+                            warnings=warnings + [f"ERR-S1: {exc}"])
+        await _log_done(job_id, user_id, started, card_count)
+        return
+
+    # 입력 가드레일 — thin input 조기 차단
+    if s1_out.word_count < _ABORT_WORD_FLOOR:
+        msg = (f"ABORT-S1: PDF에서 충분한 텍스트를 추출하지 못했습니다 "
+               f"({s1_out.word_count}단어). 스캔본이거나 논문이 아닐 수 있습니다.")
+        await db.update_job(job_id, status=JobStatus.ERROR, stage="S1", progress=10,
+                            degraded=True, warnings=warnings + [msg])
+        await _log_done(job_id, user_id, started, card_count)
+        return
+
+    # ── S6: 단일 저작 ──────────────────────────────────────────────────────
+    try:
+        await db.update_job(job_id, status=JobStatus.RUNNING, stage="AUTHOR", progress=40)
+        html = await author_deck(
+            raw_text=s1_out.raw_text,
+            metadata=s1_out.metadata,
+            card_count=card_count,
+            persona=persona,
+        )
+        if not html or "data-screen-label" not in html:
+            raise ValueError("저작 결과에 카드(data-screen-label)가 없습니다")
+    except Exception as exc:
+        logger.error("deck AUTHOR fatal: %s", exc)
+        await db.update_job(job_id, status=JobStatus.ERROR, stage="AUTHOR", progress=40,
+                            warnings=warnings + [f"ERR-AUTHOR: {exc}"])
+        await _log_done(job_id, user_id, started, card_count)
+        return
+
+    # ── V: 충실성 검증 (재사용) ────────────────────────────────────────────
+    await db.update_job(job_id, status=JobStatus.RUNNING, stage="VERIFY", progress=70)
+    claims = verify_deck(html, s1_out.raw_text)
+    verify_json = json.dumps({
+        "verified": sum(c.verified for c in claims),
+        "unverified": sum(not c.verified for c in claims),
+        "claims": [{"value": c.value, "context": c.context, "verified": c.verified} for c in claims],
+    }, ensure_ascii=False)
+
+    # 저장 (검증 리포트는 렌더 실패와 무관하게 확보)
+    await db.save_authored_deck(job_id, html, verify_json, card_count)
+
+    # ── 렌더: 카드별 PNG ───────────────────────────────────────────────────
+    await db.update_job(job_id, status=JobStatus.RUNNING, stage="RENDER", progress=85)
+    images, render_warns = await render_deck(html)
+    warnings.extend(render_warns)
+    for i, png in enumerate(images, start=1):
+        try:
+            await db.save_card_image(job_id, i, png)
+        except Exception as exc:
+            warnings.append(f"deck save_card_image {i} 실패: {exc}")
+    if not images:
+        warnings.append("deck render: 0 cards rendered")
+
+    # ── 완료 ───────────────────────────────────────────────────────────────
+    status = JobStatus.DONE if images else JobStatus.ERROR
+    await db.update_job(job_id, status=status, stage="DONE", progress=100, warnings=warnings)
+    await _log_done(job_id, user_id, started, card_count)

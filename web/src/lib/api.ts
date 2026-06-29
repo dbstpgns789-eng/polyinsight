@@ -27,6 +27,26 @@ export const uploadPdf = (file: File, cardCount: number) => {
 
 export const getStatus = (jobId: string) => api.get(`/status/${jobId}`)
 
+// ── 단일 저작 덱 (헌법 v3.0) ──────────────────────────────────────────────
+export const uploadDeck = (file: File, cardCount: number, persona?: string) => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('card_count', String(cardCount))
+  if (persona) form.append('persona', persona)
+  return api.post('/deck/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000,
+  })
+}
+
+export const getDeck = (jobId: string) => api.get(`/deck/${jobId}`)
+
+export const exportDeck = (jobId: string) =>
+  api.post(`/deck/${jobId}/export`, {}, { timeout: 120_000 })
+
+export const getDeckCardUrl = (jobId: string, cardNum: number) =>
+  `/api/deck/${jobId}/cards/${cardNum}`
+
 export const getCards = (jobId: string) => api.get(`/cards/${jobId}`)
 
 export const patchCards = (jobId: string, cardData: unknown) =>

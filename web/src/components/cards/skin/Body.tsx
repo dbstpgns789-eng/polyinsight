@@ -14,6 +14,14 @@ interface Props {
   focused?: boolean
 }
 
+function renderEm(value: string) {
+  return parseEmphasis(value).map((seg, i) =>
+    seg.em
+      ? <em key={i} style={{ color: 'var(--set-accent)', fontStyle: 'normal', fontWeight: 600 }}>{seg.text}</em>
+      : <span key={i}>{seg.text}</span>
+  )
+}
+
 export default function Body({ value, fieldKey, mode, onFieldChange, onFieldFocus, focused }: Props) {
   const style = applyFieldStyle({
     display: 'block', fontFamily: 'var(--set-font)', fontSize: 'var(--set-body)',
@@ -24,17 +32,10 @@ export default function Body({ value, fieldKey, mode, onFieldChange, onFieldFocu
       <EditableText
         fieldKey={fieldKey} value={value} mode={mode} multiline
         onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focused}
-        style={style}
+        style={{ ...style, whiteSpace: 'pre-wrap' }}
+        renderDisplay={renderEm}
       />
     )
   }
-  return (
-    <div style={{ ...style, whiteSpace: 'pre-wrap' }}>
-      {parseEmphasis(value).map((seg, i) =>
-        seg.em
-          ? <em key={i} style={{ color: 'var(--set-accent)', fontStyle: 'normal', fontWeight: 600 }}>{seg.text}</em>
-          : <span key={i}>{seg.text}</span>
-      )}
-    </div>
-  )
+  return <div style={{ ...style, whiteSpace: 'pre-wrap' }}>{renderEm(value)}</div>
 }
