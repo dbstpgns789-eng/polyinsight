@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import useCardData from '@/hooks/useCardData'
 import useUiStore from '@/store/uiStore'
 import Topbar from '@/components/editor/Topbar'
@@ -12,7 +12,7 @@ import FactDrawer from '@/components/editor/FactDrawer'
 import ExportModal from '@/components/export/ExportModal'
 import type { CardDataPayload, ApiResponse, FieldStyle, Card } from '@/types/editor'
 import { MOCK_EDITOR_DATA } from '@/lib/mockData'
-import { renameJob, downloadCard, getStatus } from '@/lib/api'
+import { renameJob, downloadCard, getStatus, getDeck } from '@/lib/api'
 import AuthGuard from '@/components/auth/AuthGuard'
 
 function EditorPageInner() {
@@ -370,9 +370,14 @@ function EditorPageInner() {
 // 카드 로드 실패 화면. job status를 조회해, 파이프라인이 입력 가드레일/에러로
 // 조기 종료된 경우(warnings에 ABORT-S1:/ERR- 사유) generic 대신 구체 사유를 표면화.
 function EditorError({ jobId }: { jobId: string }) {
+  const router = useRouter()
   const [reason, setReason] = useState<string | null>(null)
   useEffect(() => {
     let cancelled = false
+    // 단일 저작(덱) 잡을 레거시 에디터로 연 경우 → /deck 뷰로 안내(레거시는 덱을 못 읽음)
+    getDeck(jobId)
+      .then((r) => { if (!cancelled && r.data?.html) router.replace(`/deck/${jobId}`) })
+      .catch(() => {})
     getStatus(jobId)
       .then((r) => {
         if (cancelled) return
@@ -387,7 +392,7 @@ function EditorError({ jobId }: { jobId: string }) {
       })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [jobId])
+  }, [jobId, router])
 
   return (
     <div className="flex items-center justify-center h-screen bg-canvas-subtle">
