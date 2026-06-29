@@ -42,6 +42,32 @@ async def _render_async(html: str, scale: int, timeout_s: float) -> tuple[list[b
                 await page.evaluate("document.fonts && document.fonts.ready")
             except Exception:
                 pass
+            # 안전망: 카드 내용이 박스(1350)를 넘치면 비례 축소(덱엔 CardSurface 자동fit 없음).
+            # 넘치는 카드만 자식을 래퍼로 묶어 scale — 정상 카드는 손대지 않음.
+            try:
+                await page.evaluate("""() => {
+                  document.querySelectorAll('[data-screen-label]').forEach(card => {
+                    if (card.scrollHeight <= card.clientHeight + 4) return;
+                    const cs = getComputedStyle(card);
+                    const pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
+                    const wrap = document.createElement('div');
+                    wrap.style.boxSizing = 'border-box';
+                    wrap.style.width = '100%';
+                    wrap.style.transformOrigin = 'top center';
+                    if (cs.display === 'flex') { wrap.style.display = 'flex'; wrap.style.flexDirection = cs.flexDirection || 'column'; }
+                    while (card.firstChild) wrap.appendChild(card.firstChild);
+                    card.appendChild(wrap);
+                    const avail = card.clientHeight - pt - pb;
+                    const need = wrap.scrollHeight;
+                    if (need > avail && avail > 0) {
+                      const f = Math.max(0.7, avail / need);
+                      wrap.style.height = need + 'px';
+                      wrap.style.transform = 'scale(' + f + ')';
+                    }
+                  });
+                }""")
+            except Exception:
+                pass
             loc = page.locator("[data-screen-label]")
             count = await loc.count()
             if count == 0:
