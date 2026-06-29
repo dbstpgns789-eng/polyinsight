@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     # 헌법 v3.0 단일 저작(Deck Authoring) — base tier=Sonnet, premium=Opus(.env로 교체).
     LLM_MODEL_AUTHOR: str = "claude-sonnet-4-6"
     AUTHOR_TIMEOUT_S: int = 600          # 대용량 HTML 1회 저작 — 기본 120s로 부족
-    AUTHOR_MAX_TOKENS: int = 16000       # 7장 덱 출력 충분 + 비스트리밍 허용(>10분 streaming 강제 회피)
+    AUTHOR_MAX_TOKENS: int = 32000       # 정교한 아트디렉션 덱도 안 잘리게(streaming으로 호출 → 10분 제한 무관)
     AUTHOR_MAX_CARDS: int = 7            # 카드 max 장수(티어로 확장 예정)
     AUTHOR_FEWSHOT_N: int = 2            # few-shot 레퍼런스 수(입력 토큰/비용 트레이드오프)
     PLAYWRIGHT_TIMEOUT_MS: int = 15000

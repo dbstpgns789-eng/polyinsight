@@ -70,6 +70,12 @@ class LLMClient:
         self.model = model or settings.LLM_MODEL
         self._client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
+    async def _stream_final(self, kwargs: dict):
+        """streaming으로 받아 최종 Message(usage·stop_reason·content 포함) 반환.
+        SDK는 max_tokens가 커서 >10분 가능하면 비스트리밍을 거부 → 대용량 저작은 stream=True."""
+        async with self._client.messages.stream(**kwargs) as s:
+            return await s.get_final_message()
+
     async def call(
         self,
         system_prompt: str,
@@ -79,6 +85,7 @@ class LLMClient:
         timeout_s: int = 120,
         stop_sequences: list[str] | None = None,
         model: str | None = None,
+        stream: bool = False,
     ) -> str:
         # per-call 모델 오버라이드 (없으면 인스턴스 기본). 팀별 라우팅용.
         resolved = model or self.model
@@ -100,10 +107,13 @@ class LLMClient:
             kwargs["stop_sequences"] = stop_sequences
 
         try:
-            message = await asyncio.wait_for(
-                self._client.messages.create(**kwargs),
-                timeout=timeout_s,
-            )
+            if stream:
+                message = await asyncio.wait_for(self._stream_final(kwargs), timeout=timeout_s)
+            else:
+                message = await asyncio.wait_for(
+                    self._client.messages.create(**kwargs),
+                    timeout=timeout_s,
+                )
         except anthropic.AuthenticationError as exc:
             raise LLMAuthError(str(exc)) from exc
         except anthropic.RateLimitError as exc:

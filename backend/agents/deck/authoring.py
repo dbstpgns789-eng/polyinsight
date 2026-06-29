@@ -67,12 +67,10 @@ async def author_deck(
         system_prompt=system,
         user_prompt=user,
         model=settings.LLM_MODEL_AUTHOR,
-        # 7장 덱 ≈ 20K자 ≈ ~8K 토큰. 16000이면 2배 여유 + 비스트리밍 허용 범위.
-        # (SDK는 max_tokens가 너무 커서 >10분 가능하면 streaming을 강제 → 그 임계 아래로.)
-        # 카드 수를 크게 늘리는 premium 티어에선 streaming 지원이 필요(향후).
-        max_tokens=settings.AUTHOR_MAX_TOKENS,
+        max_tokens=settings.AUTHOR_MAX_TOKENS,  # 32000 — 정교한 스타일도 안 잘림
         temperature=0.5,
         timeout_s=settings.AUTHOR_TIMEOUT_S,
+        stream=True,                            # 대용량 출력 → streaming(>10분 제한 무관)
     )
     html = _strip_code_fence(raw)
     logger.info("deck authored: %d chars (model=%s)", len(html), settings.LLM_MODEL_AUTHOR)
