@@ -34,9 +34,10 @@ async def run_authoring_pipeline(
     card_count: int = 7,
     persona: str | None = None,
     user_id: int | None = None,
+    style_direction: str | None = None,
 ) -> None:
     async with _job_semaphore:
-        await _execute(job_id, pdf_bytes, card_count, persona, user_id)
+        await _execute(job_id, pdf_bytes, card_count, persona, user_id, style_direction)
 
 
 async def _log_done(job_id: str, user_id: int | None, started: float, card_count: int) -> None:
@@ -67,6 +68,7 @@ async def _execute(
     card_count: int,
     persona: str | None,
     user_id: int | None,
+    style_direction: str | None = None,
 ) -> None:
     start_usage_capture()
     started = time.monotonic()
@@ -102,6 +104,7 @@ async def _execute(
             metadata=s1_out.metadata,
             card_count=card_count,
             persona=persona,
+            style_direction=style_direction,
         )
         if not html or "data-screen-label" not in html:
             raise ValueError("저작 결과에 카드(data-screen-label)가 없습니다")

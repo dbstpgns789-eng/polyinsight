@@ -39,8 +39,13 @@ async def author_deck(
     metadata: PaperMetadata,
     card_count: int,
     persona: str | None = None,
+    style_direction: str | None = None,
 ) -> str:
-    """논문 원문 → standalone HTML 덱. DEV_MOCK_LLM 시 레퍼런스 HTML 반환(무비용)."""
+    """논문 원문 → standalone HTML 덱. DEV_MOCK_LLM 시 레퍼런스 HTML 반환(무비용).
+
+    style_direction: 사용자가 자연어로 준 미감 방향("지브리풍"·"학교 칠판"·"공공기관" 등).
+    비우면 모델이 논문에 맞는 방향을 자유 선택(동질화 방지의 핵심 — 아트 디렉션).
+    """
     if settings.DEV_MOCK_LLM:
         logger.info("deck author: DEV_MOCK_LLM → mock deck")
         return mock_deck_html(card_count)
@@ -56,6 +61,7 @@ async def author_deck(
         authors=", ".join(metadata.authors) if metadata.authors else "unknown",
         year=metadata.year or "unknown",
         card_count=card_count,
+        art_direction=P.art_direction_block(style_direction),
     )
     raw = await llm_client.call(
         system_prompt=system,

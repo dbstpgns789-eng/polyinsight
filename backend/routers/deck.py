@@ -24,9 +24,13 @@ async def deck_upload(
     file: UploadFile,
     card_count: Annotated[int, Form(ge=3, le=12)] = 7,
     persona: Annotated[str | None, Form()] = None,
+    style_direction: Annotated[str | None, Form()] = None,
     user: dict = Depends(get_current_user),
 ):
-    """PDF 업로드 → 단일 저작 파이프라인 백그라운드 시작 (헌법 v3.0)."""
+    """PDF 업로드 → 단일 저작 파이프라인 백그라운드 시작 (헌법 v3.0).
+
+    style_direction: 아트 디렉션(미감 방향, 선택). 비우면 모델 자유 선택.
+    """
     if file.content_type not in ("application/pdf", "application/octet-stream"):
         if not (file.filename or "").lower().endswith(".pdf"):
             raise HTTPException(400, detail={"code": "ERR-INP-001", "message": "PDF 파일만 업로드 가능합니다."})
@@ -43,7 +47,7 @@ async def deck_upload(
     await db.log_event("deck_upload", user_id=user["id"], job_id=job_id,
                        payload={"filename": file.filename, "card_count": card_count})
     background_tasks.add_task(
-        run_authoring_pipeline, job_id, pdf_bytes, card_count, persona, user["id"]
+        run_authoring_pipeline, job_id, pdf_bytes, card_count, persona, user["id"], style_direction
     )
     return {"jobId": job_id, "status": "PENDING"}
 

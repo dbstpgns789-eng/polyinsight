@@ -28,11 +28,12 @@ export const uploadPdf = (file: File, cardCount: number) => {
 export const getStatus = (jobId: string) => api.get(`/status/${jobId}`)
 
 // ── 단일 저작 덱 (헌법 v3.0) ──────────────────────────────────────────────
-export const uploadDeck = (file: File, cardCount: number, persona?: string) => {
+export const uploadDeck = (file: File, cardCount: number, persona?: string, styleDirection?: string) => {
   const form = new FormData()
   form.append('file', file)
   form.append('card_count', String(cardCount))
   if (persona) form.append('persona', persona)
+  if (styleDirection) form.append('style_direction', styleDirection)
   return api.post('/deck/upload', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 60000,
