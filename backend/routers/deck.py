@@ -8,7 +8,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Response, UploadFile
 
-from ..agents.deck.pipeline import run_authoring_pipeline
+from pydantic import BaseModel, Field
+
+from ..agents.deck.nl_patch import apply_nl_patch
+from ..agents.deck.pipeline import persist_edited_deck, run_authoring_pipeline
 from ..core import db
 from ..core.auth import get_current_user
 from ..core.config import settings
@@ -73,7 +76,58 @@ async def get_deck(job_id: str, user: dict = Depends(get_current_user)):
         "html": deck["html"] if deck else None,
         "verify": verify,
         "cardCount": deck["card_count"] if deck else 0,
+        "canReverify": bool(deck and deck.get("paper_text")),
     }
+
+
+class DeckPatch(BaseModel):
+    html: str = Field(min_length=1, max_length=2_000_000)
+
+
+@router.patch("/deck/{job_id}")
+async def patch_deck(job_id: str, body: DeckPatch, user: dict = Depends(get_current_user)):
+    """편집된 덱 HTML 저장(직접조작) → 재검증 + PNG 재렌더. 최종 판단은 사용자(헌법 3조)."""
+    deck = await db.get_authored_deck(job_id)
+    if deck is None:
+        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
+    if "data-screen-label" not in body.html:
+        raise HTTPException(
+            400, detail={"code": "ERR-INP-003", "message": "유효한 덱 HTML이 아닙니다(카드 라벨 없음)."}
+        )
+    result = await persist_edited_deck(job_id, body.html)
+    await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
+                       payload={"kind": "direct", "card_count": result["cardCount"]})
+    return result
+
+
+class DeckNLPatch(BaseModel):
+    instruction: str = Field(min_length=1, max_length=2000)
+
+
+@router.post("/deck/{job_id}/nlpatch")
+async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_current_user)):
+    """자연어 편집 — 지시로 덱 HTML 최소 변경(1회 LLM) → 재검증 + PNG 재렌더.
+
+    모델이 출력 계약을 깨면(카드 라벨 소실) 원본을 보존하고 거부한다(422).
+    응답에 수정된 html 동봉 → 프론트가 에디터를 갱신본으로 재마운트.
+    """
+    deck = await db.get_authored_deck(job_id)
+    if deck is None or not deck.get("html"):
+        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
+
+    new_html = await apply_nl_patch(deck["html"], body.instruction, deck.get("paper_text"))
+    if "data-screen-label" not in new_html:
+        raise HTTPException(
+            422,
+            detail={"code": "ERR-EDIT-001",
+                    "message": "수정 결과가 덱 구조를 벗어나 적용하지 않았습니다. 원본은 그대로입니다."},
+        )
+
+    result = await persist_edited_deck(job_id, new_html)
+    result["html"] = new_html
+    await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
+                       payload={"kind": "nl", "card_count": result["cardCount"]})
+    return result
 
 
 @router.get("/deck/{job_id}/cards/{card_num}")

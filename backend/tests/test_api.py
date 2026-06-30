@@ -398,3 +398,54 @@ async def test_download_missing_carddata_404(client):
     await _db.create_job("j1", "p.pdf")
     resp = await client.get("/api/cards/j1/download/1")
     assert resp.status_code == 404
+
+
+# ── 자연어 편집 (Phase 3c) ──────────────────────────────────────────────────
+
+_DECK_HTML = (
+    '<!DOCTYPE html><html><head></head><body>'
+    '<div data-screen-label="01" style="width:1080px;height:1350px;">BLEU 28.4</div>'
+    '</body></html>'
+)
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_mock_applies_and_rerenders(client, monkeypatch):
+    """DEV_MOCK_LLM nlpatch — 마커 주입(계약 보존) → 재검증/재렌더 → html·verify 반환."""
+    monkeypatch.setattr(settings, "DEV_MOCK_LLM", True)
+    monkeypatch.setattr(
+        "backend.agents.deck.pipeline.render_deck",
+        AsyncMock(return_value=([b"\x89PNG-1"], [])),
+    )
+    await _db.create_job("jnl", "paper.pdf")
+    await _db.save_authored_deck("jnl", _DECK_HTML, json.dumps({"verified": 1, "unverified": 0}),
+                                 1, paper_text="The model scored 28.4 BLEU.")
+    resp = await client.post("/api/deck/jnl/nlpatch", json={"instruction": "표지를 차분하게"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "data-screen-label" in body["html"]          # 계약 보존
+    assert "nlpatch-mock" in body["html"]                # mock 경로 실행 증명
+    assert "verify" in body and "cardCount" in body
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_404_when_no_deck(client):
+    resp = await client.post("/api/deck/nope/nlpatch", json={"instruction": "x"})
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_rejects_broken_contract(client, monkeypatch):
+    """모델이 계약을 깨면(카드 라벨 소실) 422로 거부하고 원본 보존."""
+    monkeypatch.setattr(
+        "backend.routers.deck.apply_nl_patch",
+        AsyncMock(return_value="<html><body>카드 라벨 없는 깨진 출력</body></html>"),
+    )
+    await _db.create_job("jbad", "p.pdf")
+    await _db.save_authored_deck("jbad", _DECK_HTML, json.dumps({"verified": 1}), 1,
+                                 paper_text="x")
+    resp = await client.post("/api/deck/jbad/nlpatch", json={"instruction": "전부 지워"})
+    assert resp.status_code == 422
+    # 원본은 그대로(거부 후 보존)
+    deck = await _db.get_authored_deck("jbad")
+    assert deck["html"] == _DECK_HTML

@@ -12,7 +12,7 @@ from backend.core.config import settings
 from backend.core.fidelity import verify_deck
 from backend.core.models import PaperMetadata
 from backend.agents.deck import authoring, deck_renderer, mock
-from backend.agents.deck.pipeline import run_authoring_pipeline
+from backend.agents.deck.pipeline import persist_edited_deck, run_authoring_pipeline
 
 _ATTN_PDF = pathlib.Path(
     r"C:\Users\User\Desktop\한국생산기술연구원_근로장학"
@@ -99,5 +99,43 @@ async def test_deck_db_roundtrip():
         got = await db.get_authored_deck(jid)
         assert got["card_count"] == 7
         assert json.loads(got["verify_json"])["verified"] == 2
+    finally:
+        await db.delete_job(jid)
+
+
+async def test_paper_text_roundtrip_and_preserve():
+    """원문 저장→조회 라운드트립 + 편집 저장(paper_text 생략) 시 원문 보존(COALESCE)."""
+    jid = "test-deck-pt"
+    await db.delete_job(jid)
+    await db.create_job(jid, title="pt.pdf")
+    try:
+        html = "<div data-screen-label='01'>x</div>"
+        await db.save_authored_deck(jid, html, json.dumps({"verified": 1}), 7,
+                                    paper_text="ORIGINAL PAPER TEXT")
+        got = await db.get_authored_deck(jid)
+        assert got["paper_text"] == "ORIGINAL PAPER TEXT"
+        # 편집 저장: paper_text 생략 → 기존 원문 보존(덮어쓰지 않음)
+        await db.save_authored_deck(jid, html + "<!--edited-->",
+                                    json.dumps({"verified": 1}), 7)
+        again = await db.get_authored_deck(jid)
+        assert again["paper_text"] == "ORIGINAL PAPER TEXT"
+    finally:
+        await db.delete_job(jid)
+
+
+async def test_persist_edited_deck_null_fallback_warns():
+    """원문 없는 기존 덱 편집 저장 → 재검증 건너뛰되 경고 표면화(막지 않음, 헌법 3조)."""
+    jid = "test-deck-nullfb"
+    await db.delete_job(jid)
+    await db.create_job(jid, title="nf.pdf")
+    try:
+        deck_html = mock.mock_deck_html(7)
+        await db.save_authored_deck(jid, deck_html, json.dumps({"verified": 0}), 7)  # paper_text NULL
+        result = await persist_edited_deck(jid, deck_html)
+        assert any("재검증 불가" in w for w in result["warnings"])
+        assert result["verify"].get("skipped") is True
+        assert result["cardCount"] >= 1                      # 막지 않고 렌더는 진행
+        imgs = await db.get_card_images(jid)
+        assert len(imgs) >= 1
     finally:
         await db.delete_job(jid)

@@ -28,6 +28,53 @@ _job_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_JOBS)
 _ABORT_WORD_FLOOR = 80
 
 
+def _verify_to_json(html: str, paper_text: str | None) -> tuple[str, dict]:
+    """덱 HTML 충실성 검증 → (json 문자열, dict). paper_text 없으면 검증 보류(빈 결과)."""
+    if not paper_text:
+        payload = {"verified": 0, "unverified": 0, "claims": [], "skipped": True}
+        return json.dumps(payload, ensure_ascii=False), payload
+    claims = verify_deck(html, paper_text)
+    payload = {
+        "verified": sum(c.verified for c in claims),
+        "unverified": sum(not c.verified for c in claims),
+        "claims": [{"value": c.value, "context": c.context, "verified": c.verified} for c in claims],
+    }
+    return json.dumps(payload, ensure_ascii=False), payload
+
+
+async def persist_edited_deck(job_id: str, html: str) -> dict:
+    """편집된 덱 HTML 영속화 — 재검증(원문 있으면) → 저장 → PNG 재렌더.
+
+    PATCH(직접조작)·nlpatch(자연어) 공용. 반환: {verify, cardCount, warnings}.
+    원문(paper_text)이 없는 기존 덱은 재검증을 건너뛰고 경고로 표면화(막지 않음, 헌법 3조).
+    """
+    existing = await db.get_authored_deck(job_id)
+    paper_text = existing.get("paper_text") if existing else None
+    # 편집된 HTML이 카드 수의 사실 소스 (카드 삭제 반영)
+    card_count = html.count("data-screen-label") or (existing.get("card_count") if existing else 0)
+
+    warnings: list[str] = []
+    verify_json, verify = _verify_to_json(html, paper_text)
+    if not paper_text:
+        warnings.append("이 덱은 원문이 없어 재검증 불가 — 재생성 시 충실성 검증이 복원됩니다.")
+
+    await db.save_authored_deck(job_id, html, verify_json, card_count, paper_text=None)
+
+    images, render_warns = await render_deck(html)
+    warnings.extend(render_warns)
+    for i, png in enumerate(images, start=1):
+        try:
+            await db.save_card_image(job_id, i, png)
+        except Exception as exc:
+            warnings.append(f"deck save_card_image {i} 실패: {exc}")
+    if not images:
+        warnings.append("deck render: 0 cards rendered")
+    else:
+        await db.delete_card_images_above(job_id, len(images))
+
+    return {"verify": verify, "cardCount": len(images) or card_count, "warnings": warnings}
+
+
 async def run_authoring_pipeline(
     job_id: str,
     pdf_bytes: bytes,
@@ -124,8 +171,8 @@ async def _execute(
         "claims": [{"value": c.value, "context": c.context, "verified": c.verified} for c in claims],
     }, ensure_ascii=False)
 
-    # 저장 (검증 리포트는 렌더 실패와 무관하게 확보)
-    await db.save_authored_deck(job_id, html, verify_json, card_count)
+    # 저장 (검증 리포트는 렌더 실패와 무관하게 확보). 원문은 편집본 재검증(Phase 3)용으로 보관.
+    await db.save_authored_deck(job_id, html, verify_json, card_count, paper_text=s1_out.raw_text)
 
     # ── 렌더: 카드별 PNG ───────────────────────────────────────────────────
     await db.update_job(job_id, status=JobStatus.RUNNING, stage="RENDER", progress=85)

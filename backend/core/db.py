@@ -110,15 +110,22 @@ async def migrate() -> None:
             );
 
             -- 헌법 v3.0 단일 저작 경로(레거시 card_data와 분리). HTML 덱 전문 + 충실성 검증 결과.
+            -- paper_text: 편집본 재검증(V)을 위한 원문 보관 (Phase 3).
             CREATE TABLE IF NOT EXISTS authored_deck (
                 job_id TEXT PRIMARY KEY REFERENCES jobs(job_id),
                 html TEXT,
                 verify_json TEXT,
                 card_count INT,
+                paper_text TEXT,
                 updated_at TEXT
             );
             """
         )
+        # idempotent 마이그레이션 — 기존 DB의 authored_deck에 paper_text 없으면 추가.
+        async with conn.execute("PRAGMA table_info(authored_deck)") as cur:
+            cols = [row[1] for row in await cur.fetchall()]
+        if "paper_text" not in cols:
+            await conn.execute("ALTER TABLE authored_deck ADD COLUMN paper_text TEXT")
         await conn.commit()
 
 
@@ -257,21 +264,27 @@ async def get_card_data(job_id: str) -> str | None:
 # ── 단일 저작 덱 (헌법 v3.0) ───────────────────────────────────────────────
 
 async def save_authored_deck(
-    job_id: str, html: str, verify_json: str, card_count: int
+    job_id: str,
+    html: str,
+    verify_json: str,
+    card_count: int,
+    paper_text: str | None = None,
 ) -> None:
+    """덱 저장. paper_text=None(편집 저장)이면 기존 원문을 보존(덮어쓰지 않음)."""
     now = _utc_now_iso()
     async with aiosqlite.connect(_db_path()) as conn:
         await conn.execute(
             """
-            INSERT INTO authored_deck (job_id, html, verify_json, card_count, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO authored_deck (job_id, html, verify_json, card_count, paper_text, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(job_id) DO UPDATE SET
                 html = excluded.html,
                 verify_json = excluded.verify_json,
                 card_count = excluded.card_count,
+                paper_text = COALESCE(excluded.paper_text, authored_deck.paper_text),
                 updated_at = excluded.updated_at
             """,
-            (job_id, html, verify_json, card_count, now),
+            (job_id, html, verify_json, card_count, paper_text, now),
         )
         await conn.commit()
 
@@ -280,7 +293,8 @@ async def get_authored_deck(job_id: str) -> dict | None:
     async with aiosqlite.connect(_db_path()) as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            "SELECT html, verify_json, card_count, updated_at FROM authored_deck WHERE job_id = ?",
+            "SELECT html, verify_json, card_count, paper_text, updated_at "
+            "FROM authored_deck WHERE job_id = ?",
             (job_id,),
         ) as cursor:
             row = await cursor.fetchone()
@@ -328,6 +342,16 @@ async def save_card_image(
             VALUES (?, ?, ?, ?)
             """,
             (job_id, card_num, png_bytes, expires_at),
+        )
+        await conn.commit()
+
+
+async def delete_card_images_above(job_id: str, max_card_num: int) -> None:
+    """card_num > max_card_num 인 카드 이미지 삭제 (편집으로 카드 수가 줄었을 때 잔재 정리)."""
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute(
+            "DELETE FROM card_images WHERE job_id = ? AND card_num > ?",
+            (job_id, max_card_num),
         )
         await conn.commit()
 
