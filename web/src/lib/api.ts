@@ -42,11 +42,20 @@ export const uploadDeck = (file: File, cardCount: number, persona?: string, styl
 
 export const getDeck = (jobId: string) => api.get(`/deck/${jobId}`)
 
+// 편집(직접조작) 저장 → 재검증 + PNG 재렌더. Playwright 대기 위해 타임아웃 확대.
+export const patchDeck = (jobId: string, html: string) =>
+  api.patch(`/deck/${jobId}`, { html }, { timeout: 120_000 })
+
+// 자연어 편집 (유료 LLM). 응답에 새 html·verify 포함.
+export const nlPatchDeck = (jobId: string, instruction: string) =>
+  api.post(`/deck/${jobId}/nlpatch`, { instruction }, { timeout: 180_000 })
+
 export const exportDeck = (jobId: string) =>
   api.post(`/deck/${jobId}/export`, {}, { timeout: 120_000 })
 
-export const getDeckCardUrl = (jobId: string, cardNum: number) =>
-  `/api/deck/${jobId}/cards/${cardNum}`
+// v: 편집 저장 후 재렌더된 PNG 캐시 무력화용 버전(보통 updatedAt/저장 카운트).
+export const getDeckCardUrl = (jobId: string, cardNum: number, v?: number | string) =>
+  `/api/deck/${jobId}/cards/${cardNum}${v != null ? `?v=${v}` : ''}`
 
 export const getCards = (jobId: string) => api.get(`/cards/${jobId}`)
 
