@@ -12,9 +12,12 @@ import AGENT_BODY from './editorAgent'
 export interface SelectedInfo {
   tag: string
   editable: boolean
+  absolute: boolean
   styles: { color: string; fontSize: string; textAlign: string; fontWeight: string; background: string }
   text: string
 }
+
+export interface HistoryState { canUndo: boolean; canRedo: boolean }
 
 export interface DeckEditorHandle {
   getHtml: () => Promise<string>
@@ -22,6 +25,9 @@ export interface DeckEditorHandle {
   deleteElement: () => void
   moveElement: (dir: 'up' | 'down') => void
   clearSelection: () => void
+  undo: () => void
+  redo: () => void
+  revertFlow: () => void
 }
 
 interface Props {
@@ -30,6 +36,7 @@ interface Props {
   onSelected?: (info: SelectedInfo) => void
   onDeselected?: () => void
   onDirty?: () => void
+  onHistory?: (state: HistoryState) => void
 }
 
 const CARD_W = 1080
@@ -40,7 +47,7 @@ function buildSrcDoc(html: string): string {
 }
 
 const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
-  { html, mode, onSelected, onDeselected, onDirty }, ref,
+  { html, mode, onSelected, onDeselected, onDirty, onHistory }, ref,
 ) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -63,6 +70,9 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     deleteElement: () => send('DELETE_ELEMENT'),
     moveElement: (dir) => send('MOVE_ELEMENT', { dir }),
     clearSelection: () => send('CLEAR_SELECTION'),
+    undo: () => send('UNDO'),
+    redo: () => send('REDO'),
+    revertFlow: () => send('REVERT_FLOW'),
   }), [send])
 
   // iframe → 부모 메시지
@@ -76,6 +86,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
         case 'SELECTED': onSelected?.(d as unknown as SelectedInfo); break
         case 'DESELECTED': onDeselected?.(); break
         case 'DIRTY': onDirty?.(); break
+        case 'HISTORY_STATE': onHistory?.({ canUndo: !!d.canUndo, canRedo: !!d.canRedo }); break
         case 'HTML': {
           const r = htmlResolvers.current.shift()
           r?.(d.html as string)
@@ -85,7 +96,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
-  }, [mode, send, onSelected, onDeselected, onDirty])
+  }, [mode, send, onSelected, onDeselected, onDirty, onHistory])
 
   // 모드 변경을 iframe에 반영
   useEffect(() => { send('SET_MODE', { mode }) }, [mode, send])

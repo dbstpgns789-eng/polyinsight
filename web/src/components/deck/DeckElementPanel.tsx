@@ -10,6 +10,7 @@ interface Props {
   onStyle: (prop: string, value: string) => void
   onDelete: () => void
   onMove: (dir: 'up' | 'down') => void
+  onRevertFlow: () => void
 }
 
 function rgbToHex(c: string): string {
@@ -20,7 +21,7 @@ function rgbToHex(c: string): string {
   return `#${h(r)}${h(g)}${h(b)}`
 }
 
-export default function DeckElementPanel({ selected, onStyle, onDelete, onMove }: Props) {
+export default function DeckElementPanel({ selected, onStyle, onDelete, onMove, onRevertFlow }: Props) {
   if (!selected) {
     return (
       <p className="text-[12px] text-ink-3 leading-relaxed">
@@ -97,6 +98,14 @@ export default function DeckElementPanel({ selected, onStyle, onDelete, onMove }
         <button onClick={() => onMove('down')}
           className="flex-1 h-8 rounded-lg border border-border text-[12px] text-ink-2">아래로 ↓</button>
       </div>
+
+      {selected.absolute && (
+        <button onClick={onRevertFlow}
+          className="h-8 rounded-lg border border-forest-green text-[12px] text-forest-green">
+          ↺ 흐름으로 복귀 (자유배치 해제)
+        </button>
+      )}
+
       <button onClick={onDelete}
         className="h-8 rounded-lg border border-red-300 text-[12px] text-red-600">요소 삭제</button>
     </div>

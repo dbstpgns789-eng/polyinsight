@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
 import { getStatus, getDeck, patchDeck, nlPatchDeck, exportDeck, getDeckCardUrl, getExportDownloadUrl } from '@/lib/api'
-import DeckEditor, { type DeckEditorHandle, type SelectedInfo } from '@/components/deck/DeckEditor'
+import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState } from '@/components/deck/DeckEditor'
 import DeckElementPanel from '@/components/deck/DeckElementPanel'
 import DeckNLBar from '@/components/deck/DeckNLBar'
 
@@ -41,6 +41,7 @@ function DeckPageInner() {
   const [ver, setVer] = useState(0)            // PNG 캐시 무력화 버전
   const [editWarnings, setEditWarnings] = useState<string[]>([])
   const [nlBusy, setNlBusy] = useState(false)
+  const [history, setHistory] = useState<HistoryState>({ canUndo: false, canRedo: false })
   const editorRef = useRef<DeckEditorHandle>(null)
 
   // 상태 폴링 → DONE이면 덱 로드
@@ -157,6 +158,23 @@ function DeckPageInner() {
             {editing ? '편집 종료' : '편집'}
           </button>
 
+          {editing && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => editorRef.current?.undo()}
+                disabled={!history.canUndo}
+                title="실행 취소 (Ctrl+Z)"
+                className="w-9 h-9 rounded-lg border border-border text-ink-2 disabled:opacity-30"
+              >↶</button>
+              <button
+                onClick={() => editorRef.current?.redo()}
+                disabled={!history.canRedo}
+                title="다시 실행 (Ctrl+Shift+Z)"
+                className="w-9 h-9 rounded-lg border border-border text-ink-2 disabled:opacity-30"
+              >↷</button>
+            </div>
+          )}
+
           {editing ? (
             <button
               onClick={handleSave}
@@ -193,6 +211,7 @@ function DeckPageInner() {
               onSelected={setSelected}
               onDeselected={() => setSelected(null)}
               onDirty={() => setDirty(true)}
+              onHistory={setHistory}
             />
           </div>
         ) : (
@@ -219,6 +238,7 @@ function DeckPageInner() {
               onStyle={(prop, value) => editorRef.current?.applyStyle(prop, value)}
               onDelete={() => editorRef.current?.deleteElement()}
               onMove={(dir) => editorRef.current?.moveElement(dir)}
+              onRevertFlow={() => editorRef.current?.revertFlow()}
             />
             <div className="h-px bg-border my-6" />
             <DeckNLBar onSend={handleNL} busy={nlBusy} />
