@@ -334,6 +334,53 @@ per_page: integer  (선택, 1~40, 기본 20)
 
 ---
 
+### 1-7. 덱 이미지 자산 API (v3 저작 덱 — 스펙 2026-07-01)
+
+> 저작 덱 HTML(iframe WYSIWYG)에 `<img>` 삽입용 바이트 저장소.
+> **설계 심장**: 바이트는 `deck_assets`(SQLite BLOB)에, 저장 HTML엔 짧은 URL만.
+> 렌더(S7 `deck_renderer`) 직전에만 URL을 DB 바이트→data URI로 인라인한다
+> (2MB PATCH 한도 준수 + 쿠키 없는 Playwright 401·set_content base 부재 동시 해소).
+
+#### `POST /api/deck/:jobId/assets`
+사용자 업로드 이미지(① 소유진실/② AI 천장 오버라이드/데이터 도표)를 저장한다. `multipart/form-data`.
+
+**Request** — multipart
+```
+file:        binary  (필수) — 이미지. mime 화이트리스트 = image/png|jpeg|webp|gif (SVG 거부: XSS/SSRF)
+source_type: string  (선택, 기본 upload-owned) — upload-owned | upload-data | paper-figure
+```
+최대 크기 8MB.
+
+**Response** `201 Created`
+```json
+{ "assetId": "a1b2c3d4e5f6a7b8", "url": "/api/deck/<jobId>/assets/a1b2c3d4e5f6a7b8" }
+```
+프론트는 반환 `url`을 `insertImage({url, assetId, sourceType})`로 iframe 에이전트에 넘긴다.
+
+**에러**: 잡 없음 404(ERR-JOB-001) · 미지원 mime 400(ERR-IMG-001) · 8MB 초과 400(ERR-IMG-002) · 빈 파일 400(ERR-IMG-003).
+
+#### `GET /api/deck/:jobId/assets/:assetId`
+자산 바이트를 원본 mime으로 서빙(iframe 미리보기용 — 쿠키 인증됨). **export/렌더 PNG는 이 라우트를 거치지 않는다**(렌더시 인라인이 대체). 만료/부재 시 404(ERR-IMG-004).
+
+**동작 규칙**:
+- `data-source-type` 토큰 집합 동결: `stock`(S2 스톡 다운로드-저장) / `upload-owned` / `upload-data` / `paper-figure`. V(충실성)가 읽는 "원문 대조 불가" 신호 = `upload-data` 단일(S3).
+- TTL = 덱 수명 정합(기본 720h). 만료 감지 시 프론트에 "이미지 재업로드 필요" 표시.
+- degrade-not-fail: 업로드 경로는 스톡 키 유무와 독립. 부분 실패 시 삽입 취소(부분 상태 금지).
+
+#### `<img data-*>` 메타 규약 (HTML이 단일 진실)
+이미지 메타는 별도 JSON 스키마가 아니라 삽입된 `<img>`의 속성에 실려 직렬화·DB·export·V까지 보존된다. **`CardSlot` 같은 필드스키마 신설 금지**(헌법 §1 카탈로그 감옥 회피).
+
+| 속성 | 의미 |
+|---|---|
+| `data-asset-id` | deck_assets PK(assetId) |
+| `data-source-type` | stock / upload-owned / upload-data / paper-figure |
+| `data-provider` | (스톡) pexels / unsplash |
+| `data-credit` / `data-credit-url` | (스톡) 저자 표시 |
+
+> **금지**: `data-pi-artifact`/`data-pi-*` 부착 — editorAgent serialize()가 제거해 소실된다. 메타는 반드시 `data-asset-id`/`data-source-type` 등으로.
+
+---
+
 ## 2. 핵심 데이터 모델
 
 ### 2-1. Project (SQLite: `jobs` + `card_data`)
@@ -349,6 +396,23 @@ per_page: integer  (선택, 1~40, 기본 20)
 | `title` | TEXT | 논문 제목 (S2 파싱 결과) |
 | `created_at` | TEXT | ISO 8601 |
 | `updated_at` | TEXT | ISO 8601 |
+
+---
+
+### 2-1b. DeckAsset (SQLite: `deck_assets`) — v3 덱 이미지 삽입
+
+바이트 원장. 저장 HTML엔 URL만, 렌더시 data URI 인라인(§1-7). PK = `(job_id, asset_id)`.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `asset_id` | TEXT | 16-hex. `(job_id, asset_id)` 복합 PK |
+| `job_id` | TEXT | jobs FK |
+| `bytes` | BLOB | 이미지 원본 바이트 |
+| `mime` | TEXT | image/png\|jpeg\|webp\|gif |
+| `source_type` | TEXT | stock\|upload-owned\|upload-data\|paper-figure |
+| `source_url` | TEXT? | (스톡) 원본 CDN URL |
+| `provider`/`credit`/`credit_url` | TEXT? | (스톡) 저자 표시 |
+| `created_at`/`expires_at` | TEXT | ISO 8601. TTL=덱 수명 정합(기본 720h) |
 
 ---
 
