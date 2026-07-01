@@ -42,6 +42,10 @@ export interface DeckEditorHandle {
   distribute: (axis: 'h' | 'v') => void
   setRect: (r: { left?: number; top?: number; width?: number; height?: number }) => void
   setPage: (index: number) => void
+  insertImage: (p: {
+    url: string; assetId?: string; sourceType?: string
+    provider?: string; credit?: string; creditUrl?: string
+  }) => void
 }
 
 interface Props {
@@ -92,6 +96,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     distribute: (axis) => send('DISTRIBUTE', { axis }),
     setRect: (r) => send('SET_RECT', r),
     setPage: (index) => send('SET_PAGE', { index }),
+    insertImage: (p) => send('INSERT_IMAGE', p),
   }), [send])
 
   // iframe → 부모 메시지

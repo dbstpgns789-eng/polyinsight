@@ -649,6 +649,37 @@ const AGENT_BODY = `
         }
         break;
       }
+      case 'INSERT_IMAGE': {
+        var cards = cardEls();
+        var card = cards[activeCard];   // 삽입 대상 = 현재 보이는 카드만(숨은 카드 금지)
+        if (!card) break;
+        if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
+        var img = document.createElement('img');
+        img.src = d.url;
+        // 메타는 data-* 로(serialize가 data-pi-* 만 제거 → 이건 생존). data-pi-artifact 절대 금지.
+        img.setAttribute('data-asset-id', d.assetId || '');
+        img.setAttribute('data-source-type', d.sourceType || 'upload-owned');
+        if (d.provider) img.setAttribute('data-provider', d.provider);
+        if (d.credit) img.setAttribute('data-credit', d.credit);
+        if (d.creditUrl) img.setAttribute('data-credit-url', d.creditUrl);
+        // element 프리셋: absolute + 명시 px(height:auto 금지 — setRect/resize의 offsetWidth 로직이 px 요구).
+        var IW = 400, IH = 300;
+        img.style.position = 'absolute';
+        img.style.width = IW + 'px';
+        img.style.height = IH + 'px';
+        img.style.left = ((CARD_W - IW) / 2) + 'px';
+        img.style.top = ((CARD_H - IH) / 2) + 'px';
+        img.style.objectFit = 'cover';
+        // undo 보편성(3e 불변식): 삽입도 되돌리기 가능. run=append, undo=remove.
+        pushCmd({
+          run: function () { card.appendChild(img); },
+          undo: function () { if (img.parentNode) img.parentNode.removeChild(img); }
+        });
+        card.appendChild(img);
+        select(img);
+        afterMutate();
+        break;
+      }
       case 'DELETE_ELEMENT': {
         var el = primary();
         if (el) {
