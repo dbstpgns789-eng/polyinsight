@@ -537,6 +537,60 @@ def test_paging():
         return ok
 
 
+def test_insert_image():
+    """INSERT_IMAGE(S0): activeCard 삽입 + 직렬화 생존(data-asset-id, data-pi 0) + undo/redo."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as pw:
+        browser, page = make_page(pw)   # SET_MODE edit(=paged), activeCard=0
+        results = []
+
+        def check(name, cond):
+            results.append((name, bool(cond)))
+
+        # 카드2(index1)로 페이지 이동 후 삽입 → 카드2에만 들어가야 함(activeCard 한정)
+        goto_card(page, 1)
+        clear_msgs(page)
+        host(page, "INSERT_IMAGE",
+             url="data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=",
+             assetId="A1", sourceType="upload-owned")
+        page.wait_for_timeout(150)
+
+        counts = page.evaluate("""() => {
+          const cards = document.querySelectorAll('[data-screen-label]');
+          return [cards[0].querySelectorAll('img').length, cards[1].querySelectorAll('img').length];
+        }""")
+        check("삽입: activeCard(카드2)에 img 1개", counts[1] == 1)
+        check("삽입: 다른 카드(카드1)엔 0개", counts[0] == 0)
+
+        sel = last(page, "SELECTED")
+        check("삽입 후 img 선택", sel is not None and sel.get("tag") == "img")
+
+        # 직렬화 생존
+        html = get_html(page)
+        check("serialize: data-asset-id 생존", 'data-asset-id="A1"' in html)
+        check("serialize: data-source-type 생존", 'data-source-type="upload-owned"' in html)
+        check("serialize: data-pi 아티팩트 0", "data-pi-" not in html)
+        check("serialize: img 1개", html.count("<img") == 1)
+
+        # undo → img 제거, redo → 복원
+        host(page, "UNDO"); page.wait_for_timeout(120)
+        after_undo = page.evaluate("() => document.querySelectorAll('img').length")
+        check("undo→img 제거", after_undo == 0)
+        host(page, "REDO"); page.wait_for_timeout(120)
+        after_redo = page.evaluate("() => document.querySelectorAll('img').length")
+        check("redo→img 복원", after_redo == 1)
+
+        browser.close()
+        print("\n=== INSERT_IMAGE (S0) ===")
+        ok = True
+        for name, passed in results:
+            print(f"  [{'PASS' if passed else 'FAIL'}] {name}")
+            ok = ok and passed
+        print(f"결과: {'ALL PASS' if ok else 'FAIL 있음'}")
+        return ok
+
+
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
     ok = True
@@ -550,4 +604,6 @@ if __name__ == "__main__":
         ok = test_undo_universality() and ok
     if mode in ("all", "paging"):
         ok = test_paging() and ok
+    if mode in ("all", "insert"):
+        ok = test_insert_image() and ok
     sys.exit(0 if ok else 1)
