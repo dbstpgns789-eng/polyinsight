@@ -167,7 +167,7 @@ export default function Home() {
                 <div className="step__num" aria-hidden="true">3</div>
                 <div className="step__content">
                   <h3 className="step__title">편집 후 내보내기</h3>
-                  <p className="step__desc">카드 에디터에서 문구와 이미지를 수정하세요. 완료하면 1080×1080 PNG 파일을 한 번에 내보냅니다.</p>
+                  <p className="step__desc">카드 에디터에서 문구와 이미지를 수정하세요. 완료하면 1080×1350 카드뉴스를 PNG로 한 번에 내보냅니다.</p>
                 </div>
               </li>
             </ol>
@@ -190,28 +190,28 @@ export default function Home() {
                 <div className="feature__num" aria-hidden="true">02</div>
                 <div>
                   <h3 className="feature__title">신뢰도 표시</h3>
-                  <p className="feature__desc">추출된 각 항목에 신뢰도(높음·보통·낮음)와 검토 필요 여부가 표시됩니다. 검토가 필요한 항목이 남아있으면 내보내기 버튼이 잠깁니다.</p>
+                  <p className="feature__desc">추출된 각 항목에 신뢰도와 검토 필요 여부가 표시됩니다. 검토가 필요한 항목은 경고로 알려주되, 내보낼지는 사용자가 결정합니다.</p>
                 </div>
               </article>
               <article className="feature reveal reveal-delay-2">
                 <div className="feature__num" aria-hidden="true">03</div>
                 <div>
-                  <h3 className="feature__title">가변 카드 구조</h3>
-                  <p className="feature__desc">논문 분량과 내용에 따라 3장에서 15장까지 자유롭게 구성합니다. 표지, 문제 제기, 연구 방법, 결과, 마무리 등 12가지 슬라이드 유형을 지원합니다.</p>
+                  <h3 className="feature__title">내용에 맞는 자유 구성</h3>
+                  <p className="feature__desc">논문 분량과 내용에 따라 카드 수와 구성을 정합니다. AI가 표지·문제 제기·핵심 결과·마무리까지 내용에 맞는 형태를 직접 저작합니다.</p>
                 </div>
               </article>
               <article className="feature reveal reveal-delay-1">
                 <div className="feature__num" aria-hidden="true">04</div>
                 <div>
                   <h3 className="feature__title">카드 에디터</h3>
-                  <p className="feature__desc">생성된 카드를 브라우저에서 바로 수정할 수 있습니다. 5초 자동저장으로 작업 내용이 유지됩니다.</p>
+                  <p className="feature__desc">생성된 카드를 브라우저에서 바로 수정합니다. 텍스트·이미지·배치를 자유롭게 편집하고 저장할 수 있습니다.</p>
                 </div>
               </article>
               <article className="feature reveal reveal-delay-2">
                 <div className="feature__num" aria-hidden="true">05</div>
                 <div>
                   <h3 className="feature__title">고해상도 내보내기</h3>
-                  <p className="feature__desc">편집 완료 후 1080×1080 PNG를 ZIP으로 일괄 다운로드합니다.</p>
+                  <p className="feature__desc">편집 완료 후 1080×1350 PNG를 ZIP으로 일괄 다운로드합니다.</p>
                 </div>
               </article>
             </div>

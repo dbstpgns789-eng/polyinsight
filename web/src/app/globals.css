@@ -403,7 +403,7 @@ h1, h2, h3, h4, h5 {
 
 /* Hero — kicker, headline underline, trust */
 .hero-kicker { display:inline-flex; align-items:center; gap:6px; font-size:var(--t-sm); font-weight:700; color:var(--accent-hover); background:var(--accent-subtle); padding:7px 14px; border-radius:999px; margin-bottom:var(--s5); }
-.hero__title .hi { border-bottom: 5px solid var(--accent); padding-bottom: 2px; }
+.hero__title .hi { color: var(--accent); }
 .hero__actions--row { flex-direction: row; align-items: center; flex-wrap: wrap; }
 .hero__trust { margin-top: var(--s5); display:flex; align-items:center; gap:10px; font-size:var(--t-sm); color:var(--text-2); }
 .hero__trust-mark { display:inline-flex; align-items:center; gap:6px; color:var(--accent-hover); font-weight:800; white-space:nowrap; }
