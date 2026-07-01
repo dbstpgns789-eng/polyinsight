@@ -12,6 +12,7 @@ import AuthGuard from '@/components/auth/AuthGuard'
 import { getStatus, getDeck, patchDeck, nlPatchDeck, exportDeck, getDeckCardUrl, getExportDownloadUrl } from '@/lib/api'
 import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState, type PageState } from '@/components/deck/DeckEditor'
 import DeckElementPanel from '@/components/deck/DeckElementPanel'
+import DeckMediaPanel from '@/components/deck/DeckMediaPanel'
 import DeckNLBar from '@/components/deck/DeckNLBar'
 
 interface VerifyClaim { value: string; context: string; verified: boolean }
@@ -267,6 +268,11 @@ function DeckPageInner() {
         {editing && (
           <section className="mb-7">
             <h2 className="text-[15px] font-bold text-ink mb-3">요소 편집</h2>
+            <DeckMediaPanel
+              jobId={jobId}
+              onInsert={(p) => { editorRef.current?.insertImage(p); setDirty(true) }}
+            />
+            <div className="h-px bg-border my-6" />
             <DeckElementPanel
               selected={selected}
               onStyle={(prop, value) => editorRef.current?.applyStyle(prop, value)}

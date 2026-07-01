@@ -42,6 +42,20 @@ export const uploadDeck = (file: File, cardCount: number, persona?: string, styl
 
 export const getDeck = (jobId: string) => api.get(`/deck/${jobId}`)
 
+// 덱 이미지 자산 업로드(멀티파트) → {assetId, url}. 렌더시 data URI 인라인 전제(저장 HTML엔 url만).
+export const uploadDeckAsset = (jobId: string, file: File, sourceType = 'upload-owned') => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('source_type', sourceType)
+  return api.post(`/deck/${jobId}/assets`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000,
+  })
+}
+
+export const getDeckAssetUrl = (jobId: string, assetId: string) =>
+  `/api/deck/${jobId}/assets/${assetId}`
+
 // 편집(직접조작) 저장 → 재검증 + PNG 재렌더. Playwright 대기 위해 타임아웃 확대.
 export const patchDeck = (jobId: string, html: string) =>
   api.patch(`/deck/${jobId}`, { html }, { timeout: 120_000 })
