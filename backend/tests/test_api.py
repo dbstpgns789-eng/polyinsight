@@ -508,6 +508,27 @@ async def test_get_deck_asset_missing_404(client):
 
 
 @pytest.mark.asyncio
+async def test_get_deck_asset_public_no_auth(client):
+    """서빙은 무인증 capability URL — sandboxed iframe(null-origin) 미리보기가
+    세션 쿠키를 못 실어도 200. 추측 불가 job_id+asset_id가 접근 권한(스펙 §9)."""
+    from backend.core.auth import get_current_user
+    await _db.create_job("jpub", "p.pdf")
+    up = await client.post(
+        "/api/deck/jpub/assets",
+        files={"file": ("x.png", _png_bytes(), "image/png")},
+    )
+    url = up.json()["url"]
+    # auth 의존성 override 제거 → 진짜 무인증 요청 재현
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        resp = await client.get(url)   # 쿠키/인증 없음
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "image/png"
+    finally:
+        app.dependency_overrides[get_current_user] = lambda: {"id": 1, "email": "test@test", "role": "user"}
+
+
+@pytest.mark.asyncio
 async def test_nlpatch_rejects_broken_contract(client, monkeypatch):
     """모델이 계약을 깨면(카드 라벨 소실) 422로 거부하고 원본 보존."""
     monkeypatch.setattr(

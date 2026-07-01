@@ -360,7 +360,9 @@ source_type: string  (선택, 기본 upload-owned) — upload-owned | upload-dat
 **에러**: 잡 없음 404(ERR-JOB-001) · 미지원 mime 400(ERR-IMG-001) · 8MB 초과 400(ERR-IMG-002) · 빈 파일 400(ERR-IMG-003).
 
 #### `GET /api/deck/:jobId/assets/:assetId`
-자산 바이트를 원본 mime으로 서빙(iframe 미리보기용 — 쿠키 인증됨). **export/렌더 PNG는 이 라우트를 거치지 않는다**(렌더시 인라인이 대체). 만료/부재 시 404(ERR-IMG-004).
+자산 바이트를 원본 mime으로 서빙. **인증 없음 — capability URL**(추측 불가능한 job_id UUID + 16-hex asset_id 조합이 접근 권한). **export/렌더 PNG는 이 라우트를 거치지 않는다**(렌더시 인라인이 대체). 만료/부재 시 404(ERR-IMG-004).
+
+> **왜 무인증인가(스펙 §9 결정 "서빙 라우트 auth는 인라인 전제로 무해화")**: 편집 미리보기는 저작 HTML을 **sandboxed iframe**(`sandbox="allow-scripts"`, 신뢰 경계)에 마운트한다. iframe은 null-origin이라 `<img src="/api/deck/...">` 서브리소스 요청에 SameSite 세션 쿠키가 실리지 않아 인증 서빙은 **401→빈칸 렌더**가 된다(2026-07-01 실측 확인). 렌더 PNG는 인라인이 대체하므로 서빙 라우트는 미리보기 전용 — 무인증 capability URL로 열어 iframe 샌드박스를 유지한 채 미리보기를 살린다. 업로드(POST)는 인증 유지. 자산은 사용자 소유 이미지(로고·사진)로 민감도 낮고, 앱 전체가 invite-only.
 
 **동작 규칙**:
 - `data-source-type` 토큰 집합 동결: `stock`(S2 스톡 다운로드-저장) / `upload-owned` / `upload-data` / `paper-figure`. V(충실성)가 읽는 "원문 대조 불가" 신호 = `upload-data` 단일(S3).

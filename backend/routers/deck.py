@@ -172,8 +172,13 @@ async def upload_deck_asset(
 
 
 @router.get("/deck/{job_id}/assets/{asset_id}")
-async def get_deck_asset(job_id: str, asset_id: str, user: dict = Depends(get_current_user)):
-    """자산 바이트를 원본 mime으로 서빙(iframe 미리보기용). export/렌더 PNG는 인라인이 대체."""
+async def get_deck_asset(job_id: str, asset_id: str):
+    """자산 바이트를 원본 mime으로 서빙 — **무인증 capability URL**(스펙 §9).
+
+    편집 미리보기는 sandboxed iframe(null-origin)이라 인증 서빙 URL에 세션 쿠키를
+    실을 수 없어 401→빈칸 렌더가 된다(2026-07-01 실측). 추측 불가능한 job_id+asset_id
+    조합이 접근 권한. export/렌더 PNG는 이 라우트 대신 렌더시 인라인이 대체한다.
+    """
     asset = await db.get_deck_asset(job_id, asset_id)
     if asset is None or asset.get("bytes") is None:
         raise HTTPException(
