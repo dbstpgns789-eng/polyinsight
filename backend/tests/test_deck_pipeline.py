@@ -176,3 +176,50 @@ async def test_inline_deck_assets_replaces_url():
         assert "data:image/png;base64," in out  # data URI로 치환
     finally:
         await db.delete_job(jid)
+
+
+async def test_inserted_image_survives_to_rendered_png():
+    """자산 URL을 담은 카드 HTML → persist → 재렌더 PNG가 순수 배경 렌더와 다름.
+    (인라인 경로가 실제로 픽셀을 그림 = auth/base/2MB/직렬화 리스크 실증 폐쇄)"""
+    jid = "test-rt-pixel"
+    await db.delete_job(jid)
+    await db.create_job(jid, title="rt.pdf")
+    try:
+        # 눈에 띄는 단색 이미지(빨강 400x300) — 실제 유효 PNG 필요.
+        from PIL import Image
+        import io as _io
+        buf = _io.BytesIO()
+        Image.new("RGB", (400, 300), (220, 40, 40)).save(buf, format="PNG")
+        red_png = buf.getvalue()
+        await db.save_deck_asset(jid, "redA", red_png, "image/png")
+
+        base_html = (
+            '<!DOCTYPE html><html><head><meta charset=utf-8></head><body>'
+            '<div data-screen-label="01" style="width:1080px;height:1350px;'
+            'position:relative;background:#0A0E1A;box-sizing:border-box"></div>'
+            '</body></html>'
+        )
+        img_html = base_html.replace(
+            '</div>',
+            f'<img src="/api/deck/{jid}/assets/redA" data-asset-id="redA" '
+            f'data-source-type="upload-owned" '
+            f'style="position:absolute;left:340px;top:525px;width:400px;height:300px;'
+            f'object-fit:cover"></div>',
+        )
+        # 기존 authored_deck 필요(persist가 조회) — paper_text 없이 저장.
+        await db.save_authored_deck(jid, base_html, json.dumps({"verified": 0}), 1)
+
+        # 베이스라인(이미지 없음) 렌더
+        base_imgs, _ = await deck_renderer.render_deck(base_html, scale=1, job_id=jid)
+        # 삽입본 저장 + 재렌더
+        await persist_edited_deck(jid, img_html)
+        got = await db.get_card_images(jid)
+        assert len(got) >= 1
+        assert base_imgs and got[1] != base_imgs[0]     # 픽셀이 달라짐
+        # 저장 HTML은 URL 참조 유지(2MB 한도 — base64 저장 금지)
+        deck = await db.get_authored_deck(jid)
+        assert "/api/deck/" in deck["html"]
+        assert "data:image/png;base64," not in deck["html"]
+        assert 'data-asset-id="redA"' in deck["html"]   # 메타 직렬화 생존
+    finally:
+        await db.delete_job(jid)
