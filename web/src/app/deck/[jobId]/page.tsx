@@ -239,6 +239,9 @@ function DeckPageInner() {
               onDelete={() => editorRef.current?.deleteElement()}
               onMove={(dir) => editorRef.current?.moveElement(dir)}
               onRevertFlow={() => editorRef.current?.revertFlow()}
+              onAlign={(axis) => editorRef.current?.align(axis)}
+              onDistribute={(axis) => editorRef.current?.distribute(axis)}
+              onSetRect={(r) => editorRef.current?.setRect(r)}
             />
             <div className="h-px bg-border my-6" />
             <DeckNLBar onSend={handleNL} busy={nlBusy} />
