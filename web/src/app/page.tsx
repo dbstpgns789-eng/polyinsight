@@ -111,71 +111,33 @@ export default function Home() {
           <div className="container hero__grid">
 
             <div className="hero__content">
-              <p className="eyebrow">무료 베타 운영 중</p>
+              <p className="hero-kicker">✦ 무료 베타 · 논문 원문 기반</p>
               <h1 id="hero-title" className="hero__title">
-                논문 PDF 하나로,<br />카드뉴스 완성
+                논문 읽는 시간은 그대로.<br /><span className="hi">알리는 시간은 1/10</span>로.
               </h1>
               <p className="hero__sub">
-                학술 논문을 업로드하면 AI가 원문에서 핵심 내용을 직접 추출해 카드뉴스를 만듭니다.
-                수치와 근거는 논문 그대로, 편집 가능한 형태로 제공됩니다.
+                PDF 하나를 올리면 AI가 원문 근거만으로 카드뉴스를 만듭니다.
+                모든 수치는 논문 원문에서 검증되고, 편집 가능한 형태로 제공됩니다.
               </p>
-              <div className="hero__actions">
-                <a href="/dashboard" className="btn btn-primary btn-lg">
-                  무료로 시작하기
-                </a>
+              <div className="hero__actions hero__actions--row">
+                <a href="/dashboard" className="btn btn-primary btn-lg">무료로 시작하기</a>
+                <a href="#how-it-works" className="btn btn-ghost btn-lg">작동 방식 보기</a>
               </div>
+              <p className="hero__trust">
+                <span className="hero__trust-mark">✓ 원문 검증</span> 지어내지 않습니다. 논문이 근거입니다.
+              </p>
             </div>
 
             <div className="hero__visual" aria-hidden="true">
-              <div className="card-stack">
-                <div className="card-mock card-mock--3">
-                  <div className="card-mock__header"><span>서론</span><span>1 / 8</span></div>
+              <div className="hero-stage">
+                <div className="hero-fstat"><b>6.8%</b><span>평균 저장률 (예시)</span></div>
+                <div className="hero-card hero-card--a"><img src="/cards/attn_05.png" alt="" /></div>
+                <div className="hero-card hero-card--b"><img src="/cards/bert_03.png" alt="" /></div>
+                <div className="hero-card hero-card--c"><img src="/cards/attn_01.png" alt="" /></div>
+                <div className="hero-badge">
+                  <span className="hero-badge__ring">✓</span>
+                  <span className="hero-badge__txt"><b>28.4 BLEU</b><small>논문 7페이지 확인됨</small></span>
                 </div>
-                <div className="card-mock card-mock--2">
-                  <div className="card-mock__header"><span>연구 방법</span><span>3 / 8</span></div>
-                  <div className="card-mock__body">
-                    <div className="mock-line mock-line--title"></div>
-                    <div className="mock-line"></div>
-                    <div className="mock-line mock-line--short"></div>
-                  </div>
-                </div>
-                <div className="card-mock card-mock--1">
-                  <div className="card-mock__header"><span>연구 결과</span><span>4 / 8</span></div>
-                  <div className="card-mock__body">
-                    <p className="card-mock__stat">73.2%</p>
-                    <p className="card-mock__claim">전체 샘플에서 통계적 유의성 확인</p>
-                    <div className="card-mock__cite">
-                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                        <rect x="1" y="1" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.1"/>
-                        <line x1="3" y1="4" x2="8" y2="4" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round"/>
-                        <line x1="3" y1="6" x2="6.5" y2="6" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round"/>
-                      </svg>
-                      Table 2, p.8
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="visual-label visual-label--input">
-                <svg width="28" height="36" viewBox="0 0 28 36" fill="none" aria-hidden="true">
-                  <rect x="1" y="1" width="26" height="34" rx="3" fill="white" stroke="var(--border)" strokeWidth="1.5"/>
-                  <rect x="5" y="8" width="12" height="2" rx="1" fill="var(--border)"/>
-                  <rect x="5" y="13" width="18" height="1.5" rx="0.75" fill="var(--border-subtle)"/>
-                  <rect x="5" y="17" width="15" height="1.5" rx="0.75" fill="var(--border-subtle)"/>
-                  <rect x="5" y="21" width="17" height="1.5" rx="0.75" fill="var(--border-subtle)"/>
-                  <path d="M19 1v8h8" fill="none" stroke="var(--border)" strokeWidth="1.5"/>
-                </svg>
-                <span>논문 PDF</span>
-              </div>
-
-              <div className="visual-arrow" aria-hidden="true">
-                <svg width="36" height="16" viewBox="0 0 36 16" fill="none">
-                  <path d="M2 8h28M24 3l6 5-6 5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-
-              <div className="visual-label visual-label--output">
-                <span>카드뉴스 8장</span>
               </div>
             </div>
 
