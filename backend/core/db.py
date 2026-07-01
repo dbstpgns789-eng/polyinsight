@@ -119,6 +119,22 @@ async def migrate() -> None:
                 paper_text TEXT,
                 updated_at TEXT
             );
+
+            -- 덱 이미지 삽입(스펙 2026-07-01): 바이트 원장. 저장 HTML엔 URL만, 렌더시 인라인.
+            CREATE TABLE IF NOT EXISTS deck_assets (
+                asset_id TEXT,
+                job_id TEXT REFERENCES jobs(job_id),
+                bytes BLOB,
+                mime TEXT,
+                source_type TEXT,
+                source_url TEXT,
+                provider TEXT,
+                credit TEXT,
+                credit_url TEXT,
+                created_at TEXT,
+                expires_at TEXT,
+                PRIMARY KEY (job_id, asset_id)
+            );
             """
         )
         # idempotent 마이그레이션 — 기존 DB의 authored_deck에 paper_text 없으면 추가.
@@ -301,6 +317,67 @@ async def get_authored_deck(job_id: str) -> dict | None:
             return dict(row) if row else None
 
 
+# ── 덱 이미지 자산 (스펙 2026-07-01) ─────────────────────────────────────────
+
+async def save_deck_asset(
+    job_id: str,
+    asset_id: str,
+    data: bytes,
+    mime: str,
+    source_type: str = "upload-owned",
+    source_url: str | None = None,
+    provider: str | None = None,
+    credit: str | None = None,
+    credit_url: str | None = None,
+    ttl_hours: int = 24 * 30,  # 덱 수명 정합(스펙 §4.4). 재편집까지 생존.
+) -> None:
+    now = _utc_now_iso()
+    expires_at = (_utc_now() + timedelta(hours=ttl_hours)).isoformat()
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute(
+            """
+            INSERT INTO deck_assets (
+                asset_id, job_id, bytes, mime, source_type, source_url,
+                provider, credit, credit_url, created_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(job_id, asset_id) DO UPDATE SET
+                bytes = excluded.bytes, mime = excluded.mime,
+                source_type = excluded.source_type, source_url = excluded.source_url,
+                provider = excluded.provider, credit = excluded.credit,
+                credit_url = excluded.credit_url, expires_at = excluded.expires_at
+            """,
+            (asset_id, job_id, data, mime, source_type, source_url,
+             provider, credit, credit_url, now, expires_at),
+        )
+        await conn.commit()
+
+
+async def get_deck_asset(job_id: str, asset_id: str) -> dict | None:
+    now = _utc_now_iso()
+    async with aiosqlite.connect(_db_path()) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT asset_id, bytes, mime, source_type, source_url, provider, "
+            "credit, credit_url FROM deck_assets "
+            "WHERE job_id = ? AND asset_id = ? AND expires_at > ?",
+            (job_id, asset_id, now),
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def list_deck_assets(job_id: str) -> list[dict]:
+    now = _utc_now_iso()
+    async with aiosqlite.connect(_db_path()) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT asset_id, mime, source_type FROM deck_assets "
+            "WHERE job_id = ? AND expires_at > ?",
+            (job_id, now),
+        ) as cursor:
+            return [dict(r) for r in await cursor.fetchall()]
+
+
 async def update_job_title(job_id: str, title: str) -> bool:
     """job 표시명(title) 갱신. 존재하면 True."""
     async with aiosqlite.connect(_db_path()) as conn:
@@ -316,6 +393,7 @@ async def delete_job(job_id: str) -> bool:
     """job과 연관 데이터(card_data·card_images·exports·authored_deck) 일괄 삭제. job 존재 시 True."""
     async with aiosqlite.connect(_db_path()) as conn:
         await conn.execute("DELETE FROM card_images WHERE job_id = ?", (job_id,))
+        await conn.execute("DELETE FROM deck_assets WHERE job_id = ?", (job_id,))
         await conn.execute("DELETE FROM card_data WHERE job_id = ?", (job_id,))
         await conn.execute("DELETE FROM exports WHERE job_id = ?", (job_id,))
         await conn.execute("DELETE FROM authored_deck WHERE job_id = ?", (job_id,))

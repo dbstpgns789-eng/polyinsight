@@ -139,3 +139,23 @@ async def test_persist_edited_deck_null_fallback_warns():
         assert len(imgs) >= 1
     finally:
         await db.delete_job(jid)
+
+
+async def test_deck_asset_roundtrip():
+    """자산 바이트 저장→조회 라운드트립 + delete_job 정리."""
+    jid = "test-asset-rt"
+    await db.delete_job(jid)
+    await db.create_job(jid, title="a.pdf")
+    try:
+        png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+        await db.save_deck_asset(jid, "asset-1", png, "image/png",
+                                 source_type="upload-owned")
+        got = await db.get_deck_asset(jid, "asset-1")
+        assert got is not None
+        assert got["bytes"] == png
+        assert got["mime"] == "image/png"
+        assert got["source_type"] == "upload-owned"
+        await db.delete_job(jid)
+        assert await db.get_deck_asset(jid, "asset-1") is None
+    finally:
+        await db.delete_job(jid)
