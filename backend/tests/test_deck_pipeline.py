@@ -159,3 +159,20 @@ async def test_deck_asset_roundtrip():
         assert await db.get_deck_asset(jid, "asset-1") is None
     finally:
         await db.delete_job(jid)
+
+
+async def test_inline_deck_assets_replaces_url():
+    """저장 HTML의 자산 URL이 렌더 전처리에서 data URI로 치환된다(auth/base 공백 회피)."""
+    from backend.agents.deck.deck_renderer import _inline_deck_assets
+    jid = "test-inline"
+    await db.delete_job(jid)
+    await db.create_job(jid, title="i.pdf")
+    try:
+        png = b"\x89PNG\r\n\x1a\n" + b"\x01" * 64
+        await db.save_deck_asset(jid, "aid9", png, "image/png")
+        html = f'<img src="/api/deck/{jid}/assets/aid9">'
+        out = await _inline_deck_assets(html, jid)
+        assert "/api/deck/" not in out          # URL이 사라짐
+        assert "data:image/png;base64," in out  # data URI로 치환
+    finally:
+        await db.delete_job(jid)

@@ -60,7 +60,7 @@ async def persist_edited_deck(job_id: str, html: str) -> dict:
 
     await db.save_authored_deck(job_id, html, verify_json, card_count, paper_text=None)
 
-    images, render_warns = await render_deck(html)
+    images, render_warns = await render_deck(html, job_id=job_id)
     warnings.extend(render_warns)
     for i, png in enumerate(images, start=1):
         try:
@@ -176,7 +176,7 @@ async def _execute(
 
     # ── 렌더: 카드별 PNG ───────────────────────────────────────────────────
     await db.update_job(job_id, status=JobStatus.RUNNING, stage="RENDER", progress=85)
-    images, render_warns = await render_deck(html)
+    images, render_warns = await render_deck(html, job_id=job_id)
     warnings.extend(render_warns)
     for i, png in enumerate(images, start=1):
         try:

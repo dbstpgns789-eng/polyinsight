@@ -8,11 +8,15 @@ Windows ProactorEventLoop 격리는 s7_renderer.py 패턴을 복제.
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
+import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
 from playwright.async_api import async_playwright
+
+from ...core import db
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +25,35 @@ _deck_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="deck-playwrig
 
 _CARD_W = 1080
 _CARD_H = 1350  # 4:5 세로
+
+# 저장 HTML의 자산 URL 패턴. 렌더 직전 DB 바이트→data URI로 인라인(스펙 §4.2).
+_ASSET_URL_RE = re.compile(r'/api/deck/([\w-]+)/assets/([\w-]+)')
+
+
+async def _inline_deck_assets(html: str, job_id: str | None) -> str:
+    """set_content 전, 자산 URL을 DB 바이트→data URI로 치환.
+    Playwright는 쿠키·base URL이 없어 authed 자산 URL을 못 불러온다(조용한 빈칸 렌더).
+    인라인으로 self-contained HTML을 확보해 미리보기와 export PNG가 같은 픽셀로 수렴."""
+    if not job_id or "/api/deck/" not in html:
+        return html
+    seen: dict[str, str] = {}
+    for m in _ASSET_URL_RE.finditer(html):
+        aid = m.group(2)
+        if aid in seen:
+            continue
+        asset = await db.get_deck_asset(job_id, aid)
+        if not asset or asset.get("bytes") is None:
+            seen[aid] = ""   # 만료/부재 → 치환 안 함(§7: 플레이스홀더로 렌더 계속)
+            continue
+        b64 = base64.b64encode(asset["bytes"]).decode("ascii")
+        seen[aid] = f'data:{asset["mime"] or "image/png"};base64,{b64}'
+
+    def _repl(mm: "re.Match[str]") -> str:
+        aid = mm.group(2)
+        uri = seen.get(aid, "")
+        return uri or mm.group(0)
+
+    return _ASSET_URL_RE.sub(_repl, html)
 
 
 async def _render_async(html: str, scale: int, timeout_s: float) -> tuple[list[bytes], list[str]]:
@@ -40,6 +73,14 @@ async def _render_async(html: str, scale: int, timeout_s: float) -> tuple[list[b
             # 웹폰트 race 방지 — 폰트 로딩 완료 대기
             try:
                 await page.evaluate("document.fonts && document.fonts.ready")
+            except Exception:
+                pass
+            # 안전망: 이미지 decode 완료 대기(networkidle이 디코드를 보장 안 함 → 부분 캡처 방지)
+            try:
+                await page.evaluate(
+                    "() => Promise.all(Array.from(document.images)"
+                    ".map(i => (i.decode ? i.decode().catch(() => {}) : null)))"
+                )
             except Exception:
                 pass
             # 안전망: 카드 내용이 박스(1350)를 넘치면 비례 축소(덱엔 CardSurface 자동fit 없음).
@@ -102,7 +143,11 @@ def _render_sync(html: str, scale: int, timeout_s: float) -> tuple[list[bytes], 
         loop.close()
 
 
-async def render_deck(html: str, scale: int = 2, timeout_s: float = 30.0) -> tuple[list[bytes], list[str]]:
-    """저작 HTML → [PNG bytes], [warnings]. 각 [data-screen-label] 카드 1장씩(×scale 레티나)."""
+async def render_deck(
+    html: str, scale: int = 2, timeout_s: float = 30.0, job_id: str | None = None
+) -> tuple[list[bytes], list[str]]:
+    """저작 HTML → [PNG bytes], [warnings]. 각 [data-screen-label] 카드 1장씩(×scale 레티나).
+    job_id가 있으면 렌더 전 자산 URL을 data URI로 인라인(스펙 §4.2)."""
+    html = await _inline_deck_assets(html, job_id)
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(_deck_pool, _render_sync, html, scale, timeout_s)
