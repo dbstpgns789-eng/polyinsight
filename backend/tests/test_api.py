@@ -434,6 +434,79 @@ async def test_nlpatch_404_when_no_deck(client):
     assert resp.status_code == 404
 
 
+# ── 덱 이미지 자산 업로드/서빙 (S1) ──────────────────────────────────────────
+
+def _png_bytes() -> bytes:
+    from PIL import Image
+    import io as _io
+    buf = _io.BytesIO()
+    Image.new("RGB", (40, 30), (12, 200, 90)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_upload_deck_asset_and_serve(client):
+    await _db.create_job("jasset", "p.pdf")
+    png = _png_bytes()
+    resp = await client.post(
+        "/api/deck/jasset/assets",
+        files={"file": ("logo.png", png, "image/png")},
+        data={"source_type": "upload-owned"},
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert "assetId" in body
+    assert body["url"] == f"/api/deck/jasset/assets/{body['assetId']}"
+    # 서빙 라운드트립
+    got = await client.get(body["url"])
+    assert got.status_code == 200
+    assert got.headers["content-type"] == "image/png"
+    assert got.content == png
+    # DB 소스타입 보존
+    asset = await _db.get_deck_asset("jasset", body["assetId"])
+    assert asset["source_type"] == "upload-owned"
+
+
+@pytest.mark.asyncio
+async def test_upload_deck_asset_rejects_svg(client):
+    await _db.create_job("jsvg", "p.pdf")
+    resp = await client.post(
+        "/api/deck/jsvg/assets",
+        files={"file": ("x.svg", b"<svg></svg>", "image/svg+xml")},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "ERR-IMG-001"
+
+
+@pytest.mark.asyncio
+async def test_upload_deck_asset_rejects_oversized(client):
+    await _db.create_job("jbig", "p.pdf")
+    big = b"\x89PNG\r\n\x1a\n" + b"x" * (9 * 1024 * 1024)
+    resp = await client.post(
+        "/api/deck/jbig/assets",
+        files={"file": ("big.png", big, "image/png")},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "ERR-IMG-002"
+
+
+@pytest.mark.asyncio
+async def test_upload_deck_asset_missing_job_404(client):
+    resp = await client.post(
+        "/api/deck/nope/assets",
+        files={"file": ("x.png", _png_bytes(), "image/png")},
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_deck_asset_missing_404(client):
+    await _db.create_job("jempty", "p.pdf")
+    resp = await client.get("/api/deck/jempty/assets/doesnotexist")
+    assert resp.status_code == 404
+    assert resp.json()["detail"]["code"] == "ERR-IMG-004"
+
+
 @pytest.mark.asyncio
 async def test_nlpatch_rejects_broken_contract(client, monkeypatch):
     """모델이 계약을 깨면(카드 라벨 소실) 422로 거부하고 원본 보존."""

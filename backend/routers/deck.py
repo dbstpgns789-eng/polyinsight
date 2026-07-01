@@ -19,6 +19,10 @@ from ..core.config import settings
 router = APIRouter(prefix="/api", tags=["deck"])
 
 _MAX_PDF_BYTES = 50 * 1024 * 1024  # 50 MB
+_MAX_ASSET_BYTES = 8 * 1024 * 1024  # 8 MB — 덱 이미지 자산
+# SVG 제외(XSS/SSRF 축소, 스펙 §7). 저작 덱의 raster 삽입만 허용.
+_ASSET_MIME_WHITELIST = {"image/png", "image/jpeg", "image/webp", "image/gif"}
+_ASSET_SOURCE_TYPES = {"upload-owned", "upload-data", "paper-figure"}
 
 
 @router.post("/deck/upload", status_code=202)
@@ -128,6 +132,56 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
     await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
                        payload={"kind": "nl", "card_count": result["cardCount"]})
     return result
+
+
+@router.post("/deck/{job_id}/assets", status_code=201)
+async def upload_deck_asset(
+    job_id: str,
+    file: UploadFile,
+    source_type: Annotated[str, Form()] = "upload-owned",
+    user: dict = Depends(get_current_user),
+):
+    """사용자 이미지 업로드 → deck_assets 바이트 저장 → {assetId, url} (스펙 §3.1 업로드).
+
+    저장 HTML엔 반환 url만 실리고, 렌더 직전 deck_renderer가 data URI로 인라인한다.
+    """
+    job = await db.get_job(job_id)
+    if job is None:
+        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+
+    mime = (file.content_type or "").lower()
+    if mime not in _ASSET_MIME_WHITELIST:
+        raise HTTPException(
+            400,
+            detail={"code": "ERR-IMG-001",
+                    "message": "지원하지 않는 이미지 형식입니다(PNG·JPEG·WebP·GIF)."},
+        )
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, detail={"code": "ERR-IMG-003", "message": "빈 파일입니다."})
+    if len(data) > _MAX_ASSET_BYTES:
+        raise HTTPException(400, detail={"code": "ERR-IMG-002", "message": "이미지 크기가 8MB를 초과합니다."})
+
+    st = source_type if source_type in _ASSET_SOURCE_TYPES else "upload-owned"
+    asset_id = uuid.uuid4().hex[:16]
+    await db.save_deck_asset(job_id, asset_id, data, mime, source_type=st)
+    await db.log_event("deck_asset_upload", user_id=user["id"], job_id=job_id,
+                       payload={"asset_id": asset_id, "mime": mime,
+                                "source_type": st, "bytes": len(data)})
+    return {"assetId": asset_id, "url": f"/api/deck/{job_id}/assets/{asset_id}"}
+
+
+@router.get("/deck/{job_id}/assets/{asset_id}")
+async def get_deck_asset(job_id: str, asset_id: str, user: dict = Depends(get_current_user)):
+    """자산 바이트를 원본 mime으로 서빙(iframe 미리보기용). export/렌더 PNG는 인라인이 대체."""
+    asset = await db.get_deck_asset(job_id, asset_id)
+    if asset is None or asset.get("bytes") is None:
+        raise HTTPException(
+            404,
+            detail={"code": "ERR-IMG-004",
+                    "message": "이미지를 찾을 수 없습니다(만료되었을 수 있습니다)."},
+        )
+    return Response(content=asset["bytes"], media_type=asset["mime"] or "image/png")
 
 
 @router.get("/deck/{job_id}/cards/{card_num}")
