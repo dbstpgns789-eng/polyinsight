@@ -178,6 +178,19 @@ def card_rect(page, ci):
     )
 
 
+def goto_card(page, ci):
+    """편집 모드 페이징(3f): 조작·측정 전에 해당 카드로 페이지 이동(그 카드만 표시)."""
+    host(page, "SET_PAGE", index=ci)
+    page.wait_for_timeout(120)
+
+
+def card_hidden(page, ci):
+    return page.evaluate(
+        "(ci) => document.querySelectorAll('[data-screen-label]')[ci].classList.contains('pi-hidden')",
+        ci,
+    )
+
+
 def get_html(page):
     clear_msgs(page)
     host(page, "GET_HTML")
@@ -261,13 +274,13 @@ def test_multiselect():
         check("shift클릭 → count=2", sel and sel.get("count") == 2)
         check("shift클릭 → tag '(다중 2)'", sel and "다중" in (sel.get("tag") or ""))
 
-        # 2) D2: 다른 카드 shift클릭 → 그 카드로 리셋(count=1)
-        c2x, c2y = center(page, 1, 0)
+        # 2) 페이지 이동(SET_PAGE) → 카드2만 표시 + 선택 해제(3f R3)
         clear_msgs(page)
-        shift_click(page, c2x, c2y)
+        host(page, "SET_PAGE", index=1)
         page.wait_for_timeout(120)
-        sel = last(page, "SELECTED")
-        check("다른 카드 shift → count=1(리셋)", sel and sel.get("count") == 1)
+        check("페이지 이동 → DESELECTED", last(page, "DESELECTED") is not None)
+        check("페이지 이동 → 카드2 표시·카드1 숨김", (not card_hidden(page, 1)) and card_hidden(page, 0))
+        goto_card(page, 0)  # 이후 테스트 위해 카드1로 복귀
 
         # 3) 마퀴 드래그(카드1 빈영역→블록들 가로지르기) → 다중 선택
         cr = card_rect(page, 0)
@@ -339,6 +352,7 @@ def test_align_numeric_textundo():
             results.append((name, bool(cond)))
 
         def sel_card2_all():
+            goto_card(page, 1)   # 3f: 카드2로 페이지 이동해야 조작 가능
             ax, ay = center(page, 1, 0)
             page.mouse.click(ax, ay); wait_msg(page, "SELECTED")
             for bi in (1, 2):
@@ -366,6 +380,7 @@ def test_align_numeric_textundo():
         host(page, "UNDO"); page.wait_for_timeout(150)
 
         # C) 수치 단일: 카드2 A left=400
+        goto_card(page, 1)
         ax, ay = center(page, 1, 0)
         page.mouse.click(ax, ay); wait_msg(page, "SELECTED")
         clear_msgs(page); host(page, "SET_RECT", left=400); wait_msg(page, "HISTORY_STATE")
@@ -374,6 +389,7 @@ def test_align_numeric_textundo():
         check("수치 단일 undo → left=100 복원", abs((pxnum(block_info(page, 1, 0)["left"]) or 0) - 100) <= 1)
 
         # D) 수치 다중: A,B 선택 → 집합 좌상단 left=50 (A left100,B left500 → minx100 → +? => 50)
+        goto_card(page, 1)
         ax, ay = center(page, 1, 0)
         page.mouse.click(ax, ay); wait_msg(page, "SELECTED")
         bx, by = center(page, 1, 1); shift_click(page, bx, by); page.wait_for_timeout(120)
@@ -384,6 +400,7 @@ def test_align_numeric_textundo():
         host(page, "UNDO"); page.wait_for_timeout(150)
 
         # E) 텍스트 undo 보편성: 카드1 텍스트 편집 → UNDO 1회에 원문 복원
+        goto_card(page, 0)
         cx, cy = center(page, 0, 0)
         orig = block_info(page, 0, 0)["text"]
         page.mouse.click(cx, cy); wait_msg(page, "SELECTED")
@@ -439,7 +456,8 @@ def test_undo_universality():
         drag(page, a0["vx"] + 30, a0["vy"] + 30, a0["vx"] + 130, a0["vy"] + 90)
         wait_msg(page, "HISTORY_STATE")
 
-        # 3) 정렬(카드2 A+B+C, 왼쪽)
+        # 3) 정렬(카드2 A+B+C, 왼쪽) — 카드2로 페이지 이동
+        goto_card(page, 1)
         px, py = center(page, 1, 0)
         page.mouse.click(px, py); wait_msg(page, "SELECTED")
         for bi in (1, 2):
@@ -470,6 +488,55 @@ def test_undo_universality():
         return ok
 
 
+def test_paging():
+    """3f: 편집 모드 한 장씩 페이징 — 진입/이동/클램프/직렬화 청결/보기복원."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as pw:
+        browser, page = make_page(pw)  # make_page가 편집 모드 진입 → 페이징 ON
+        results = []
+
+        def check(name, cond, extra=""):
+            results.append((name, bool(cond), extra))
+
+        # 진입: 페이지 0, 카드1만 표시
+        pg = wait_msg(page, "PAGE")
+        check("진입 PAGE count=2·index=0", pg and pg.get("count") == 2 and pg.get("index") == 0)
+        check("카드1 표시·카드2 숨김", (not card_hidden(page, 0)) and card_hidden(page, 1))
+
+        # SET_PAGE 1 → 카드2만 표시
+        clear_msgs(page)
+        host(page, "SET_PAGE", index=1)
+        pg = wait_msg(page, "PAGE")
+        check("SET_PAGE 1 → PAGE index=1", pg and pg.get("index") == 1)
+        check("카드2 표시·카드1 숨김", (not card_hidden(page, 1)) and card_hidden(page, 0))
+
+        # 경계 클램프
+        clear_msgs(page)
+        host(page, "SET_PAGE", index=9)
+        pg = wait_msg(page, "PAGE")
+        check("경계 클램프 → index=1(마지막)", pg and pg.get("index") == 1)
+
+        # 직렬화 청결: pi-hidden·아티팩트 흔적 0, 카드 2개 온전
+        html = get_html(page)
+        check("serialize: pi-hidden 잔재 0", "pi-hidden" not in html)
+        check("serialize: data-pi 0·카드 2 유지", "data-pi-" not in html and html.count("data-screen-label") == 2)
+
+        # 보기 모드 전환 → 전 카드 표시 복원
+        host(page, "SET_MODE", mode="view")
+        page.wait_for_timeout(120)
+        check("보기 모드 → 전 카드 표시", (not card_hidden(page, 0)) and (not card_hidden(page, 1)))
+
+        browser.close()
+        print("\n=== 페이징(3f) ===")
+        ok = True
+        for name, passed, extra in results:
+            print(f"  [{'PASS' if passed else 'FAIL'}] {name}" + (f"  ({extra})" if extra else ""))
+            ok = ok and passed
+        print(f"결과: {'ALL PASS' if ok else 'FAIL 있음'}")
+        return ok
+
+
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
     ok = True
@@ -481,4 +548,6 @@ if __name__ == "__main__":
         ok = test_align_numeric_textundo() and ok
     if mode in ("all", "undo"):
         ok = test_undo_universality() and ok
+    if mode in ("all", "paging"):
+        ok = test_paging() and ok
     sys.exit(0 if ok else 1)

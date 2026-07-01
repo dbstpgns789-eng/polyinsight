@@ -25,6 +25,8 @@ export interface SelectedInfo {
 
 export interface HistoryState { canUndo: boolean; canRedo: boolean }
 
+export interface PageState { index: number; count: number }
+
 export type AlignAxis = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom'
 
 export interface DeckEditorHandle {
@@ -39,6 +41,7 @@ export interface DeckEditorHandle {
   align: (axis: AlignAxis) => void
   distribute: (axis: 'h' | 'v') => void
   setRect: (r: { left?: number; top?: number; width?: number; height?: number }) => void
+  setPage: (index: number) => void
 }
 
 interface Props {
@@ -48,6 +51,7 @@ interface Props {
   onDeselected?: () => void
   onDirty?: () => void
   onHistory?: (state: HistoryState) => void
+  onPage?: (state: PageState) => void
 }
 
 const CARD_W = 1080
@@ -58,7 +62,7 @@ function buildSrcDoc(html: string): string {
 }
 
 const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
-  { html, mode, onSelected, onDeselected, onDirty, onHistory }, ref,
+  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage }, ref,
 ) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -87,6 +91,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     align: (axis) => send('ALIGN', { axis }),
     distribute: (axis) => send('DISTRIBUTE', { axis }),
     setRect: (r) => send('SET_RECT', r),
+    setPage: (index) => send('SET_PAGE', { index }),
   }), [send])
 
   // iframe → 부모 메시지
@@ -101,6 +106,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
         case 'DESELECTED': onDeselected?.(); break
         case 'DIRTY': onDirty?.(); break
         case 'HISTORY_STATE': onHistory?.({ canUndo: !!d.canUndo, canRedo: !!d.canRedo }); break
+        case 'PAGE': onPage?.({ index: Number(d.index) || 0, count: Number(d.count) || 0 }); break
         case 'HTML': {
           const r = htmlResolvers.current.shift()
           r?.(d.html as string)
@@ -110,7 +116,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
-  }, [mode, send, onSelected, onDeselected, onDirty, onHistory])
+  }, [mode, send, onSelected, onDeselected, onDirty, onHistory, onPage])
 
   // 모드 변경을 iframe에 반영
   useEffect(() => { send('SET_MODE', { mode }) }, [mode, send])

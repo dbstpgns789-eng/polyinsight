@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
 import { getStatus, getDeck, patchDeck, nlPatchDeck, exportDeck, getDeckCardUrl, getExportDownloadUrl } from '@/lib/api'
-import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState } from '@/components/deck/DeckEditor'
+import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState, type PageState } from '@/components/deck/DeckEditor'
 import DeckElementPanel from '@/components/deck/DeckElementPanel'
 import DeckNLBar from '@/components/deck/DeckNLBar'
 
@@ -42,7 +42,21 @@ function DeckPageInner() {
   const [editWarnings, setEditWarnings] = useState<string[]>([])
   const [nlBusy, setNlBusy] = useState(false)
   const [history, setHistory] = useState<HistoryState>({ canUndo: false, canRedo: false })
+  const [page, setPage] = useState<PageState>({ index: 0, count: 0 })
   const editorRef = useRef<DeckEditorHandle>(null)
+
+  // 편집 모드 ←/→ 로 페이지 이동 (입력창·텍스트 편집 중엔 캐럿 우선 → 무시)
+  useEffect(() => {
+    if (mode !== 'edit') return
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (e.key === 'ArrowLeft') editorRef.current?.setPage(page.index - 1)
+      else if (e.key === 'ArrowRight') editorRef.current?.setPage(page.index + 1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mode, page.index])
 
   // 상태 폴링 → DONE이면 덱 로드
   useEffect(() => {
@@ -203,7 +217,26 @@ function DeckPageInner() {
         )}
 
         {editing ? (
-          <div className="w-full max-w-[460px]">
+          <div className="w-full max-w-[460px] flex flex-col gap-3">
+            {page.count > 1 && (
+              <div className="flex items-center justify-center gap-3 select-none">
+                <button
+                  onClick={() => editorRef.current?.setPage(page.index - 1)}
+                  disabled={page.index <= 0}
+                  aria-label="이전 카드"
+                  className="w-9 h-9 rounded-full border border-border text-ink-2 disabled:opacity-30"
+                >‹</button>
+                <span className="text-[13px] tabular-nums text-ink-2 min-w-[52px] text-center">
+                  {page.index + 1} / {page.count}
+                </span>
+                <button
+                  onClick={() => editorRef.current?.setPage(page.index + 1)}
+                  disabled={page.index >= page.count - 1}
+                  aria-label="다음 카드"
+                  className="w-9 h-9 rounded-full border border-border text-ink-2 disabled:opacity-30"
+                >›</button>
+              </div>
+            )}
             <DeckEditor
               ref={editorRef}
               html={deck.html as string}
@@ -212,6 +245,7 @@ function DeckPageInner() {
               onDeselected={() => setSelected(null)}
               onDirty={() => setDirty(true)}
               onHistory={setHistory}
+              onPage={setPage}
             />
           </div>
         ) : (

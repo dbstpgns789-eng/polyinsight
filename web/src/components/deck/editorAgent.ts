@@ -20,6 +20,9 @@ const AGENT_BODY = `
   var groupBox = null;     // 2개+ 선택 시 집합 바운딩박스(점선)
   var handles = [];        // 8방향 리사이즈 핸들(단일 선택 시만)
   var guides = [];         // 스냅 정렬 가이드선
+  var paged = false;       // 편집 모드 한 장씩 페이징(3f)
+  var activeCard = 0;      // 현재 페이지(0-based)
+  var pageStyle = null;    // .pi-hidden 숨김 스타일시트(아티팩트)
   var CARD_W = 1080, CARD_H = 1350;
   var DRAG_THRESHOLD = 3, SNAP = 6;
   var HANDLE_DIRS = ['nw','n','ne','e','se','s','sw','w'];
@@ -564,14 +567,61 @@ const AGENT_BODY = `
     for (var i = 0; i < rm.length; i++) rm[i].parentNode.removeChild(rm[i]);
     var ce = clone.querySelectorAll('[contenteditable]');
     for (var j = 0; j < ce.length; j++) { ce[j].removeAttribute('contenteditable'); ce[j].style.outline = ''; }
+    var ph = clone.querySelectorAll('.pi-hidden');   // 페이징 숨김 흔적 제거 → 7장 온전
+    for (var k = 0; k < ph.length; k++) ph[k].classList.remove('pi-hidden');
     return '<!DOCTYPE html>\\n' + clone.outerHTML;
+  }
+
+  // ── 페이징 (편집 모드 한 장씩, 3f) ────────────────────────────────────────────
+  function cardEls() { return document.querySelectorAll('[data-screen-label]'); }
+  function cardIndexOf(el) {
+    var card = cardOf(el); if (!card) return -1;
+    var cs = cardEls();
+    for (var i = 0; i < cs.length; i++) if (cs[i] === card) return i;
+    return -1;
+  }
+  function ensurePageStyle() {
+    if (pageStyle) return;
+    pageStyle = document.createElement('style');
+    pageStyle.setAttribute('data-pi-artifact', '1');
+    pageStyle.textContent = '.pi-hidden{display:none !important;}';
+    (document.head || document.documentElement).appendChild(pageStyle);
+  }
+  function applyPaging() {
+    var cs = cardEls();
+    if (activeCard < 0) activeCard = 0;
+    if (activeCard > cs.length - 1) activeCard = cs.length - 1;
+    for (var i = 0; i < cs.length; i++) {
+      if (i === activeCard) cs[i].classList.remove('pi-hidden');
+      else cs[i].classList.add('pi-hidden');
+    }
+    positionOverlay(); postHeight();
+  }
+  function clearPaging() {
+    var ph = document.querySelectorAll('.pi-hidden');
+    for (var i = 0; i < ph.length; i++) ph[i].classList.remove('pi-hidden');
+    postHeight();
+  }
+  function emitPage() { post('PAGE', { index: activeCard, count: cardEls().length }); }
+  function setPage(index) {
+    if (!paged) return;
+    var n = cardEls().length;
+    activeCard = Math.max(0, Math.min(index, n - 1));
+    deselect();          // 이전 페이지 선택의 유령 오버레이 방지
+    applyPaging(); emitPage();
   }
 
   function setMode(m) {
     commitTextEdit();
     mode = m;
     document.body.style.cursor = (m === 'edit') ? 'default' : '';
-    if (m !== 'edit') deselect(); else positionOverlay();
+    if (m !== 'edit') {
+      deselect();
+      paged = false; clearPaging();
+    } else {
+      paged = true; ensurePageStyle(); applyPaging(); emitPage();
+      positionOverlay();
+    }
   }
   function onInput() { post('DIRTY', {}); positionOverlay(); postHeight(); }
 
@@ -589,6 +639,7 @@ const AGENT_BODY = `
       case 'ALIGN': alignSelection(d.axis); break;
       case 'DISTRIBUTE': distributeSelection(d.axis); break;
       case 'SET_RECT': setRect(d); break;
+      case 'SET_PAGE': setPage(d.index); break;
       case 'APPLY_STYLE': {
         var el = primary();
         if (el) {
