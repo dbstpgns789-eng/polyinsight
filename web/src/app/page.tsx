@@ -145,7 +145,7 @@ export default function Home() {
         </section>
 
         {/* ─── How It Works ─── */}
-        <section className="section section--surface" id="how-it-works" aria-labelledby="hiw-title">
+        <section className="section section--subtle" id="how-it-works" aria-labelledby="hiw-title">
           <div className="container">
             <h2 id="hiw-title" className="section__title reveal">세 단계면 충분합니다</h2>
             <ol className="steps">
@@ -171,6 +171,48 @@ export default function Home() {
                 </div>
               </li>
             </ol>
+          </div>
+        </section>
+
+        {/* ─── Showcase (논문마다 다른 형태 — 형태 발명 증명) ─── */}
+        <section className="section section--surface" aria-labelledby="showcase-title">
+          <div className="container">
+            <div className="showcase__head">
+              <h2 id="showcase-title" className="section__title reveal">논문마다, 다른 얼굴로 나옵니다</h2>
+              <p className="showcase__lead reveal reveal-delay-1">고정 템플릿이 아닙니다. AI가 각 논문의 내용에 맞는 형태를 직접 저작합니다. 아래는 서로 다른 세 논문에서 나온 실제 결과물입니다.</p>
+            </div>
+            <div className="showcase__grid">
+              <figure className="showcase-item reveal reveal-delay-1">
+                <div className="showcase-item__frame">
+                  <img src="/cards/showcase_attention.png" alt="Attention Is All You Need 논문을 요약한 카드뉴스 표지 — 미니멀 다크 에메랄드" loading="lazy" />
+                </div>
+                <figcaption className="showcase-item__cap">
+                  <b>Attention Is All You Need</b>
+                  <span>Transformer · NIPS 2017</span>
+                  <span className="showcase-item__tag">미니멀 다크</span>
+                </figcaption>
+              </figure>
+              <figure className="showcase-item reveal reveal-delay-2">
+                <div className="showcase-item__frame">
+                  <img src="/cards/showcase_bert.png" alt="BERT 논문을 요약한 카드뉴스 표지 — 빈칸 채우기 체험형" loading="lazy" />
+                </div>
+                <figcaption className="showcase-item__cap">
+                  <b>BERT</b>
+                  <span>언어 이해 모델 · 2018</span>
+                  <span className="showcase-item__tag">빈칸 체험형</span>
+                </figcaption>
+              </figure>
+              <figure className="showcase-item reveal reveal-delay-3">
+                <div className="showcase-item__frame">
+                  <img src="/cards/showcase_resnet.png" alt="ResNet 논문을 요약한 카드뉴스 표지 — 수식 칠판형" loading="lazy" />
+                </div>
+                <figcaption className="showcase-item__cap">
+                  <b>ResNet</b>
+                  <span>잔차 연결 · CVPR 2015</span>
+                  <span className="showcase-item__tag">수식 칠판형</span>
+                </figcaption>
+              </figure>
+            </div>
           </div>
         </section>
 

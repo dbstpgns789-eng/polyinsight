@@ -484,6 +484,20 @@ h1, h2, h3, h4, h5 {
 /* ─── Section Title ──────────────────────────────── */
 .section__title { font-family: var(--font-serif); font-size: var(--t-display); font-weight: 700; color: var(--text-1); margin-bottom: var(--s12); max-width: 24ch; letter-spacing: -0.015em; }
 
+/* ─── Showcase (논문마다 다른 형태 — 형태 발명 증명) ──── */
+.showcase__head .section__title { margin-bottom: var(--s3); }
+.showcase__lead { font-size: var(--t-lg); color: var(--text-2); line-height: 1.7; max-width: 58ch; }
+.showcase__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(var(--s6), 3vw, var(--s10)); margin-top: clamp(var(--s10), 5vw, var(--s16)); }
+.showcase-item { display: flex; flex-direction: column; gap: var(--s4); }
+.showcase-item__frame { aspect-ratio: 1080 / 1350; border-radius: 16px; overflow: hidden; background: oklch(16% 0.02 163); box-shadow: 0 22px 54px oklch(30% 0.05 163 / 0.16); border: 1px solid var(--border-subtle); }
+.showcase-item__frame img { width: 100%; height: 100%; object-fit: cover; }
+.showcase-item__cap b { display: block; font-size: var(--t-base); font-weight: 700; color: var(--text-1); letter-spacing: -0.01em; }
+.showcase-item__cap > span { display: block; font-size: var(--t-sm); color: var(--text-2); margin-top: 2px; }
+.showcase-item__tag { display: inline-block !important; width: fit-content; margin-top: var(--s3) !important; font-size: var(--t-xs); font-weight: 700; color: var(--accent); background: var(--accent-faint); border: 1px solid var(--accent-subtle); padding: 3px 11px; border-radius: 999px; }
+@media (max-width: 760px) {
+  .showcase__grid { grid-template-columns: 1fr; max-width: 400px; margin-inline: auto; }
+}
+
 /* ─── Steps ──────────────────────────────────────── */
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; position: relative; }
 .steps::before { content: ''; position: absolute; top: 22px; left: calc(16.67% + 22px); right: calc(16.67% + 22px); height: 1px; background: var(--border); }
