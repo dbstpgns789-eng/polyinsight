@@ -1143,7 +1143,10 @@ h1, h2, h3, h4, h5 {
 }
 
 .auth-brand {
-  background: var(--dark-bg);
+  /* 다크 에메랄드 스포트라이트 — 해자 카드와 동일 언어(radial 글로우 + jewel 그라디언트) */
+  background:
+    radial-gradient(115% 85% at 12% -5%, oklch(38% 0.095 163 / 0.55), transparent 55%),
+    linear-gradient(160deg, oklch(24% 0.055 164), oklch(30% 0.076 163));
   display: flex;
   flex-direction: column;
   padding: var(--s12) clamp(var(--s8), 6vw, var(--s16));
@@ -1176,12 +1179,13 @@ h1, h2, h3, h4, h5 {
 }
 
 .auth-brand__headline {
+  font-family: var(--font-serif);
   font-size: clamp(1.875rem, 3.2vw + 0.5rem, 3rem);
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.035em;
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.02em;
   color: var(--dark-text-1);
-  margin-bottom: var(--s4);
+  margin-bottom: var(--s5);
 }
 
 .auth-brand__sub {
@@ -1196,11 +1200,12 @@ h1, h2, h3, h4, h5 {
 }
 
 .auth-proof-card {
-  background: var(--dark-bg-2);
-  border: 1px solid var(--dark-border);
+  background: var(--surface);
+  border: 1px solid oklch(100% 0 0 / 0.14);
+  box-shadow: 0 18px 42px oklch(10% 0.03 163 / 0.45);
   border-radius: var(--radius-lg);
-  padding: var(--s4);
-  max-width: 15rem;
+  padding: var(--s5);
+  max-width: 16rem;
   display: flex;
   flex-direction: column;
   gap: var(--s3);
@@ -1214,20 +1219,21 @@ h1, h2, h3, h4, h5 {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--dark-text-3);
+  color: var(--text-3);
 }
 
 .auth-proof-card__finding {
   font-size: 0.9375rem;
   line-height: 1.55;
-  color: var(--dark-text-2);
+  color: var(--text-1);
+  font-weight: 500;
   letter-spacing: -0.01em;
 }
 
 .auth-proof-card__num {
   font-size: 1.125rem;
   font-weight: 700;
-  color: var(--dark-text-1);
+  color: var(--text-1);
   letter-spacing: -0.03em;
 }
 
@@ -1236,10 +1242,10 @@ h1, h2, h3, h4, h5 {
   align-items: center;
   gap: var(--s1);
   font-size: 11px;
-  font-weight: 600;
-  color: oklch(75% 0.12 163);
-  background: var(--dark-chip-bg);
-  border: 1px solid var(--dark-chip-border);
+  font-weight: 700;
+  color: var(--accent-hover);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-subtle);
   padding: 3px 8px;
   border-radius: var(--radius-sm);
   width: fit-content;
@@ -1278,11 +1284,12 @@ h1, h2, h3, h4, h5 {
 }
 
 .auth-form__title {
-  font-size: 1.75rem;
+  font-family: var(--font-serif);
+  font-size: 1.875rem;
   font-weight: 700;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.015em;
   color: var(--text-1);
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 /* Fields */
