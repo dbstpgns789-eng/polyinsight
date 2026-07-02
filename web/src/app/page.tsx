@@ -145,7 +145,7 @@ export default function Home() {
         </section>
 
         {/* ─── How It Works ─── */}
-        <section className="section section--subtle" id="how-it-works" aria-labelledby="hiw-title">
+        <section className="section section--surface" id="how-it-works" aria-labelledby="hiw-title">
           <div className="container">
             <h2 id="hiw-title" className="section__title reveal">세 단계면 충분합니다</h2>
             <ol className="steps">
@@ -197,6 +197,25 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
+            <ul className="moat-guards reveal reveal-delay-1" role="list">
+              <li className="moat-guard">
+                <span className="moat-guard__ic" aria-hidden="true">✓</span>
+                <div><b>수치 출처 자동 표기</b><span>모든 숫자에 섹션명과 페이지가 함께 붙습니다.</span></div>
+              </li>
+              <li className="moat-guard">
+                <span className="moat-guard__ic" aria-hidden="true">✓</span>
+                <div><b>위험 항목 경고</b><span>검증이 불확실한 항목은 에디터에서 명확히 표시됩니다.</span></div>
+              </li>
+              <li className="moat-guard">
+                <span className="moat-guard__ic" aria-hidden="true">✓</span>
+                <div><b>AI 결과 강제 없음</b><span>생성된 내용은 언제든 수정하거나 삭제할 수 있습니다.</span></div>
+              </li>
+              <li className="moat-guard">
+                <span className="moat-guard__ic" aria-hidden="true">✓</span>
+                <div><b>프로젝트 이력 보존</b><span>변환한 논문과 작업 내역은 대시보드에 남습니다.</span></div>
+              </li>
+            </ul>
           </div>
         </section>
 
@@ -245,7 +264,7 @@ export default function Home() {
         </section>
 
         {/* ─── Target Users ─── */}
-        <section className="section" aria-labelledby="users-title">
+        <section className="section section--subtle" aria-labelledby="users-title">
           <div className="container">
             <h2 id="users-title" className="section__title reveal">이런 분들을 위해 만들었습니다</h2>
             <ul className="users__list" role="list">
@@ -262,31 +281,6 @@ export default function Home() {
                 <p>다수의 논문을 정기적으로 카드뉴스로 제작해야 하는 <strong>연구소·학술기관 팀</strong></p>
               </li>
             </ul>
-          </div>
-        </section>
-
-        {/* ─── Trust Points ─── */}
-        <section className="section section--subtle" aria-labelledby="trust-title">
-          <div className="container">
-            <h2 id="trust-title" className="section__title reveal">정확성을 설계에 넣었습니다</h2>
-            <div className="trust__grid">
-              <article className="trust-item reveal reveal-delay-1">
-                <h3 className="trust-item__title">수치에 출처 자동 표기</h3>
-                <p className="trust-item__desc">모든 숫자에 섹션명과 페이지가 함께 표시됩니다.</p>
-              </article>
-              <article className="trust-item reveal reveal-delay-2">
-                <h3 className="trust-item__title">위험 항목 경고</h3>
-                <p className="trust-item__desc">검증이 불확실한 항목은 에디터에서 명확히 표시됩니다.</p>
-              </article>
-              <article className="trust-item reveal reveal-delay-3">
-                <h3 className="trust-item__title">AI 결과 강제 없음</h3>
-                <p className="trust-item__desc">생성된 모든 내용은 에디터에서 수정하거나 삭제할 수 있습니다.</p>
-              </article>
-              <article className="trust-item reveal reveal-delay-4">
-                <h3 className="trust-item__title">프로젝트 이력 보존</h3>
-                <p className="trust-item__desc">변환한 논문과 작업 내역은 대시보드에서 언제든 다시 확인할 수 있습니다.</p>
-              </article>
-            </div>
           </div>
         </section>
 

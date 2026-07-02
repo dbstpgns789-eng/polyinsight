@@ -310,7 +310,8 @@ h1, h2, h3, h4, h5 {
 
 /* ─── Section helpers ────────────────────────────── */
 .section { padding-block: var(--section-py); }
-.section--subtle  { background: var(--bg-subtle); }
+/* 랜딩 밝은 밴드 2단 리듬 — clean white(surface) ↔ warm(subtle). 다크(해자·CTA)로 구두점. */
+.section--subtle  { background: oklch(96.5% 0.013 163); }
 .section--surface { background: var(--surface); }
 .section--dark    { background: var(--dark-bg); color: oklch(92% 0.008 163); }
 
@@ -435,6 +436,8 @@ h1, h2, h3, h4, h5 {
 }
 
 /* ─── Moat (원문 검증 해자) ──────────────────────── */
+/* 따뜻한 "무대" 밴드 — 다크 에메랄드 스포트라이트 카드가 대비로 뜨게. */
+.moat { background: oklch(95% 0.017 163); }
 .moat__card {
   background:
     radial-gradient(130% 150% at 12% -10%, oklch(40% 0.10 163 / 0.55), transparent 58%),
@@ -468,6 +471,15 @@ h1, h2, h3, h4, h5 {
 @media (max-width: 760px) {
   .moat__card { grid-template-columns: 1fr; }
 }
+
+/* 해자 보장 스트립 — 4개 구체 보장(구 트러스트 섹션 흡수). 따뜻한 무대 위 슬림 행. */
+.moat-guards { margin-top: clamp(var(--s6), 3vw, var(--s10)); display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(var(--s5), 2.5vw, var(--s8)); }
+.moat-guard { display: flex; align-items: flex-start; gap: var(--s3); }
+.moat-guard__ic { flex-shrink: 0; color: var(--accent); font-weight: 800; line-height: 1.5; }
+.moat-guard b { display: block; font-size: var(--t-sm); font-weight: 700; color: var(--text-1); margin-bottom: 3px; letter-spacing: -0.01em; }
+.moat-guard span { display: block; font-size: var(--t-xs); color: var(--text-2); line-height: 1.55; }
+@media (max-width: 760px) { .moat-guards { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 460px) { .moat-guards { grid-template-columns: 1fr; } }
 
 /* ─── Section Title ──────────────────────────────── */
 .section__title { font-family: var(--font-serif); font-size: var(--t-display); font-weight: 700; color: var(--text-1); margin-bottom: var(--s12); max-width: 24ch; letter-spacing: -0.015em; }
@@ -511,17 +523,6 @@ h1, h2, h3, h4, h5 {
 
 @media (max-width: 640px) {
   .user-item { font-size: var(--t-base); gap: var(--s4); }
-}
-
-/* ─── Trust Points ───────────────────────────────── */
-.trust__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--s8); }
-.trust-item { padding: var(--s6) 0; border-top: 1px solid var(--border); }
-.trust-item__title::before { content: '✓'; color: var(--accent); font-weight: 800; margin-right: 8px; }
-.trust-item__title { font-size: var(--t-lg); font-weight: 700; color: var(--text-1); margin-bottom: var(--s3); }
-.trust-item__desc { font-size: var(--t-sm); color: var(--text-2); line-height: 1.7; }
-
-@media (max-width: 640px) {
-  .trust__grid { grid-template-columns: 1fr; }
 }
 
 /* ─── Skip Link ─────────────────────────────────── */
