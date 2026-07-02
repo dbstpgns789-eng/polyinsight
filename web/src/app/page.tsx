@@ -174,6 +174,32 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ─── Moat (원문 검증 해자) ─── */}
+        <section className="section moat" aria-labelledby="moat-title">
+          <div className="container">
+            <div className="moat__card reveal">
+              <div className="moat__lead">
+                <span className="moat__chip">우리만의 해자</span>
+                <h2 id="moat-title" className="moat__title">AI가 지어내지 않습니다.<br />원문이 근거입니다.</h2>
+                <p className="moat__desc">모든 수치와 주장에 논문 근거 배지가 붙습니다. 카드에 적힌 숫자가 원문 몇 페이지에서 왔는지 바로 확인됩니다.</p>
+                <div className="moat__stats">
+                  <div className="moat__stat moat__stat--g"><b>98.4%</b><span>수치 원문 일치율 (예시)</span></div>
+                  <div className="moat__stat moat__stat--w"><b>p.단위</b><span>페이지까지 추적</span></div>
+                </div>
+              </div>
+              <div className="moat__snippet">
+                <p className="moat__snippet-lab">카드 본문</p>
+                <p className="moat__snippet-body">번역 품질 <u>28.4 BLEU</u>로 당시 최고 기록을 세웠습니다.</p>
+                <span className="moat__badge">✓ 논문 7페이지 · Results 표에서 확인</span>
+                <div className="moat__vsum">
+                  <div><b className="g">8</b><span>논문 근거 확인</span></div>
+                  <div><b className="a">1</b><span>확인 필요</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ─── Features ─── */}
         <section className="section section--surface" id="features" aria-labelledby="feat-title">
           <div className="container">

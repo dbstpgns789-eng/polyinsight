@@ -430,6 +430,37 @@ h1, h2, h3, h4, h5 {
   .hero-stage { width: min(360px, 86%); margin-top: var(--s6); }
 }
 
+/* ─── Moat (원문 검증 해자) ──────────────────────── */
+.moat__card {
+  background: linear-gradient(135deg, oklch(29% 0.055 163), oklch(33% 0.06 163));
+  border-radius: 22px;
+  padding: clamp(var(--s8), 4.5vw, var(--s16));
+  display: grid; grid-template-columns: 1.05fr 0.95fr;
+  gap: clamp(var(--s8), 4vw, var(--s16)); align-items: center;
+}
+.moat__chip { display:inline-flex; padding:6px 13px; border-radius:999px; font-size:var(--t-xs); font-weight:800; background: oklch(60% 0.14 163 / 0.16); color: oklch(82% 0.13 163); margin-bottom: var(--s5); }
+.moat__title { font-size: clamp(1.75rem, 2.6vw + 0.6rem, 2.5rem); font-weight:800; color:#fff; letter-spacing:-0.02em; line-height:1.24; }
+.moat__desc { font-size: 1.0625rem; color: oklch(84% 0.03 163); line-height:1.65; margin-top: var(--s4); max-width: 46ch; }
+.moat__stats { display:flex; gap: var(--s8); margin-top: var(--s6); }
+.moat__stat b { display:block; font-size: 1.75rem; font-weight:800; font-variant-numeric: tabular-nums; line-height:1; }
+.moat__stat span { display:block; font-size: var(--t-xs); color: oklch(72% 0.03 163); margin-top: 6px; }
+.moat__stat--g b { color: oklch(80% 0.14 163); }
+.moat__stat--w b { color:#fff; }
+.moat__snippet { background: var(--surface); border-radius: var(--radius-lg); padding: var(--s6); }
+.moat__snippet-lab { font-size: var(--t-xs); color: var(--text-3); margin-bottom: var(--s2); }
+.moat__snippet-body { font-size: 1.0625rem; font-weight:700; line-height:1.55; color: var(--text-1); }
+.moat__snippet-body u { text-decoration:none; border-bottom: 2.5px solid var(--accent); padding-bottom:1px; }
+.moat__badge { margin-top: var(--s4); display:inline-flex; align-items:center; gap:6px; background: var(--accent-subtle); color: var(--accent-hover); padding: 7px 12px; border-radius: var(--radius-sm); font-size: var(--t-sm); font-weight:800; }
+.moat__vsum { margin-top: var(--s4); display:flex; gap: var(--s3); }
+.moat__vsum > div { flex:1; text-align:center; border:1px solid var(--border); border-radius: var(--radius-md); padding: var(--s3); }
+.moat__vsum b { display:block; font-size: 1.35rem; font-weight:800; font-variant-numeric: tabular-nums; }
+.moat__vsum .g { color: var(--accent-hover); }
+.moat__vsum .a { color: oklch(52% 0.14 66); }
+.moat__vsum span { font-size: 11px; color: var(--text-3); }
+@media (max-width: 760px) {
+  .moat__card { grid-template-columns: 1fr; }
+}
+
 /* ─── Section Title ──────────────────────────────── */
 .section__title { font-size: var(--t-display); font-weight: 700; color: var(--text-1); margin-bottom: var(--s12); max-width: 24ch; }
 
