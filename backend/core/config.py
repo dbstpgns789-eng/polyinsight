@@ -23,6 +23,19 @@ class Settings(BaseSettings):
     SESSION_TTL_HOURS: int = 72         # 세션 쿠키/DB 만료
     COOKIE_SECURE: bool = False         # 프로덕션(HTTPS/터널)에서 True
     RENDER_TOKEN: str = ""              # 내부 렌더(Playwright) 서비스 우회 토큰. 프로덕션 필수.
+
+    # ── CORS (2026-07-02) — 쉼표구분 오리진. 비우면 개발용 로컬만 허용. 프로덕션=터널 도메인. ──
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    # ── 보안 하드닝 (2026-07-02) ──────────────────────────────
+    PASSWORD_MAX_LEN: int = 128          # argon2 pre-hash DoS 방지 상한
+    RATE_LIMIT_ENABLED: bool = True      # 테스트에서 False
+    LOGIN_IP_LIMIT: int = 20             # IP당 로그인 시도(성공 포함) / window
+    LOGIN_IP_WINDOW_S: int = 300
+    LOGIN_EMAIL_LIMIT: int = 5           # 이메일당 실패 시도 / window (성공 시 리셋)
+    LOGIN_EMAIL_WINDOW_S: int = 900
+    SIGNUP_IP_LIMIT: int = 5             # IP당 가입 / window
+    SIGNUP_IP_WINDOW_S: int = 3600
     PEXELS_API_KEY: str = ""            # 스톡 이미지 검색(선택). 비우면 해당 provider만 skip.
     UNSPLASH_ACCESS_KEY: str = ""        # Unsplash Access Key (Secret Key는 OAuth용, 검색에는 불필요)
 

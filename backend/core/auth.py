@@ -9,9 +9,20 @@ from .config import settings
 
 _ph = PasswordHasher()
 
+# 로그인 타이밍/열거 오라클 방지 — 유저 부재 시에도 argon2 1회 실행해 응답시간 균등화.
+_DUMMY_HASH = _ph.hash("timing-equalization-dummy")
+
 
 def hash_password(password: str) -> str:
     return _ph.hash(password)
+
+
+def verify_dummy() -> None:
+    """존재하지 않는 유저 로그인 경로에서 호출 — 실제 verify와 동일한 argon2 비용 발생."""
+    try:
+        _ph.verify(_DUMMY_HASH, "x")
+    except Exception:
+        pass
 
 
 def verify_password(password_hash: str, password: str) -> bool:

@@ -17,6 +17,9 @@ async def mem_db(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "SESSION_TTL_HOURS", 72)
     monkeypatch.setattr(settings, "COOKIE_SECURE", False)
     monkeypatch.setattr(settings, "RENDER_TOKEN", "")
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
+    from backend.core import ratelimit
+    ratelimit.reset_all()
     await _db.migrate()
     yield
 

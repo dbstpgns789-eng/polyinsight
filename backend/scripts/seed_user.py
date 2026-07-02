@@ -13,6 +13,7 @@ from backend.core.auth import hash_password
 
 
 async def main(email: str, password: str, role: str = "user") -> None:
+    email = email.strip().lower()  # 로그인 경로와 정규화 일치(대소문자 불일치 잠금 방지)
     await db.migrate()
     if await db.get_user_by_email(email) is not None:
         print(f"이미 존재: {email}")

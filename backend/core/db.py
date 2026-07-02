@@ -516,6 +516,12 @@ async def cleanup_expired_blobs() -> int:
             (now,),
         )
         deleted += cursor.rowcount or 0
+        # 만료 세션 정리(무한증식 방지, 2026-07-02) — _ttl_cleaner가 30분마다 호출.
+        cursor = await conn.execute(
+            "DELETE FROM sessions WHERE expires_at <= ?",
+            (now,),
+        )
+        deleted += cursor.rowcount or 0
         await conn.commit()
     return deleted
 
