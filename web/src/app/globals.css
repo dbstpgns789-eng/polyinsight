@@ -135,6 +135,10 @@
   --t-display: clamp(1.875rem, 3vw + 0.75rem, 2.875rem);
   --t-hero:    clamp(2.625rem, 5.5vw + 0.75rem, 5rem);
 
+  /* 학술 격조용 세리프(명조) — 히어로·섹션·해자·CTA 디스플레이 헤드라인 전용.
+     본문·UI·카드 라벨은 Pretendard(sans) 유지. Claude식 "세리프 디스플레이 + sans 바디" 분리. */
+  --font-serif: 'Noto Serif KR', 'Pretendard Variable', serif;
+
   --risk-critical:          oklch(40% 0.16 25);
   --risk-critical-hover:    oklch(34% 0.16 25);
   --risk-critical-faint:    oklch(97% 0.025 25);
@@ -396,7 +400,7 @@ h1, h2, h3, h4, h5 {
 
 .hero__grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(var(--s12), 6vw, var(--s32)); align-items: center; }
 
-.hero__title { font-size: clamp(2.4rem, 3.2vw + 1.1rem, 3.55rem); font-weight: 800; color: var(--text-1); line-height: 1.14; margin-bottom: var(--s6); letter-spacing: -0.035em; }
+.hero__title { font-family: var(--font-serif); font-size: clamp(2.4rem, 3.2vw + 1.1rem, 3.55rem); font-weight: 700; color: var(--text-1); line-height: 1.22; margin-bottom: var(--s6); letter-spacing: -0.02em; }
 .hero__sub { font-size: var(--t-lg); color: var(--text-2); line-height: 1.75; max-width: 52ch; margin-bottom: var(--s8); }
 .hero__actions { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s4); }
 .hero__note { display: flex; align-items: center; gap: var(--s2); font-size: var(--t-sm); color: var(--text-3); }
@@ -432,14 +436,18 @@ h1, h2, h3, h4, h5 {
 
 /* ─── Moat (원문 검증 해자) ──────────────────────── */
 .moat__card {
-  background: linear-gradient(135deg, oklch(29% 0.055 163), oklch(33% 0.06 163));
+  background:
+    radial-gradient(130% 150% at 12% -10%, oklch(40% 0.10 163 / 0.55), transparent 58%),
+    linear-gradient(135deg, oklch(26% 0.06 164), oklch(31% 0.078 163));
+  border: 1px solid oklch(48% 0.09 163 / 0.35);
+  box-shadow: 0 34px 74px oklch(28% 0.06 163 / 0.30);
   border-radius: 22px;
   padding: clamp(var(--s8), 4.5vw, var(--s16));
   display: grid; grid-template-columns: 1.05fr 0.95fr;
   gap: clamp(var(--s8), 4vw, var(--s16)); align-items: center;
 }
 .moat__chip { display:inline-flex; padding:6px 13px; border-radius:999px; font-size:var(--t-xs); font-weight:800; background: oklch(60% 0.14 163 / 0.16); color: oklch(82% 0.13 163); margin-bottom: var(--s5); }
-.moat__title { font-size: clamp(1.75rem, 2.6vw + 0.6rem, 2.5rem); font-weight:800; color:#fff; letter-spacing:-0.02em; line-height:1.24; }
+.moat__title { font-family: var(--font-serif); font-size: clamp(1.75rem, 2.6vw + 0.6rem, 2.5rem); font-weight:700; color:#fff; letter-spacing:-0.015em; line-height:1.3; }
 .moat__desc { font-size: 1.0625rem; color: oklch(84% 0.03 163); line-height:1.65; margin-top: var(--s4); max-width: 46ch; }
 .moat__stats { display:flex; gap: var(--s8); margin-top: var(--s6); }
 .moat__stat b { display:block; font-size: 1.75rem; font-weight:800; font-variant-numeric: tabular-nums; line-height:1; }
@@ -462,7 +470,7 @@ h1, h2, h3, h4, h5 {
 }
 
 /* ─── Section Title ──────────────────────────────── */
-.section__title { font-size: var(--t-display); font-weight: 700; color: var(--text-1); margin-bottom: var(--s12); max-width: 24ch; }
+.section__title { font-family: var(--font-serif); font-size: var(--t-display); font-weight: 700; color: var(--text-1); margin-bottom: var(--s12); max-width: 24ch; letter-spacing: -0.015em; }
 
 /* ─── Steps ──────────────────────────────────────── */
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; position: relative; }
@@ -507,7 +515,8 @@ h1, h2, h3, h4, h5 {
 
 /* ─── Trust Points ───────────────────────────────── */
 .trust__grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--s8); }
-.trust-item { padding: var(--s6) 0; border-top: 2px solid var(--accent); }
+.trust-item { padding: var(--s6) 0; border-top: 1px solid var(--border); }
+.trust-item__title::before { content: '✓'; color: var(--accent); font-weight: 800; margin-right: 8px; }
 .trust-item__title { font-size: var(--t-lg); font-weight: 700; color: var(--text-1); margin-bottom: var(--s3); }
 .trust-item__desc { font-size: var(--t-sm); color: var(--text-2); line-height: 1.7; }
 
@@ -566,7 +575,7 @@ h1, h2, h3, h4, h5 {
 /* ─── CTA Section ────────────────────────────────── */
 .cta-section { padding-block: clamp(var(--s24), 10vw, 140px); }
 .cta__inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s6); }
-.cta__title { font-size: var(--t-display); font-weight: 800; color: oklch(95% 0.01 163); letter-spacing: -0.03em; max-width: 22ch; line-height: 1.15; }
+.cta__title { font-family: var(--font-serif); font-size: var(--t-display); font-weight: 700; color: oklch(95% 0.01 163); letter-spacing: -0.02em; max-width: 22ch; line-height: 1.22; }
 .cta__sub { font-size: var(--t-lg); color: oklch(65% 0.04 163); }
 
 /* ─── Footer ─────────────────────────────────────── */
