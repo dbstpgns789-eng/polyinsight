@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import logging
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -7,6 +9,7 @@ from pydantic import BaseModel
 
 from ..core import auth as auth_core
 from ..core import db
+from ..core import email as email_mod
 from ..core import ratelimit
 from ..core.config import settings
 
@@ -44,6 +47,16 @@ async def _start_session(response: Response, user_id: int) -> str:
     return token
 
 
+async def _issue_verification(user_id: int, email: str) -> None:
+    """이메일 인증 토큰 발급 + 발송(best-effort). 원문은 링크에만, DB엔 sha256."""
+    raw = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    await db.create_auth_token(token_hash, user_id, "verify_email", settings.VERIFY_TOKEN_TTL_HOURS)
+    base = settings.PUBLIC_BASE_URL or settings.WEB_BASE_URL  # 사용자-대면 URL(내부 렌더 호스트 아님)
+    link = f"{base}/verify?token={raw}"
+    await email_mod.send_verification_email(email, link)
+
+
 @router.post("/signup")
 async def signup(body: SignupBody, request: Request, response: Response):
     email = body.email.strip().lower()
@@ -59,7 +72,11 @@ async def signup(body: SignupBody, request: Request, response: Response):
         raise HTTPException(400, detail={"code": "ERR-AUTH-003", "message": "이미 사용 중인 이메일입니다."})
     # 오픈 가입 — 초대코드 게이트 폐기(2026-07-02). invites 테이블/헬퍼는 휴면(향후 referral 재활용 가능).
     user_id = await db.create_user(email, auth_core.hash_password(body.password))
-    await _start_session(response, user_id)
+    await _start_session(response, user_id)  # grace: 자동로그인 유지, 인증은 비차단
+    try:
+        await _issue_verification(user_id, email)  # 토큰발급/발송 실패해도 signup 안 깨짐
+    except Exception:
+        logging.getLogger(__name__).exception("인증메일 발급 실패(비차단) user_id=%s", user_id)
     await db.log_event("signup", user_id=user_id)  # PII(email) 미기록 — user_id로 연결
     return {"email": email}
 
@@ -122,4 +139,42 @@ async def logout(request: Request, response: Response):
 
 @router.get("/me")
 async def me(user: dict = Depends(auth_core.get_current_user)):
-    return {"email": user["email"], "role": user["role"]}
+    return {
+        "email": user["email"],
+        "role": user["role"],
+        "emailVerified": bool(user.get("email_verified")),
+    }
+
+
+# ── 이메일 인증 (grace 모드 — 비차단) ──────────────────────────────────────
+
+class ConfirmVerifyBody(BaseModel):
+    token: str
+
+
+@router.post("/request-verify")
+async def request_verify(user: dict = Depends(auth_core.get_current_user)):
+    """로그인 유저에게 인증메일 재발송 — 유저당 rate limit(쿼터 소진·토큰 증식 방지)."""
+    if user.get("email_verified"):
+        return {"ok": True, "alreadyVerified": True}
+    if settings.RATE_LIMIT_ENABLED:
+        k = f"verify:{user['id']}"
+        ra = ratelimit.check(k, settings.VERIFY_REQUEST_LIMIT, settings.VERIFY_REQUEST_WINDOW_S)
+        if ra:
+            raise ratelimit.too_many(ra)
+        ratelimit.record(k)
+    await _issue_verification(user["id"], user["email"])
+    return {"ok": True}
+
+
+@router.post("/confirm-verify")
+async def confirm_verify(body: ConfirmVerifyBody):
+    """이메일 링크의 토큰 확인 → 인증 완료. 단일사용·TTL."""
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    tok = await db.get_auth_token(token_hash, "verify_email")
+    if tok is None:
+        raise HTTPException(400, detail={"code": "ERR-AUTH-006", "message": "유효하지 않거나 만료된 인증 링크입니다."})
+    await db.set_email_verified(tok["user_id"])
+    await db.mark_token_used(token_hash)
+    await db.log_event("email_verified", user_id=tok["user_id"])
+    return {"ok": True}

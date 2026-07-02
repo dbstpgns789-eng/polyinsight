@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     LOGIN_EMAIL_WINDOW_S: int = 900
     SIGNUP_IP_LIMIT: int = 5             # IP당 가입 / window
     SIGNUP_IP_WINDOW_S: int = 3600
+
+    # ── 이메일 인증 (Resend, 2026-07-02) ──────────────────────
+    RESEND_API_KEY: str = ""             # 비우면 발송 no-op(dormant). https://resend.com
+    EMAIL_FROM: str = "onboarding@resend.dev"   # 도메인 DKIM 검증 전엔 이걸로 본인 메일함 테스트
+    EMAIL_FROM_NAME: str = "PolyInsight"
+    VERIFY_TOKEN_TTL_HOURS: int = 24
+    # 이메일 링크의 사용자-대면 베이스 URL. 비우면 WEB_BASE_URL 폴백(로컬).
+    # ⚠️ 프로덕션 필수: WEB_BASE_URL은 내부 렌더 호스트(compose=http://web:3000, 브라우저 접근불가) →
+    #    반드시 공개 Cloudflare 터널 도메인으로 설정.
+    PUBLIC_BASE_URL: str = ""
+    VERIFY_REQUEST_LIMIT: int = 3        # 유저당 인증메일 재요청 / window
+    VERIFY_REQUEST_WINDOW_S: int = 900
     PEXELS_API_KEY: str = ""            # 스톡 이미지 검색(선택). 비우면 해당 provider만 skip.
     UNSPLASH_ACCESS_KEY: str = ""        # Unsplash Access Key (Secret Key는 OAuth용, 검색에는 불필요)
 

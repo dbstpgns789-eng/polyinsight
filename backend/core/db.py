@@ -84,7 +84,17 @@ async def migrate() -> None:
                 email TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'user',
+                email_verified INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS auth_tokens (
+                token_hash TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                purpose TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                used_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS sessions (
@@ -148,6 +158,11 @@ async def migrate() -> None:
             jcols = [row[1] for row in await cur.fetchall()]
         if "user_id" not in jcols:
             await conn.execute("ALTER TABLE jobs ADD COLUMN user_id INTEGER")
+        # 이메일 인증(2026-07-02) — 기존 users에 email_verified 없으면 추가(기존행=0=미인증, grace라 비차단).
+        async with conn.execute("PRAGMA table_info(users)") as cur:
+            ucols = [row[1] for row in await cur.fetchall()]
+        if "email_verified" not in ucols:
+            await conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
         await conn.commit()
 
 
@@ -522,6 +537,12 @@ async def cleanup_expired_blobs() -> int:
             (now,),
         )
         deleted += cursor.rowcount or 0
+        # 만료·사용 완료된 인증 토큰 정리.
+        cursor = await conn.execute(
+            "DELETE FROM auth_tokens WHERE expires_at <= ? OR used_at IS NOT NULL",
+            (now,),
+        )
+        deleted += cursor.rowcount or 0
         await conn.commit()
     return deleted
 
@@ -636,6 +657,50 @@ async def consume_invite(code: str, user_id: int) -> bool:
         )
         await conn.commit()
         return (cursor.rowcount or 0) > 0
+
+
+# ── 이메일 인증: auth_tokens (2026-07-02) ──────────────────────────────────
+# 원문 토큰은 이메일 링크에만, DB엔 sha256만(누출 시 방어). 단일사용·TTL.
+
+async def create_auth_token(token_hash: str, user_id: int, purpose: str, ttl_hours: int) -> None:
+    now = _utc_now()
+    expires_at = (now + timedelta(hours=ttl_hours)).isoformat()
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute(
+            "INSERT INTO auth_tokens (token_hash, user_id, purpose, created_at, expires_at, used_at) "
+            "VALUES (?, ?, ?, ?, ?, NULL)",
+            (token_hash, user_id, purpose, now.isoformat(), expires_at),
+        )
+        await conn.commit()
+
+
+async def get_auth_token(token_hash: str, purpose: str) -> dict | None:
+    """미사용·미만료·purpose 일치 토큰만 반환."""
+    now = _utc_now_iso()
+    async with aiosqlite.connect(_db_path()) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT * FROM auth_tokens WHERE token_hash = ? AND purpose = ? "
+            "AND used_at IS NULL AND expires_at > ?",
+            (token_hash, purpose, now),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def mark_token_used(token_hash: str) -> None:
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute(
+            "UPDATE auth_tokens SET used_at = ? WHERE token_hash = ?",
+            (_utc_now_iso(), token_hash),
+        )
+        await conn.commit()
+
+
+async def set_email_verified(user_id: int) -> None:
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))
+        await conn.commit()
 
 
 # ── 행동 로깅: events ──────────────────────────────────────────────────────

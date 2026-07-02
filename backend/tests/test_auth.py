@@ -249,3 +249,38 @@ async def test_cannot_access_others_job_404(client):
     await client.post("/api/auth/login", json={"email": "a2@own.test", "password": "password1"})
     assert (await client.get("/api/status/job-b2")).status_code == 404
     assert (await client.get("/api/cards/job-b2")).status_code == 404
+
+
+# ── 이메일 인증 (2026-07-02) ────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_signup_sets_unverified_and_me(client):
+    resp = await client.post("/api/auth/signup", json={"email": "unv@x.com", "password": "password1"})
+    assert resp.status_code == 200
+    me = await client.get("/api/auth/me")
+    assert me.status_code == 200
+    assert me.json()["emailVerified"] is False
+
+
+@pytest.mark.asyncio
+async def test_email_verify_confirm_flow(client):
+    import hashlib
+    from backend.core import db
+    from backend.core.auth import hash_password
+    uid = await db.create_user("ev@x.com", hash_password("password1"))
+    raw = "rawtoken-abc"
+    th = hashlib.sha256(raw.encode()).hexdigest()
+    await db.create_auth_token(th, uid, "verify_email", 24)
+    r = await client.post("/api/auth/confirm-verify", json={"token": raw})
+    assert r.status_code == 200
+    assert (await db.get_user_by_id(uid))["email_verified"] == 1
+    # 단일사용 — 재사용 400
+    r2 = await client.post("/api/auth/confirm-verify", json={"token": raw})
+    assert r2.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_email_verify_invalid_token(client):
+    r = await client.post("/api/auth/confirm-verify", json={"token": "nope-not-a-token"})
+    assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "ERR-AUTH-006"

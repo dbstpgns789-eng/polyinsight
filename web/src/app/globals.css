@@ -539,6 +539,14 @@ h1, h2, h3, h4, h5 {
   .user-item { font-size: var(--t-base); gap: var(--s4); }
 }
 
+/* ─── Verify (이메일 인증 착지) ──────────────────── */
+.verify-wrap { min-height: 100dvh; display: grid; place-items: center; padding: var(--gutter); background: var(--bg); }
+.verify-card { width: 100%; max-width: 420px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--s5); }
+.verify-logo { font-size: 1.125rem; font-weight: 700; letter-spacing: -0.04em; color: var(--text-1); margin-bottom: var(--s2); }
+.verify-logo span { color: var(--accent); }
+.verify-title { font-family: var(--font-serif); font-size: 1.75rem; font-weight: 700; color: var(--text-1); letter-spacing: -0.015em; line-height: 1.3; }
+.verify-msg { font-size: var(--t-base); color: var(--text-2); line-height: 1.6; max-width: 34ch; }
+
 /* ─── Skip Link ─────────────────────────────────── */
 .skip-link {
   position: absolute;
