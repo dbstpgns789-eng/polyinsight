@@ -19,10 +19,6 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             </p>
           </div>
 
-          <p className="auth-brand__verify">
-            <span className="auth-brand__verify-mark" aria-hidden="true">✓</span>
-            모든 수치는 논문 원문에서 검증됩니다
-          </p>
         </div>
       </div>
 
