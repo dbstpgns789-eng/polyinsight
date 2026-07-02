@@ -133,33 +133,29 @@ async def test_get_current_user_render_token_bypass(monkeypatch):
 # ── Task 6: auth 라우터 ────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_signup_requires_valid_invite(client):
+async def test_signup_open_no_invite_sets_cookie(client):
+    """오픈 가입(2026-07-02 초대코드 폐기) — invite 없이 가입 성공 + 세션 발급."""
     resp = await client.post("/api/auth/signup", json={
-        "email": "new@b.com", "password": "password1", "invite": "BAD"})
-    assert resp.status_code == 403
-    assert resp.json()["detail"]["code"] == "ERR-AUTH-004"
-
-
-@pytest.mark.asyncio
-async def test_signup_with_invite_sets_cookie(client):
-    from backend.core import db
-    await db.create_invite("GOODCODE")
-    resp = await client.post("/api/auth/signup", json={
-        "email": "new@b.com", "password": "password1", "invite": "GOODCODE"})
+        "email": "new@b.com", "password": "password1"})
     assert resp.status_code == 200
     assert resp.json()["email"] == "new@b.com"
     assert "session" in resp.cookies
 
 
 @pytest.mark.asyncio
-async def test_signup_duplicate_email(client):
-    from backend.core import db
-    await db.create_invite("C1")
-    await db.create_invite("C2")
-    await client.post("/api/auth/signup", json={
-        "email": "dup@b.com", "password": "password1", "invite": "C1"})
+async def test_signup_short_password_rejected(client):
     resp = await client.post("/api/auth/signup", json={
-        "email": "dup@b.com", "password": "password1", "invite": "C2"})
+        "email": "short@b.com", "password": "short"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "ERR-AUTH-002"
+
+
+@pytest.mark.asyncio
+async def test_signup_duplicate_email(client):
+    await client.post("/api/auth/signup", json={
+        "email": "dup@b.com", "password": "password1"})
+    resp = await client.post("/api/auth/signup", json={
+        "email": "dup@b.com", "password": "password1"})
     assert resp.status_code == 400
     assert resp.json()["detail"]["code"] == "ERR-AUTH-003"
 

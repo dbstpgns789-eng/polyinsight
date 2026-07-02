@@ -17,7 +17,6 @@ COOKIE_NAME = "session"
 class SignupBody(BaseModel):
     email: str
     password: str
-    invite: str
 
 
 class LoginBody(BaseModel):
@@ -50,11 +49,8 @@ async def signup(body: SignupBody, response: Response):
         raise HTTPException(400, detail={"code": "ERR-AUTH-002", "message": "비밀번호는 8자 이상이어야 합니다."})
     if await db.get_user_by_email(body.email) is not None:
         raise HTTPException(400, detail={"code": "ERR-AUTH-003", "message": "이미 사용 중인 이메일입니다."})
-    invite = await db.get_invite(body.invite)
-    if invite is None or invite["used_by"] is not None:
-        raise HTTPException(403, detail={"code": "ERR-AUTH-004", "message": "유효하지 않은 초대코드입니다."})
+    # 오픈 가입 — 초대코드 게이트 폐기(2026-07-02). invites 테이블/헬퍼는 휴면(향후 referral 재활용 가능).
     user_id = await db.create_user(body.email, auth_core.hash_password(body.password))
-    await db.consume_invite(body.invite, user_id)
     await _start_session(response, user_id)
     await db.log_event("signup", user_id=user_id, payload={"email": body.email})
     return {"email": body.email}
