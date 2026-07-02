@@ -10,6 +10,7 @@ interface Errors {
   email?: string;
   password?: string;
   confirm?: string;
+  agree?: string;
   form?: string;
 }
 
@@ -18,6 +19,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
   const [email, setEmail]     = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
+  const [agreed, setAgreed]     = useState(false);
   const [errors, setErrors]   = useState<Errors>({});
   const [loading, setLoading] = useState(false);
 
@@ -37,6 +39,9 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     }
     if (!isLogin && password !== confirm) {
       e.confirm = '비밀번호가 일치하지 않습니다.';
+    }
+    if (!isLogin && !agreed) {
+      e.agree = '약관 및 개인정보 처리방침에 동의해 주세요.';
     }
     return e;
   }
@@ -144,6 +149,29 @@ export default function AuthForm({ mode }: { mode: Mode }) {
 
       </div>
 
+      {!isLogin && (
+        <div className="auth-agree-row">
+          <label className="auth-agree">
+            <input
+              type="checkbox"
+              className="auth-agree__box"
+              checked={agreed}
+              onChange={e => { setAgreed(e.target.checked); clearFieldError('agree'); }}
+              aria-invalid={!!errors.agree || undefined}
+              aria-describedby={errors.agree ? 'err-agree' : undefined}
+            />
+            <span>
+              <strong>[필수]</strong>{' '}
+              <a href="#" className="auth-link auth-link--strong">이용약관</a> 및{' '}
+              <a href="#" className="auth-link auth-link--strong">개인정보 처리방침</a>에 동의합니다.
+            </span>
+          </label>
+          {errors.agree && (
+            <p className="auth-field__error" id="err-agree" role="alert">{errors.agree}</p>
+          )}
+        </div>
+      )}
+
       <button
         type="submit"
         className="btn btn-primary btn-lg auth-submit"
@@ -170,14 +198,6 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         </svg>
         Google로 계속하기
       </button>
-
-      {!isLogin && (
-        <p className="auth-terms">
-          회원가입 시{' '}
-          <a href="#" className="auth-link">이용약관</a>과{' '}
-          <a href="#" className="auth-link">개인정보 처리방침</a>에 동의합니다.
-        </p>
-      )}
 
       <p className="auth-switch">
         {isLogin
