@@ -334,7 +334,7 @@ def test_card_editor_data_bg_color_custom():
 
 @pytest.mark.asyncio
 async def test_get_cards_includes_filename(client):
-    await _db.create_job("j1", "paper.pdf")
+    await _db.create_job("j1", "paper.pdf", user_id=1)
     await _db.save_card_data("j1", json.dumps({"cards": []}))
     resp = await client.get("/api/cards/j1")
     assert resp.status_code == 200
@@ -343,7 +343,7 @@ async def test_get_cards_includes_filename(client):
 
 @pytest.mark.asyncio
 async def test_rename_job(client):
-    await _db.create_job("j1", "old.pdf")
+    await _db.create_job("j1", "old.pdf", user_id=1)
     resp = await client.patch("/api/jobs/j1", json={"title": "새 이름.pdf"})
     assert resp.status_code == 200
     assert resp.json()["title"] == "새 이름.pdf"
@@ -353,7 +353,7 @@ async def test_rename_job(client):
 
 @pytest.mark.asyncio
 async def test_rename_empty_rejected(client):
-    await _db.create_job("j1", "old.pdf")
+    await _db.create_job("j1", "old.pdf", user_id=1)
     resp = await client.patch("/api/jobs/j1", json={"title": "   "})
     assert resp.status_code == 400
 
@@ -366,7 +366,7 @@ async def test_rename_missing_job_404(client):
 
 @pytest.mark.asyncio
 async def test_delete_job_cascade(client):
-    await _db.create_job("j1", "p.pdf")
+    await _db.create_job("j1", "p.pdf", user_id=1)
     await _db.save_card_data("j1", json.dumps({"cards": []}))
     resp = await client.delete("/api/jobs/j1")
     assert resp.status_code == 204
@@ -378,7 +378,7 @@ async def test_delete_job_cascade(client):
 
 @pytest.mark.asyncio
 async def test_download_card_fresh_render(client):
-    await _db.create_job("j1", "paper.pdf")
+    await _db.create_job("j1", "paper.pdf", user_id=1)
     await _db.save_card_data("j1", json.dumps({"cards": []}))
     fake_png = b"\x89PNG fake-bytes"
     with patch(
@@ -395,7 +395,7 @@ async def test_download_card_fresh_render(client):
 
 @pytest.mark.asyncio
 async def test_download_missing_carddata_404(client):
-    await _db.create_job("j1", "p.pdf")
+    await _db.create_job("j1", "p.pdf", user_id=1)
     resp = await client.get("/api/cards/j1/download/1")
     assert resp.status_code == 404
 
@@ -417,7 +417,7 @@ async def test_nlpatch_mock_applies_and_rerenders(client, monkeypatch):
         "backend.agents.deck.pipeline.render_deck",
         AsyncMock(return_value=([b"\x89PNG-1"], [])),
     )
-    await _db.create_job("jnl", "paper.pdf")
+    await _db.create_job("jnl", "paper.pdf", user_id=1)
     await _db.save_authored_deck("jnl", _DECK_HTML, json.dumps({"verified": 1, "unverified": 0}),
                                  1, paper_text="The model scored 28.4 BLEU.")
     resp = await client.post("/api/deck/jnl/nlpatch", json={"instruction": "표지를 차분하게"})
@@ -446,7 +446,7 @@ def _png_bytes() -> bytes:
 
 @pytest.mark.asyncio
 async def test_upload_deck_asset_and_serve(client):
-    await _db.create_job("jasset", "p.pdf")
+    await _db.create_job("jasset", "p.pdf", user_id=1)
     png = _png_bytes()
     resp = await client.post(
         "/api/deck/jasset/assets",
@@ -469,7 +469,7 @@ async def test_upload_deck_asset_and_serve(client):
 
 @pytest.mark.asyncio
 async def test_upload_deck_asset_rejects_svg(client):
-    await _db.create_job("jsvg", "p.pdf")
+    await _db.create_job("jsvg", "p.pdf", user_id=1)
     resp = await client.post(
         "/api/deck/jsvg/assets",
         files={"file": ("x.svg", b"<svg></svg>", "image/svg+xml")},
@@ -480,7 +480,7 @@ async def test_upload_deck_asset_rejects_svg(client):
 
 @pytest.mark.asyncio
 async def test_upload_deck_asset_rejects_oversized(client):
-    await _db.create_job("jbig", "p.pdf")
+    await _db.create_job("jbig", "p.pdf", user_id=1)
     big = b"\x89PNG\r\n\x1a\n" + b"x" * (9 * 1024 * 1024)
     resp = await client.post(
         "/api/deck/jbig/assets",
@@ -501,7 +501,7 @@ async def test_upload_deck_asset_missing_job_404(client):
 
 @pytest.mark.asyncio
 async def test_get_deck_asset_missing_404(client):
-    await _db.create_job("jempty", "p.pdf")
+    await _db.create_job("jempty", "p.pdf", user_id=1)
     resp = await client.get("/api/deck/jempty/assets/doesnotexist")
     assert resp.status_code == 404
     assert resp.json()["detail"]["code"] == "ERR-IMG-004"
@@ -512,7 +512,7 @@ async def test_get_deck_asset_public_no_auth(client):
     """서빙은 무인증 capability URL — sandboxed iframe(null-origin) 미리보기가
     세션 쿠키를 못 실어도 200. 추측 불가 job_id+asset_id가 접근 권한(스펙 §9)."""
     from backend.core.auth import get_current_user
-    await _db.create_job("jpub", "p.pdf")
+    await _db.create_job("jpub", "p.pdf", user_id=1)
     up = await client.post(
         "/api/deck/jpub/assets",
         files={"file": ("x.png", _png_bytes(), "image/png")},
@@ -535,7 +535,7 @@ async def test_nlpatch_rejects_broken_contract(client, monkeypatch):
         "backend.routers.deck.apply_nl_patch",
         AsyncMock(return_value="<html><body>카드 라벨 없는 깨진 출력</body></html>"),
     )
-    await _db.create_job("jbad", "p.pdf")
+    await _db.create_job("jbad", "p.pdf", user_id=1)
     await _db.save_authored_deck("jbad", _DECK_HTML, json.dumps({"verified": 1}), 1,
                                  paper_text="x")
     resp = await client.post("/api/deck/jbad/nlpatch", json={"instruction": "전부 지워"})

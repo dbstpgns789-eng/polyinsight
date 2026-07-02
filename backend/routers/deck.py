@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from ..agents.deck.nl_patch import apply_nl_patch
 from ..agents.deck.pipeline import persist_edited_deck, run_authoring_pipeline
 from ..core import db
-from ..core.auth import get_current_user
+from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
 
 router = APIRouter(prefix="/api", tags=["deck"])
@@ -50,7 +50,7 @@ async def deck_upload(
     card_count = max(3, min(card_count, settings.AUTHOR_MAX_CARDS))
 
     job_id = str(uuid.uuid4())
-    await db.create_job(job_id, title=file.filename)
+    await db.create_job(job_id, title=file.filename, user_id=user["id"])
     await db.log_event("deck_upload", user_id=user["id"], job_id=job_id,
                        payload={"filename": file.filename, "card_count": card_count})
     background_tasks.add_task(
@@ -62,9 +62,7 @@ async def deck_upload(
 @router.get("/deck/{job_id}")
 async def get_deck(job_id: str, user: dict = Depends(get_current_user)):
     """덱 뷰용 — 저작 HTML + 충실성 검증 + 상태."""
-    job = await db.get_job(job_id)
-    if job is None:
-        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+    job = await require_owned_job(job_id, user)
     deck = await db.get_authored_deck(job_id)
     verify = None
     if deck and deck.get("verify_json"):
@@ -91,6 +89,7 @@ class DeckPatch(BaseModel):
 @router.patch("/deck/{job_id}")
 async def patch_deck(job_id: str, body: DeckPatch, user: dict = Depends(get_current_user)):
     """편집된 덱 HTML 저장(직접조작) → 재검증 + PNG 재렌더. 최종 판단은 사용자(헌법 3조)."""
+    await require_owned_job(job_id, user)
     deck = await db.get_authored_deck(job_id)
     if deck is None:
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
@@ -115,6 +114,7 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
     모델이 출력 계약을 깨면(카드 라벨 소실) 원본을 보존하고 거부한다(422).
     응답에 수정된 html 동봉 → 프론트가 에디터를 갱신본으로 재마운트.
     """
+    await require_owned_job(job_id, user)
     deck = await db.get_authored_deck(job_id)
     if deck is None or not deck.get("html"):
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
@@ -145,9 +145,7 @@ async def upload_deck_asset(
 
     저장 HTML엔 반환 url만 실리고, 렌더 직전 deck_renderer가 data URI로 인라인한다.
     """
-    job = await db.get_job(job_id)
-    if job is None:
-        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+    await require_owned_job(job_id, user)
 
     mime = (file.content_type or "").lower()
     if mime not in _ASSET_MIME_WHITELIST:
@@ -192,6 +190,7 @@ async def get_deck_asset(job_id: str, asset_id: str):
 @router.get("/deck/{job_id}/cards/{card_num}")
 async def get_deck_card(job_id: str, card_num: int, user: dict = Depends(get_current_user)):
     """덱 카드 1장 PNG."""
+    await require_owned_job(job_id, user)
     images = await db.get_card_images(job_id)
     png = images.get(card_num)
     if png is None:
@@ -202,6 +201,7 @@ async def get_deck_card(job_id: str, card_num: int, user: dict = Depends(get_cur
 @router.post("/deck/{job_id}/export")
 async def export_deck(job_id: str, user: dict = Depends(get_current_user)):
     """저장된 카드 PNG + HTML + 검증 결과를 ZIP으로. 다운로드는 /api/export/{id}/download 재사용."""
+    await require_owned_job(job_id, user)
     deck = await db.get_authored_deck(job_id)
     if deck is None:
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})

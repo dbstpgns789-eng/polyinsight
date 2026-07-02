@@ -216,3 +216,33 @@ async def test_render_token_bypasses_protected_route(client, monkeypatch):
     monkeypatch.setattr(settings, "RENDER_TOKEN", "rt-secret")
     resp = await client.get("/api/projects", headers={"X-Render-Token": "rt-secret"})
     assert resp.status_code == 200
+
+
+# ── 유저별 격리 + IDOR (2026-07-02) ────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_dashboard_lists_only_own_jobs(client):
+    from backend.core import db
+    from backend.core.auth import hash_password
+    a = await db.create_user("a@own.test", hash_password("password1"))
+    b = await db.create_user("b@own.test", hash_password("password1"))
+    await db.create_job("job-a", "a.pdf", user_id=a)
+    await db.create_job("job-b", "b.pdf", user_id=b)
+    await client.post("/api/auth/login", json={"email": "a@own.test", "password": "password1"})
+    resp = await client.get("/api/projects")
+    assert resp.status_code == 200
+    ids = [p["jobId"] for p in resp.json()["projects"]]
+    assert ids == ["job-a"]  # B의 잡 안 보임
+
+
+@pytest.mark.asyncio
+async def test_cannot_access_others_job_404(client):
+    """IDOR — 남의 job_id 알아도 접근 불가(404, 존재 은닉)."""
+    from backend.core import db
+    from backend.core.auth import hash_password
+    await db.create_user("a2@own.test", hash_password("password1"))
+    b = await db.create_user("b2@own.test", hash_password("password1"))
+    await db.create_job("job-b2", "b.pdf", user_id=b)
+    await client.post("/api/auth/login", json={"email": "a2@own.test", "password": "password1"})
+    assert (await client.get("/api/status/job-b2")).status_code == 404
+    assert (await client.get("/api/cards/job-b2")).status_code == 404

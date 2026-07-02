@@ -28,6 +28,23 @@ _UNAUTH = HTTPException(
 )
 
 
+async def require_owned_job(job_id: str, user: dict) -> dict:
+    """job 로드 + 소유권 검사. 내부 렌더 서비스(role=service)는 우회.
+    소유자 아니면 404(존재 자체를 은닉 — IDOR 방어). 반환=job dict(재사용)."""
+    job = await db.get_job(job_id)
+    _NOT_FOUND = HTTPException(
+        status_code=404,
+        detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."},
+    )
+    if job is None:
+        raise _NOT_FOUND
+    if user.get("role") == "service":
+        return job
+    if job.get("user_id") != user.get("id"):
+        raise _NOT_FOUND
+    return job
+
+
 async def get_current_user(request: Request) -> dict:
     # 내부 렌더 서비스(Playwright) 우회: 유효한 X-Render-Token이면 서비스 사용자로 통과
     rt = request.headers.get("x-render-token")

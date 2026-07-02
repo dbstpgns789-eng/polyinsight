@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from ..agents.orchestrator import run_pipeline
 from ..agents.s7_renderer import S7Renderer
 from ..core import db
-from ..core.auth import get_current_user
+from ..core.auth import get_current_user, require_owned_job
 from ..core.models import CardEditorData, CardTheme
 
 router = APIRouter(prefix="/api", tags=["jobs"])
@@ -39,7 +39,7 @@ async def upload_pdf(
         raise HTTPException(400, detail={"code": "ERR-INP-002", "message": "파일 크기가 50MB를 초과합니다."})
 
     job_id = str(uuid.uuid4())
-    await db.create_job(job_id, title=file.filename)
+    await db.create_job(job_id, title=file.filename, user_id=user["id"])
     await db.log_event(
         "upload",
         user_id=user["id"],
@@ -54,11 +54,9 @@ async def upload_pdf(
 # ── 상태 폴링 ─────────────────────────────────────────────────────────────
 
 @router.get("/status/{job_id}")
-async def get_status(job_id: str):
+async def get_status(job_id: str, user: dict = Depends(get_current_user)):
     """파이프라인 진행 상태 반환."""
-    row = await db.get_job(job_id)
-    if row is None:
-        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+    row = await require_owned_job(job_id, user)
 
     return {
         "jobId": row["job_id"],
@@ -74,11 +72,9 @@ async def get_status(job_id: str):
 # ── 카드 데이터 ───────────────────────────────────────────────────────────
 
 @router.get("/cards/{job_id}")
-async def get_cards(job_id: str):
+async def get_cards(job_id: str, user: dict = Depends(get_current_user)):
     """카드 에디터용 CardEditorData 반환."""
-    job = await db.get_job(job_id)
-    if job is None:
-        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+    job = await require_owned_job(job_id, user)
 
     raw = await db.get_card_data(job_id)
     if raw is None:
@@ -99,11 +95,9 @@ class PatchCardBody(BaseModel):
 
 
 @router.patch("/cards/{job_id}/data")
-async def patch_cards(job_id: str, body: PatchCardBody):
+async def patch_cards(job_id: str, body: PatchCardBody, user: dict = Depends(get_current_user)):
     """에디터 자동저장 — CardEditorData 전체 교체."""
-    job = await db.get_job(job_id)
-    if job is None:
-        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+    await require_owned_job(job_id, user)
 
     # 스키마 검증
     import logging as _logging
@@ -125,23 +119,21 @@ class RenameJobBody(BaseModel):
 
 
 @router.patch("/jobs/{job_id}")
-async def rename_job(job_id: str, body: RenameJobBody):
+async def rename_job(job_id: str, body: RenameJobBody, user: dict = Depends(get_current_user)):
     """프로젝트 표시명(파일명) 변경."""
     title = body.title.strip()
     if not title:
         raise HTTPException(400, detail={"code": "ERR-VAL-002", "message": "이름은 비울 수 없습니다."})
-    ok = await db.update_job_title(job_id, title)
-    if not ok:
-        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+    await require_owned_job(job_id, user)
+    await db.update_job_title(job_id, title)
     return {"ok": True, "title": title}
 
 
 @router.delete("/jobs/{job_id}", status_code=204)
-async def delete_job_endpoint(job_id: str):
+async def delete_job_endpoint(job_id: str, user: dict = Depends(get_current_user)):
     """프로젝트와 연관 데이터(card_data·card_images·exports) 일괄 삭제."""
-    ok = await db.delete_job(job_id)
-    if not ok:
-        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+    await require_owned_job(job_id, user)
+    await db.delete_job(job_id)
     return None
 
 
@@ -154,6 +146,7 @@ async def trigger_export(job_id: str, user: dict = Depends(get_current_user)):
     import zipfile as zf_mod
     from ..core.models import S7Input
 
+    await require_owned_job(job_id, user)
     raw = await db.get_card_data(job_id)
     if raw is None:
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "카드 데이터가 없습니다."})

@@ -37,6 +37,7 @@ async def migrate() -> None:
                 degraded INT,
                 warnings TEXT,
                 title TEXT,
+                user_id INTEGER,
                 created_at TEXT,
                 updated_at TEXT
             );
@@ -142,20 +143,25 @@ async def migrate() -> None:
             cols = [row[1] for row in await cur.fetchall()]
         if "paper_text" not in cols:
             await conn.execute("ALTER TABLE authored_deck ADD COLUMN paper_text TEXT")
+        # 유저별 격리(2026-07-02) — 기존 jobs에 user_id 없으면 추가(backfill은 별도 스크립트).
+        async with conn.execute("PRAGMA table_info(jobs)") as cur:
+            jcols = [row[1] for row in await cur.fetchall()]
+        if "user_id" not in jcols:
+            await conn.execute("ALTER TABLE jobs ADD COLUMN user_id INTEGER")
         await conn.commit()
 
 
-async def create_job(job_id: str, title: str | None) -> None:
+async def create_job(job_id: str, title: str | None, user_id: int | None = None) -> None:
     now = _utc_now_iso()
     warnings = json.dumps([])
     async with aiosqlite.connect(_db_path()) as conn:
         await conn.execute(
             """
             INSERT INTO jobs (
-                job_id, status, stage, progress, degraded, warnings, title, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                job_id, status, stage, progress, degraded, warnings, title, user_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (job_id, "PENDING", None, 0, 0, warnings, title, now, now),
+            (job_id, "PENDING", None, 0, 0, warnings, title, user_id, now, now),
         )
         await conn.commit()
 
@@ -514,16 +520,19 @@ async def cleanup_expired_blobs() -> int:
     return deleted
 
 
-async def list_jobs(limit: int = 20, offset: int = 0) -> list[dict]:
+async def list_jobs(limit: int = 20, offset: int = 0, user_id: int | None = None) -> list[dict]:
+    where = "WHERE user_id = ?" if user_id is not None else ""
+    params: list[object] = ([user_id] if user_id is not None else []) + [limit, offset]
     async with aiosqlite.connect(_db_path()) as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            """
+            f"""
             SELECT * FROM jobs
+            {where}
             ORDER BY created_at DESC
             LIMIT ? OFFSET ?
             """,
-            (limit, offset),
+            params,
         ) as cursor:
             rows = await cursor.fetchall()
 
