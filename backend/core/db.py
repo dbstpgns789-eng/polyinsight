@@ -1,9 +1,16 @@
+import hashlib
 import json
 from datetime import datetime, timedelta
 
 import aiosqlite
 
 from .config import settings
+
+
+def _hash_token(token: str) -> str:
+    """세션 토큰은 DB에 sha256으로만 저장(auth_tokens와 동일 패턴). 쿠키엔 원문 유지.
+    DB/백업 유출 시 세션 원문 부재 → 재사용 불가(탈취 방어)."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _db_path() -> str:
@@ -607,7 +614,7 @@ async def create_session(token: str, user_id: int, ttl_hours: int) -> None:
     async with aiosqlite.connect(_db_path()) as conn:
         await conn.execute(
             "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-            (token, user_id, now.isoformat(), expires_at),
+            (_hash_token(token), user_id, now.isoformat(), expires_at),
         )
         await conn.commit()
 
@@ -617,7 +624,7 @@ async def get_valid_session(token: str) -> dict | None:
     async with aiosqlite.connect(_db_path()) as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            "SELECT * FROM sessions WHERE token = ? AND expires_at > ?", (token, now)
+            "SELECT * FROM sessions WHERE token = ? AND expires_at > ?", (_hash_token(token), now)
         ) as cur:
             row = await cur.fetchone()
             return dict(row) if row else None
@@ -625,7 +632,13 @@ async def get_valid_session(token: str) -> dict | None:
 
 async def delete_session(token: str) -> None:
     async with aiosqlite.connect(_db_path()) as conn:
-        await conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
+        await conn.execute("DELETE FROM sessions WHERE token = ?", (_hash_token(token),))
+        await conn.commit()
+
+
+async def update_password_hash(user_id: int, password_hash: str) -> None:
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
         await conn.commit()
 
 

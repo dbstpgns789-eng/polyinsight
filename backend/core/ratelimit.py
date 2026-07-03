@@ -11,6 +11,8 @@ from collections import defaultdict, deque
 
 from fastapi import HTTPException, Request
 
+from .config import settings
+
 _hits: dict[str, deque[float]] = defaultdict(deque)
 
 
@@ -64,6 +66,19 @@ def public_ip(request: Request) -> str | None:
     (프로덕션: Next rewrite가 이 헤더를 백엔드로 전달해야 함 — 기본 전달됨.)"""
     cf = request.headers.get("cf-connecting-ip")
     return cf.strip() if cf else None
+
+
+def enforce_upload_quota(user: dict) -> None:
+    """인증된 업로드 엔드포인트 유저별 일일 쿼터. 미인증 계정은 더 낮은 상한(재정 DoS·스팸 방어).
+    IP(cf-connecting-ip) 조건 없이 user_id 키로 항상 적용 — 인증 필수 경로라 유저가 신뢰 가능한 키."""
+    if not settings.RATE_LIMIT_ENABLED:
+        return
+    limit = settings.UPLOAD_USER_LIMIT if user.get("email_verified") else settings.UPLOAD_UNVERIFIED_LIMIT
+    key = f"upload:user:{user['id']}"
+    ra = check(key, limit, settings.UPLOAD_USER_WINDOW_S)
+    if ra:
+        raise too_many(ra)
+    record(key)
 
 
 def too_many(retry_after: int) -> HTTPException:

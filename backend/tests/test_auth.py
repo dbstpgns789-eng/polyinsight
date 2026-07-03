@@ -139,7 +139,7 @@ async def test_get_current_user_render_token_bypass(monkeypatch):
 async def test_signup_open_no_invite_sets_cookie(client):
     """오픈 가입(2026-07-02 초대코드 폐기) — invite 없이 가입 성공 + 세션 발급."""
     resp = await client.post("/api/auth/signup", json={
-        "email": "new@b.com", "password": "password1"})
+        "email": "new@b.com", "password": "Str0ngPass!22"})
     assert resp.status_code == 200
     assert resp.json()["email"] == "new@b.com"
     assert "session" in resp.cookies
@@ -156,9 +156,9 @@ async def test_signup_short_password_rejected(client):
 @pytest.mark.asyncio
 async def test_signup_duplicate_email(client):
     await client.post("/api/auth/signup", json={
-        "email": "dup@b.com", "password": "password1"})
+        "email": "dup@b.com", "password": "Str0ngPass!22"})
     resp = await client.post("/api/auth/signup", json={
-        "email": "dup@b.com", "password": "password1"})
+        "email": "dup@b.com", "password": "Str0ngPass!22"})
     assert resp.status_code == 400
     assert resp.json()["detail"]["code"] == "ERR-AUTH-003"
 
@@ -255,7 +255,7 @@ async def test_cannot_access_others_job_404(client):
 
 @pytest.mark.asyncio
 async def test_signup_sets_unverified_and_me(client):
-    resp = await client.post("/api/auth/signup", json={"email": "unv@x.com", "password": "password1"})
+    resp = await client.post("/api/auth/signup", json={"email": "unv@x.com", "password": "Str0ngPass!22"})
     assert resp.status_code == 200
     me = await client.get("/api/auth/me")
     assert me.status_code == 200

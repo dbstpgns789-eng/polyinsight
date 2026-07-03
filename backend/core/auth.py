@@ -33,6 +33,14 @@ def verify_password(password_hash: str, password: str) -> bool:
         return False
 
 
+def needs_rehash(password_hash: str) -> bool:
+    """argon2 파라미터 상향 시 기존 해시 갱신 필요 여부. 로그인 성공 시 점진 재해싱용."""
+    try:
+        return _ph.check_needs_rehash(password_hash)
+    except Exception:
+        return False
+
+
 _UNAUTH = HTTPException(
     status_code=401,
     detail={"code": "ERR-AUTH-001", "message": "인증이 필요합니다."},

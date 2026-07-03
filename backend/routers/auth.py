@@ -17,6 +17,15 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 COOKIE_NAME = "session"
 
+# 흔한/유출 비밀번호 차단 — 길이(8자)만으론 'password'·'12345678' 통과(2026-07-03).
+# 소규모 큐레이션 리스트(전체 유출DB 아님) — 상위 빈출만. 소문자 비교.
+_COMMON_PASSWORDS = frozenset({
+    "password", "password1", "password123", "12345678", "123456789", "1234567890",
+    "qwerty123", "qwertyuiop", "11111111", "00000000", "iloveyou", "admin123",
+    "letmein1", "welcome1", "monkey123", "abc12345", "1q2w3e4r", "zaq12wsx",
+    "sunshine1", "princess1", "football1", "baseball1", "trustno1", "passw0rd",
+})
+
 
 class SignupBody(BaseModel):
     email: str
@@ -68,6 +77,8 @@ async def signup(body: SignupBody, request: Request, response: Response):
         ratelimit.record(f"signup:ip:{ip}")
     if not 8 <= len(body.password) <= settings.PASSWORD_MAX_LEN:
         raise HTTPException(400, detail={"code": "ERR-AUTH-002", "message": f"비밀번호는 8~{settings.PASSWORD_MAX_LEN}자여야 합니다."})
+    if body.password.lower() in _COMMON_PASSWORDS:
+        raise HTTPException(400, detail={"code": "ERR-AUTH-007", "message": "너무 흔하게 쓰이는 비밀번호입니다. 다른 비밀번호를 사용해 주세요."})
     if await db.get_user_by_email(email) is not None:
         raise HTTPException(400, detail={"code": "ERR-AUTH-003", "message": "이미 사용 중인 이메일입니다."})
     # 오픈 가입 — 초대코드 게이트 폐기(2026-07-02). invites 테이블/헬퍼는 휴면(향후 referral 재활용 가능).
@@ -106,12 +117,18 @@ async def login(body: LoginBody, request: Request, response: Response):
         auth_core.verify_dummy()  # 타이밍/열거 오라클 방지 — 부재 시에도 argon2 1회
         if rl:
             ratelimit.record(ek)
+            # 부재 이메일도 오답 경로와 대칭으로 429 → 상태코드(401 vs 429) 열거 오라클 차단
+            ra = ratelimit.check(ek, settings.LOGIN_EMAIL_LIMIT, settings.LOGIN_EMAIL_WINDOW_S)
+            if ra:
+                raise ratelimit.too_many(ra)
         raise invalid
 
     # 비번을 먼저 검증 — 정답은 이메일 실패카운터와 무관하게 항상 통과(피해자 lockout 불가).
     if auth_core.verify_password(user["password_hash"], body.password):
         if rl:
             ratelimit.clear(ek)  # 성공 → 실패카운터 리셋
+        if auth_core.needs_rehash(user["password_hash"]):  # argon2 파라미터 상향 시 점진 재해싱
+            await db.update_password_hash(user["id"], auth_core.hash_password(body.password))
         await _start_session(response, user["id"])
         await db.log_event("login", user_id=user["id"])
         return {"email": user["email"]}

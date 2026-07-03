@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from ..agents.deck.nl_patch import apply_nl_patch
 from ..agents.deck.pipeline import persist_edited_deck, run_authoring_pipeline
-from ..core import db
+from ..core import db, ratelimit
 from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
 
@@ -38,6 +38,7 @@ async def deck_upload(
 
     style_direction: 아트 디렉션(미감 방향, 선택). 비우면 모델 자유 선택.
     """
+    ratelimit.enforce_upload_quota(user)  # 유저별 일일 쿼터(미인증 낮은 상한) — 재정 DoS 차단
     if file.content_type not in ("application/pdf", "application/octet-stream"):
         if not (file.filename or "").lower().endswith(".pdf"):
             raise HTTPException(400, detail={"code": "ERR-INP-001", "message": "PDF 파일만 업로드 가능합니다."})

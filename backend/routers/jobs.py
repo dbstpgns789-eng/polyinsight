@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from ..agents.orchestrator import run_pipeline
 from ..agents.s7_renderer import S7Renderer
-from ..core import db
+from ..core import db, ratelimit
 from ..core.auth import get_current_user, require_owned_job
 from ..core.models import CardEditorData, CardTheme
 
@@ -30,6 +30,7 @@ async def upload_pdf(
     user: dict = Depends(get_current_user),
 ):
     """PDF 업로드 → 파이프라인 백그라운드 시작."""
+    ratelimit.enforce_upload_quota(user)  # 유저별 일일 쿼터(미인증 낮은 상한) — 재정 DoS 차단
     if file.content_type not in ("application/pdf", "application/octet-stream"):
         if not (file.filename or "").lower().endswith(".pdf"):
             raise HTTPException(400, detail={"code": "ERR-INP-001", "message": "PDF 파일만 업로드 가능합니다."})
