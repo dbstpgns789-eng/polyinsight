@@ -211,7 +211,11 @@
 }
 
 /* ─── Reset ─────────────────────────────────────── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* @layer base 필수 — 무계층이면 @layer utilities(Tailwind 패딩·마진 클래스)를 항상 이겨
+   앱 전체에서 여백 유틸리티가 죽는다 (2026-07-03 /deck 화면 붕괴 원인) */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+}
 
 html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 
@@ -2196,3 +2200,51 @@ h1, h2, h3, h4, h5 {
   .proj-row__right { grid-column: 2; flex-direction: row; align-items: center; flex-wrap: wrap; min-width: 0; }
   .dash-v2__summary { gap: var(--s1); }
 }
+
+/* ── /deck/new 브리핑 화면 (2026-07-03, 클로드디자인 이식) ─────────────── */
+
+.deck-fade-up { animation: deck-fade-up 0.5s ease both; }
+@keyframes deck-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 네이티브 range를 시안 모양으로 — OS 기본 파란색 금지. fill은 inline gradient. */
+.deck-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 99px;
+  outline: none;
+  cursor: pointer;
+}
+.deck-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 3px solid var(--accent);
+  box-shadow: 0 3px 8px rgba(16, 80, 55, 0.28);
+}
+.deck-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 3px solid var(--accent);
+  box-shadow: 0 3px 8px rgba(16, 80, 55, 0.28);
+}
+.deck-range:focus-visible { box-shadow: 0 0 0 4px var(--accent-subtle); }
+
+.deck-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, 0.42);
+  border-top-color: #fff;
+  animation: deck-spin 0.7s linear infinite;
+  display: inline-block;
+}
+@keyframes deck-spin { to { transform: rotate(360deg); } }

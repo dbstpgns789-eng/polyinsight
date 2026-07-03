@@ -1,6 +1,7 @@
 'use client'
 
 // 덱 생성 진입 (헌법 v3.0). 논문 PDF + 아트 디렉션(미감 방향)을 받아 단일 저작 시작.
+// 디자인: design_reference/claude-design/새 카드뉴스 브리핑.dc.html (2026-07-03 이식)
 // 아트 디렉션 = 동질화 방지의 핵심: 같은 논문도 방향을 바꿔 다르게 뽑는다.
 
 import { useCallback, useRef, useState } from 'react'
@@ -25,8 +26,30 @@ const EXAMPLE_UTTERANCES = [
   'Table 3 결과를 표지 메인으로 강조해줘',
 ]
 
+const CARD_TICKS = [3, 4, 5, 6, 7]
+
 function formatSize(bytes: number): string {
   return bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`
+}
+
+const cardShadow = { boxShadow: '0 1px 2px rgba(20,50,40,.04), 0 14px 34px rgba(20,50,40,.05)' }
+
+function FileIcon({ size, up }: { size: number; up?: boolean }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+      <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z" />
+      {up ? (<><path d="M12 18v-6" /><path d="m9.5 14 2.5-2.5 2.5 2.5" /></>) : (<><path d="M9 13h6" /><path d="M9 17h4" /></>)}
+    </svg>
+  )
+}
+
+function CheckIcon({ size, stroke = 2.6 }: { size: number; stroke?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  )
 }
 
 function DeckNewInner() {
@@ -61,97 +84,150 @@ function DeckNewInner() {
     }
   }, [file, cardCount, style, router])
 
-  return (
-    <div className="min-h-screen bg-canvas-subtle flex items-center justify-center py-12 px-4">
-      <div className="w-full max-w-[560px] bg-surface rounded-2xl border border-border p-8" style={{ wordBreak: 'keep-all' }}>
-        <h1 className="text-[20px] font-extrabold text-ink mb-1">논문으로 카드뉴스 만들기</h1>
-        <p className="text-[13px] text-ink-3 mb-6">
-          PDF 한 편 → 발행 가능한 카드뉴스. <strong className="text-forest-green font-semibold">원문 수치는 코드가 대조합니다.</strong>
-        </p>
+  const fillPct = `${((cardCount - 3) / 4) * 100}%`
 
-        {/* PDF — 드롭존 히어로: 논문이 무대 주인공 */}
+  return (
+    <div className="min-h-screen bg-canvas-subtle flex justify-center px-6 pt-13 pb-19" style={{ wordBreak: 'keep-all' }}>
+      <div className="w-full max-w-[560px] deck-fade-up">
+
+        {/* 아이브로 */}
+        <div className="flex items-center gap-2 mb-6">
+          <span className="w-[9px] h-[9px] rounded-full bg-forest-green" aria-hidden="true" />
+          <span className="text-[14px] font-bold text-ink-2 tracking-wide">PolyInsight</span>
+          <span className="w-[3px] h-[3px] rounded-full bg-border" aria-hidden="true" />
+          <span className="text-[13.5px] font-semibold text-ink-3 whitespace-nowrap">새 카드뉴스</span>
+        </div>
+
+        <h1 className="text-[37px] leading-[1.26] font-bold text-ink mb-3 tracking-[-0.01em]" style={{ fontFamily: 'var(--font-serif)' }}>
+          논문으로 카드뉴스 만들기
+        </h1>
+        <p className="text-[16px] leading-relaxed text-ink-2 mb-3.5">PDF 한 편 → 발행 가능한 카드뉴스.</p>
+
+        {/* 검증 배지 — 해자 */}
+        <div className="inline-flex items-center gap-2 bg-forest-green-wash border border-forest-green/25 text-forest-green-deep px-3.5 py-2 rounded-full text-[13.5px] font-bold mb-7">
+          <CheckIcon size={15} />
+          원문 수치는 코드가 대조합니다
+        </div>
+
+        {/* 드롭존 / 논문 카드 */}
         <input
           ref={inputRef} type="file" accept="application/pdf" className="hidden"
           onChange={(e) => { acceptFile(e.target.files?.[0]); e.target.value = '' }}
         />
         {file ? (
-          <div className="flex items-center gap-3 rounded-xl border border-forest-green/40 bg-canvas-subtle p-4 mb-5">
-            <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true" className="shrink-0">
-              <rect x="5" y="3" width="24" height="28" rx="3" className="stroke-forest-green" strokeWidth="1.8" fill="none"/>
-              <path d="M11 12h12M11 17h12M11 22h7" className="stroke-forest-green" strokeWidth="1.8" strokeLinecap="round"/>
-            </svg>
+          <div className="bg-canvas border border-border rounded-[20px] px-5 py-4.5 flex items-center gap-4" style={cardShadow}>
+            <div className="w-12 h-14 rounded-[11px] bg-forest-green-wash border border-forest-green/25 flex items-center justify-center text-forest-green-deep shrink-0">
+              <FileIcon size={24} />
+            </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[13.5px] font-semibold text-ink truncate">{file.name}</p>
-              <p className="text-[12px] text-ink-3">PDF · {formatSize(file.size)}</p>
+              <p className="text-[15.5px] font-bold text-ink truncate">{file.name}</p>
+              <p className="text-[13px] text-ink-3 mt-0.5">PDF · {formatSize(file.size)}</p>
+              <p className="inline-flex items-center gap-1.5 mt-2 text-forest-green-deep text-[12.5px] font-bold">
+                <CheckIcon size={13} stroke={2.8} />
+                논문 인수 완료
+              </p>
             </div>
             <button type="button" onClick={() => inputRef.current?.click()}
-              className="text-[12px] px-3 py-1.5 rounded-lg border border-border text-ink-2 hover:bg-canvas-subtle shrink-0">
+              className="shrink-0 bg-canvas border border-border text-ink-2 font-bold text-[13.5px] px-4 py-2 rounded-[10px] transition-colors hover:border-forest-green hover:text-forest-green-deep">
               교체
             </button>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => { e.preventDefault(); setDragOver(false); acceptFile(e.dataTransfer.files?.[0]) }}
-            className={`w-full rounded-xl border-2 border-dashed py-10 px-6 mb-5 text-center transition-colors ${
-              dragOver ? 'border-forest-green bg-forest-green/5' : 'border-border hover:border-forest-green/50 hover:bg-canvas-subtle'
-            }`}
-          >
-            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true" className="mx-auto mb-3 text-ink-3">
-              <rect x="7" y="4" width="26" height="32" rx="3" stroke="currentColor" strokeWidth="1.8" fill="none"/>
-              <path d="M14 14h12M14 19h12M14 24h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-              <path d="M20 36v-8m0 0-3.5 3.5M20 28l3.5 3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <p className="text-[14px] font-semibold text-ink mb-1">논문 PDF를 끌어다 놓으세요</p>
-            <p className="text-[12.5px] text-ink-3">또는 클릭해서 파일 선택</p>
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => { e.preventDefault(); setDragOver(false); acceptFile(e.dataTransfer.files?.[0]) }}
+              className={`w-full rounded-[20px] border-2 border-dashed px-7 py-11 text-center transition-colors ${
+                dragOver ? 'border-forest-green bg-forest-green-wash' : 'border-forest-green/35 bg-forest-green-ghost hover:border-forest-green hover:bg-forest-green-wash'
+              }`}
+            >
+              <div className="w-15 h-15 rounded-[17px] bg-canvas border border-forest-green/20 flex items-center justify-center mx-auto mb-4 text-forest-green" style={{ boxShadow: '0 6px 16px rgba(16,80,55,.10)' }}>
+                <FileIcon size={28} up />
+              </div>
+              <p className="text-[18px] font-extrabold text-ink mb-1">{dragOver ? '여기에 놓으세요' : '논문 PDF를 끌어다 놓으세요'}</p>
+              <p className="text-[14px] font-medium text-ink-3">또는 클릭해서 파일 선택</p>
+            </button>
+            <p className="text-[12.5px] text-ink-3 mt-3 text-center">PDF 파일만 올릴 수 있습니다.</p>
+          </>
         )}
 
-        {/* 아트디렉터에게 한마디 — 방향 위임(선택). 비우면 AI 자유 = 1급 경로 */}
-        <label className="block text-[13px] font-semibold text-ink-2 mb-1">아트디렉터에게 한마디 <span className="text-ink-3 font-normal">(선택)</span></label>
-        <p className="text-[12px] text-ink-3 mb-3">비우면 AI가 논문에 맞게 정합니다 · 내용은 논문이 정합니다 — 수치는 검증돼요</p>
+        {/* 아트디렉터에게 한마디 */}
+        <div className="bg-canvas border border-border rounded-[20px] p-6 mt-4" style={cardShadow}>
+          <div className="flex items-baseline gap-2 mb-1.5">
+            <h2 className="text-[18px] font-extrabold text-ink tracking-[-0.01em]">아트디렉터에게 한마디</h2>
+            <span className="text-[13px] text-ink-3 font-semibold">선택</span>
+          </div>
+          <p className="text-[13.5px] leading-relaxed text-ink-3 mb-5">비우면 AI가 논문에 맞게 정합니다 · 내용은 논문이 정합니다 — 수치는 검증돼요</p>
 
-        <p className="text-[12px] text-ink-3 mb-1.5">💡 이렇게 말해보세요</p>
-        <div className="mb-2.5">
-          {EXAMPLE_UTTERANCES.map((u) => (
-            <button key={u} type="button" onClick={() => setStyle(u)}
-              className="block w-full text-left text-[12.5px] text-ink-2 border border-border rounded-lg px-3 py-2 mb-1.5 bg-canvas-subtle/60 hover:border-forest-green/50 hover:bg-canvas-subtle transition-colors">
-              &ldquo;{u}&rdquo;
-            </button>
-          ))}
+          <p className="text-[13px] font-bold text-ink-2 mb-2.5">💡 이렇게 말해보세요</p>
+          <div className="flex flex-col gap-2 mb-5">
+            {EXAMPLE_UTTERANCES.map((u) => (
+              <button key={u} type="button" onClick={() => setStyle(u)}
+                className="text-left bg-canvas border border-border rounded-xl px-4 py-3 text-[14px] font-medium text-ink-2 flex items-center gap-3 transition-all hover:border-forest-green hover:bg-forest-green-ghost hover:translate-x-[3px]">
+                <span className="text-forest-green text-[20px] font-bold leading-none relative top-[3px] shrink-0" style={{ fontFamily: 'var(--font-serif)' }}>&ldquo;</span>
+                <span>{u}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2 mb-4">
+            {STYLE_CHIPS.map((c) => (
+              <button key={c} type="button" onClick={() => setStyle(c)}
+                className={`text-[13.5px] px-4 py-2 rounded-full border whitespace-nowrap transition-colors ${style === c ? 'bg-forest-green text-canvas border-forest-green font-bold' : 'bg-canvas border-border text-ink-2 font-semibold hover:border-forest-green/50'}`}>
+                {c.split(' — ')[0]}
+              </button>
+            ))}
+          </div>
+
+          <textarea
+            value={style} onChange={(e) => setStyle(e.target.value)}
+            placeholder="색감, 난이도, 강조점 — 뭐든 말로 지시하세요… (비워도 됩니다)"
+            rows={3}
+            className="block w-full min-h-[92px] text-[14.5px] leading-relaxed rounded-[14px] border border-border p-4 resize-y text-ink outline-none transition-shadow focus:border-forest-green focus:ring-4 focus:ring-forest-green-wash"
+            style={{ background: 'var(--surface)' }}
+          />
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-2.5">
-          {STYLE_CHIPS.map((c) => (
-            <button key={c} type="button" onClick={() => setStyle(c)}
-              className={`text-[12px] px-3 py-1.5 rounded-full border transition-colors ${style === c ? 'bg-forest-green text-canvas border-forest-green' : 'border-border text-ink-2 hover:bg-canvas-subtle'}`}>
-              {c.split(' — ')[0]}
-            </button>
-          ))}
+        {/* 카드 수 */}
+        <div className="bg-canvas border border-border rounded-[20px] px-6 pt-5 pb-5.5 mt-3.5" style={cardShadow}>
+          <div className="flex items-baseline justify-between mb-4">
+            <span className="text-[15px] font-bold text-ink">카드 수</span>
+            <span className="text-[15px] font-extrabold text-forest-green-deep">{cardCount}장</span>
+          </div>
+          <input
+            type="range" min={3} max={7} step={1} value={cardCount}
+            onChange={(e) => setCardCount(Number(e.target.value))}
+            className="deck-range w-full"
+            style={{ background: `linear-gradient(to right, var(--accent) ${fillPct}, var(--border) ${fillPct})` }}
+            aria-label="카드 수"
+          />
+          <div className="flex justify-between mt-2.5 px-0.5">
+            {CARD_TICKS.map((n) => (
+              <span key={n} className={`text-[12.5px] ${n === cardCount ? 'text-forest-green-deep font-extrabold' : 'text-ink-3 font-semibold'}`}>{n}</span>
+            ))}
+          </div>
         </div>
 
-        <textarea
-          value={style} onChange={(e) => setStyle(e.target.value)}
-          placeholder="색감, 난이도, 강조점 — 뭐든 말로 지시하세요… (비워도 됩니다)"
-          rows={2}
-          className="block w-full text-[13px] rounded-lg border border-border p-3 mb-5 resize-none"
-        />
+        {error && <p className="text-[13px] text-red-600 mt-4" role="alert">{error}</p>}
 
-        {/* 장수 */}
-        <label className="block text-[13px] font-semibold text-ink-2 mb-2">카드 수: {cardCount}장</label>
-        <input type="range" min={3} max={7} value={cardCount} onChange={(e) => setCardCount(Number(e.target.value))} className="w-full mb-6" />
-
-        {error && <p className="text-[12px] text-red-600 mb-3">{error}</p>}
-
+        {/* 생성 CTA */}
         <button
           onClick={submit} disabled={submitting}
-          className="w-full py-3 rounded-xl bg-forest-green text-canvas font-bold text-[14px] disabled:opacity-50"
+          className="w-full mt-5 rounded-[15px] py-4 bg-forest-green hover:bg-forest-green-deep text-canvas font-extrabold text-[16.5px] tracking-[-0.01em] flex items-center justify-center gap-2.5 transition-colors disabled:opacity-80"
+          style={{ boxShadow: '0 12px 26px rgba(16,90,60,.24)' }}
         >
-          {submitting ? '저작 시작 중…' : '카드뉴스 생성'}
+          {submitting ? (
+            <>
+              <span className="deck-spinner" aria-hidden="true" />
+              카드뉴스 만드는 중…
+            </>
+          ) : '카드뉴스 생성'}
         </button>
+        <p className="text-center text-[12.5px] text-ink-3 mt-3">생성 후 에디터에서 자유롭게 다듬을 수 있어요 · 보통 2~3분</p>
+
       </div>
     </div>
   )
