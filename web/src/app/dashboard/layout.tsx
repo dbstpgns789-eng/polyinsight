@@ -20,9 +20,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const initial = email ? email[0].toUpperCase() : 'U';
 
-  function handleLogout() {
+  async function handleLogout() {
+    // 서버 세션·쿠키 실제 무효화 — localStorage만 지우면 세션 살아있는 가짜 로그아웃
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
     localStorage.removeItem('isLoggedIn');
-    router.push('/');
+    router.replace('/login');
   }
 
   useEffect(() => {
