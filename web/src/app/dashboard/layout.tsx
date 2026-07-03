@@ -12,7 +12,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setEmail(localStorage.getItem('userEmail') ?? 'user@example.com');
+    // 세션 쿠키로 실제 유저 이메일 조회 — 401이면 AuthGuard가 /login으로 보내므로 빈 값 유지
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.email) setEmail(d.email); })
+      .catch(() => {});
   }, []);
 
   const initial = email ? email[0].toUpperCase() : 'U';
@@ -20,7 +24,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   async function handleLogout() {
     // 서버 세션·쿠키 실제 무효화 — localStorage만 지우면 세션 살아있는 가짜 로그아웃
     await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
-    localStorage.removeItem('isLoggedIn');
     router.replace('/login');
   }
 
@@ -67,7 +70,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
               {menuOpen && (
                 <div className="app-avatar__menu" role="menu">
-                  <p className="app-avatar__email">{email || 'user@example.com'}</p>
+                  {email && <p className="app-avatar__email">{email}</p>}
                   <button
                     className="app-avatar__item"
                     role="menuitem"
