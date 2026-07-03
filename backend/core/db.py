@@ -682,6 +682,14 @@ async def delete_session(token: str) -> None:
         await conn.commit()
 
 
+async def delete_sessions_by_user(user_id: int) -> int:
+    """유저의 전 세션 무효화 — 비밀번호 재설정 시 탈취 세션 강제 로그아웃."""
+    async with _connect() as conn:
+        cursor = await conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        await conn.commit()
+        return cursor.rowcount or 0
+
+
 async def update_password_hash(user_id: int, password_hash: str) -> None:
     async with _connect() as conn:
         await conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))

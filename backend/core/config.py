@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     PUBLIC_BASE_URL: str = ""
     VERIFY_REQUEST_LIMIT: int = 3        # 유저당 인증메일 재요청 / window
     VERIFY_REQUEST_WINDOW_S: int = 900
+
+    # ── 비밀번호 재설정 (2026-07-03) ──────────────────────────
+    RESET_TOKEN_TTL_HOURS: int = 2       # verify(24h)보다 짧게 — 비번 변경 권한 토큰
+    RESET_REQUEST_LIMIT: int = 3         # 이메일/IP당 재설정 요청 / window
+    RESET_REQUEST_WINDOW_S: int = 900
     PEXELS_API_KEY: str = ""            # 스톡 이미지 검색(선택). 비우면 해당 provider만 skip.
     UNSPLASH_ACCESS_KEY: str = ""        # Unsplash Access Key (Secret Key는 OAuth용, 검색에는 불필요)
 

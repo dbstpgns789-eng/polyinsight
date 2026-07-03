@@ -186,6 +186,62 @@ async def request_verify(user: dict = Depends(auth_core.get_current_user)):
     return {"ok": True}
 
 
+# ── 비밀번호 재설정 (2026-07-03) ───────────────────────────────────────────
+
+class ForgotPasswordBody(BaseModel):
+    email: str
+
+
+class ResetPasswordBody(BaseModel):
+    token: str
+    password: str
+
+
+@router.post("/forgot-password")
+async def forgot_password(body: ForgotPasswordBody, request: Request):
+    """재설정 메일 요청 — 유저 존재 여부와 무관하게 동일 200 응답(열거 대칭, login 패턴 준수)."""
+    email = body.email.strip().lower()
+    ip = ratelimit.public_ip(request)
+    if settings.RATE_LIMIT_ENABLED and ip is not None:
+        for key in (f"reset:ip:{ip}", f"reset:email:{email}"):
+            ra = ratelimit.check(key, settings.RESET_REQUEST_LIMIT, settings.RESET_REQUEST_WINDOW_S)
+            if ra:
+                raise ratelimit.too_many(ra)
+            ratelimit.record(key)
+
+    user = await db.get_user_by_email(email)
+    # OAuth 전용 유저(빈 해시)는 재설정할 비번이 없음 — 발송 생략, 응답은 동일
+    if user is not None and user["password_hash"]:
+        try:
+            raw = secrets.token_urlsafe(32)
+            token_hash = hashlib.sha256(raw.encode()).hexdigest()
+            await db.create_auth_token(token_hash, user["id"], "reset_password", settings.RESET_TOKEN_TTL_HOURS)
+            base = settings.PUBLIC_BASE_URL or settings.WEB_BASE_URL
+            link = f"{base}/reset-password?token={raw}"
+            await email_mod.send_reset_email(email, link)
+        except Exception:  # 발송 실패도 응답 대칭 유지(존재 오라클 차단)
+            logging.getLogger(__name__).exception("재설정 메일 발급 실패 user_id=%s", user["id"])
+    return {"ok": True}
+
+
+@router.post("/reset-password")
+async def reset_password(body: ResetPasswordBody):
+    """토큰 검증 → 비번 변경 → 전 세션 무효화(탈취 세션 강제 로그아웃). 재로그인 유도."""
+    if not 8 <= len(body.password) <= settings.PASSWORD_MAX_LEN:
+        raise HTTPException(400, detail={"code": "ERR-AUTH-002", "message": f"비밀번호는 8~{settings.PASSWORD_MAX_LEN}자여야 합니다."})
+    if body.password.lower() in _COMMON_PASSWORDS:
+        raise HTTPException(400, detail={"code": "ERR-AUTH-007", "message": "너무 흔하게 쓰이는 비밀번호입니다. 다른 비밀번호를 사용해 주세요."})
+    token_hash = hashlib.sha256(body.token.encode()).hexdigest()
+    tok = await db.get_auth_token(token_hash, "reset_password")
+    if tok is None:
+        raise HTTPException(400, detail={"code": "ERR-AUTH-006", "message": "유효하지 않거나 만료된 재설정 링크입니다."})
+    await db.update_password_hash(tok["user_id"], auth_core.hash_password(body.password))
+    await db.mark_token_used(token_hash)
+    await db.delete_sessions_by_user(tok["user_id"])
+    await db.log_event("password_reset", user_id=tok["user_id"])
+    return {"ok": True}
+
+
 # ── 소셜 로그인 (Google OAuth, grace — 2026-07-03) ─────────────────────────
 OAUTH_STATE_COOKIE = "oauth_state"
 

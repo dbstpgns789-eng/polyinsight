@@ -284,3 +284,74 @@ async def test_email_verify_invalid_token(client):
     r = await client.post("/api/auth/confirm-verify", json={"token": "nope-not-a-token"})
     assert r.status_code == 400
     assert r.json()["detail"]["code"] == "ERR-AUTH-006"
+
+
+# ── 비밀번호 재설정 (2026-07-03) ───────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_forgot_password_symmetric_response(client):
+    """존재/부재 이메일 모두 동일 200 {"ok": true} — 열거 대칭."""
+    from backend.core import db
+    from backend.core.auth import hash_password
+    await db.create_user("exists@x.com", hash_password("password!!9"))
+    r1 = await client.post("/api/auth/forgot-password", json={"email": "exists@x.com"})
+    r2 = await client.post("/api/auth/forgot-password", json={"email": "absent@x.com"})
+    assert r1.status_code == r2.status_code == 200
+    assert r1.json() == r2.json() == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_reset_password_full_flow_invalidates_sessions(client):
+    """재설정 성공 → 새 비번 로그인 OK, 구 비번 401, 기존 세션 무효화, 타 유저 세션 생존."""
+    import hashlib
+    from backend.core import db
+    from backend.core.auth import hash_password
+
+    uid = await db.create_user("victim@x.com", hash_password("oldpass!!9"))
+    other = await db.create_user("other@x.com", hash_password("otherpass9"))
+    await db.create_session("victim-tok", uid, 72)
+    await db.create_session("other-tok", other, 72)
+
+    raw = "reset-raw-token"
+    th = hashlib.sha256(raw.encode()).hexdigest()
+    await db.create_auth_token(th, uid, "reset_password", 2)
+
+    r = await client.post("/api/auth/reset-password", json={"token": raw, "password": "newpass!!10"})
+    assert r.status_code == 200
+
+    assert await db.get_valid_session("victim-tok") is None   # 전 세션 무효화
+    assert await db.get_valid_session("other-tok") is not None  # 타 유저 생존
+
+    ok = await client.post("/api/auth/login", json={"email": "victim@x.com", "password": "newpass!!10"})
+    assert ok.status_code == 200
+    bad = await client.post("/api/auth/login", json={"email": "victim@x.com", "password": "oldpass!!9"})
+    assert bad.status_code == 401
+
+    # 토큰 단일사용 — 재사용 400
+    again = await client.post("/api/auth/reset-password", json={"token": raw, "password": "anotherpw11"})
+    assert again.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_reset_password_rejects_weak_or_bad_token(client):
+    r = await client.post("/api/auth/reset-password", json={"token": "x", "password": "short"})
+    assert r.status_code == 400  # 길이
+    r = await client.post("/api/auth/reset-password", json={"token": "x", "password": "password123"})
+    assert r.status_code == 400 and r.json()["detail"]["code"] == "ERR-AUTH-007"  # 흔한 비번
+    r = await client.post("/api/auth/reset-password", json={"token": "invalid", "password": "goodpass!!9"})
+    assert r.status_code == 400 and r.json()["detail"]["code"] == "ERR-AUTH-006"  # 무효 토큰
+
+
+@pytest.mark.asyncio
+async def test_forgot_password_skips_oauth_only_user(client, monkeypatch):
+    """OAuth 전용 유저(빈 해시)는 재설정 메일 발송 안 함 — 응답은 동일."""
+    from backend.core import db, email as email_mod
+    sent = []
+    async def fake_send(to, link):
+        sent.append(to)
+        return True
+    monkeypatch.setattr(email_mod, "send_reset_email", fake_send)
+    await db.create_user("social@x.com", "")  # OAuth 전용
+    r = await client.post("/api/auth/forgot-password", json={"email": "social@x.com"})
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    assert sent == []

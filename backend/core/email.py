@@ -55,3 +55,20 @@ async def _send(to: str, subject: str, html: str) -> bool:
 
 async def send_verification_email(to: str, link: str) -> bool:
     return await _send(to, "PolyInsight 이메일 인증", _verify_html(link))
+
+
+def _reset_html(link: str) -> str:
+    return (
+        '<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">'
+        '<h2 style="font-weight:700">PolyInsight 비밀번호 재설정</h2>'
+        '<p>아래 버튼을 눌러 새 비밀번호를 설정해 주세요. 링크는 2시간 후 만료됩니다.</p>'
+        '<p>요청하지 않으셨다면 이 메일을 무시하세요 — 비밀번호는 바뀌지 않습니다.</p>'
+        f'<p><a href="{link}" style="display:inline-block;background:#0b8a67;color:#fff;'
+        'text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600">비밀번호 재설정</a></p>'
+        f'<p style="font-size:12px;color:#666">버튼이 안 되면 이 주소를 붙여넣으세요:<br>{link}</p>'
+        '</div>'
+    )
+
+
+async def send_reset_email(to: str, link: str) -> bool:
+    return await _send(to, "PolyInsight 비밀번호 재설정", _reset_html(link))

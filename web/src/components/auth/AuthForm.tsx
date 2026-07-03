@@ -125,6 +125,11 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           {errors.password && (
             <p className="auth-field__error" id="err-password" role="alert">{errors.password}</p>
           )}
+          {isLogin && (
+            <div style={{ textAlign: 'right', marginTop: 6 }}>
+              <Link href="/forgot-password" className="auth-link">비밀번호를 잊으셨나요?</Link>
+            </div>
+          )}
         </div>
 
         {!isLogin && (
@@ -162,8 +167,8 @@ export default function AuthForm({ mode }: { mode: Mode }) {
             />
             <span>
               <strong>[필수]</strong>{' '}
-              <a href="#" className="auth-link auth-link--strong">이용약관</a> 및{' '}
-              <a href="#" className="auth-link auth-link--strong">개인정보 처리방침</a>에 동의합니다.
+              <Link href="/terms" target="_blank" className="auth-link auth-link--strong">이용약관</Link> 및{' '}
+              <Link href="/privacy" target="_blank" className="auth-link auth-link--strong">개인정보 처리방침</Link>에 동의합니다.
             </span>
           </label>
           {errors.agree && (

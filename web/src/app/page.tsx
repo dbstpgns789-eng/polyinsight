@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 export default function Home() {
   const [navScrolled, setNavScrolled] = useState(false);
@@ -341,9 +342,9 @@ export default function Home() {
         <div className="container footer__inner">
           <p className="footer__logo">PolyInsight</p>
           <div className="footer__links">
-            <a href="#">개인정보 처리방침</a>
-            <a href="#">이용약관</a>
-            <a href="#">문의하기</a>
+            <Link href="/privacy">개인정보 처리방침</Link>
+            <Link href="/terms">이용약관</Link>
+            <a href="mailto:dbstpgns789@gmail.com">문의하기</a>
           </div>
           <p className="footer__copy">&copy; 2026 PolyInsight. All rights reserved.</p>
         </div>
