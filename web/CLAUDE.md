@@ -37,13 +37,16 @@ src/app/
 
 ```
 /dashboard          프로젝트 목록, 통계, 활동 피드
-/editor/:jobId      3패널 카드 에디터 (Content | Preview | Design)
-upload modal        업로드·처리 오버레이 (별도 route 없음)
-export modal        내보내기·다운로드 오버레이 (별도 route 없음)
+/deck/new           v3 업로드+브리핑 페이지 (아트디렉션·카드수) — 앞문 (2026-07-03)
+/deck/:jobId        v3 덱 뷰/편집 (PNG 피드 + 검증 패널 + WYSIWYG)
+/editor/:jobId      옛 3패널 에디터 — legacy 잡(card_data 보유) 전용 유지
+export modal        내보내기·다운로드 오버레이 (별도 route 없음, /editor 전용)
 ```
 
 핵심 규칙:
-- Upload/Export는 **modal (React Portal)** — 별도 page 금지
+- **Upload는 페이지(/deck/new)** — 아트디렉션 브리핑이 포함된 창작 시작점이라 모달로 못 담음
+  (v2 시절 "upload modal" 규칙 폐기, UploadModal.tsx 삭제됨 2026-07-03)
+- Export는 **modal (React Portal)** — 별도 page 금지
 - Export preflight는 CRITICAL/unreviewed 항목에 **경고**만, 하드블록 금지 — 최종 판단은 사용자
 - 이미지 슬롯은 optional — 이미지 없이 export 허용
 - Auto-save 5초 idle
@@ -126,7 +129,7 @@ Backend:     8000
 ```
 NEVER  @theme 블록에 hex/rgb 색상값 직접 작성
 NEVER  "빌드 성공"을 이식 완료 기준으로 삼음
-NEVER  Upload/Export를 별도 페이지로 구현
+NEVER  Export를 별도 페이지로 구현 (Upload는 v3부터 페이지가 정본 — /deck/new)
 NEVER  Export에 하드블록 구현 — 경고 후 진행만 허용
 NEVER  토큰 매핑 테이블 없이 컴포넌트 이식 시작
 ```
