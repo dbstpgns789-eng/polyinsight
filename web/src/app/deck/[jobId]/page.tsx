@@ -7,6 +7,7 @@
 // 자연어(NL) 편집은 3c(유료) — 별도.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
 import { getStatus, getDeck, patchDeck, nlPatchDeck, exportDeck, getDeckCardUrl, getExportDownloadUrl } from '@/lib/api'
@@ -27,10 +28,83 @@ function abortReason(warnings?: string[]): string | null {
   return w ? w.replace(/^(ABORT|ERR)-[A-Z0-9]*:\s*/, '') : null
 }
 
+// ── 생성 진행 화면 — 진짜 공정 공개 (Mirra식 극장이되 문구=실제 파이프라인 단계) ──
+// 가짜 남은시간·가짜 취소버튼 금지. progress(10→40→70→85)는 실측, 사이는 완만히 creep.
+const PIPELINE_STEPS = [
+  { key: 'S1', emoji: '📖', label: '논문 읽기', msg: '논문을 읽고 있어요 — 텍스트와 수치를 추출합니다' },
+  { key: 'AUTHOR', emoji: '✍️', label: 'AI 저작', msg: 'AI가 스토리와 디자인을 저작하고 있어요' },
+  { key: 'VERIFY', emoji: '🔍', label: '수치 검증', msg: '모든 수치를 원문과 대조하고 있어요' },
+  { key: 'RENDER', emoji: '🎨', label: '카드 렌더', msg: '카드를 그리고 있어요' },
+]
+const STAGE_CAP: Record<string, number> = { S1: 38, AUTHOR: 68, VERIFY: 83, RENDER: 97 }
+
+function GenerationTheater({ stage, progress }: { stage: string; progress: number }) {
+  const [elapsed, setElapsed] = useState(0)
+  const [creep, setCreep] = useState(0)
+  const stageIdx = Math.max(0, PIPELINE_STEPS.findIndex((s) => s.key === stage))
+  const current = PIPELINE_STEPS[stageIdx]
+
+  useEffect(() => {
+    const t = setInterval(() => setElapsed((e) => e + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  // 단계 사이 creep — 실측 progress에서 출발해 다음 단계 직전까지만 서서히 (0.15%/s)
+  useEffect(() => { setCreep(0) }, [stage])
+  useEffect(() => {
+    const t = setInterval(() => setCreep((c) => c + 0.15), 1000)
+    return () => clearInterval(t)
+  }, [stage])
+  const pct = Math.min(Math.max(progress, 5) + creep, STAGE_CAP[stage] ?? 97)
+
+  const mm = String(Math.floor(elapsed / 60))
+  const ss = String(elapsed % 60).padStart(2, '0')
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-canvas-subtle px-6">
+      <div className="w-full max-w-[420px] text-center deck-fade-up">
+        <div className="text-[42px] mb-4" aria-hidden="true">{current.emoji}</div>
+        <p className="text-[17px] font-bold text-ink mb-6">{current.msg}</p>
+
+        <div className="h-1.5 rounded-full bg-border overflow-hidden mb-2" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+          <div
+            className="h-full rounded-full transition-[width] duration-1000 ease-linear"
+            style={{ width: `${pct}%`, background: 'linear-gradient(90deg, var(--accent), var(--accent-bright))' }}
+          />
+        </div>
+        <div className="flex justify-between text-[12.5px] text-ink-3 mb-8">
+          <span>{mm}:{ss}</span>
+          <span>보통 2~3분</span>
+        </div>
+
+        <div className="inline-flex flex-col items-start gap-2 mb-8" aria-label="생성 단계">
+          {PIPELINE_STEPS.map((s, i) => (
+            <div key={s.key} className={`flex items-center gap-2.5 text-[13.5px] ${i < stageIdx ? 'text-forest-green-deep' : i === stageIdx ? 'text-ink font-bold' : 'text-ink-3'}`}>
+              {i < stageIdx ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+              ) : i === stageIdx ? (
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-forest-green border-t-transparent animate-spin inline-block" aria-hidden="true" />
+              ) : (
+                <span className="w-3.5 h-3.5 rounded-full border-2 border-border inline-block" aria-hidden="true" />
+              )}
+              {s.label}
+              {s.key === 'VERIFY' && <span className="text-[11px] font-bold text-forest-green-deep bg-forest-green-wash px-1.5 py-0.5 rounded-md">원문 대조</span>}
+            </div>
+          ))}
+        </div>
+
+        <p className="text-[12.5px] text-ink-3 mb-3">이 화면을 벗어나도 생성은 계속됩니다.</p>
+        <Link href="/dashboard" className="text-[13px] font-semibold text-ink-3 hover:text-forest-green-deep transition-colors">← 대시보드</Link>
+      </div>
+    </div>
+  )
+}
+
 function DeckPageInner() {
   const { jobId } = useParams() as { jobId: string }
   const [status, setStatus] = useState<string>('PENDING')
   const [stage, setStage] = useState<string>('')
+  const [progress, setProgress] = useState(0)
   const [deck, setDeck] = useState<DeckPayload | null>(null)
   const [exporting, setExporting] = useState(false)
 
@@ -69,6 +143,7 @@ function DeckPageInner() {
         if (cancelled) return
         setStatus(r.data.status)
         setStage(r.data.stage ?? '')
+        setProgress(r.data.progress ?? 0)
         if (r.data.status === 'DONE' || r.data.status === 'ERROR') {
           const d = await getDeck(jobId)
           if (!cancelled) setDeck(d.data as DeckPayload)
@@ -126,16 +201,9 @@ function DeckPageInner() {
     setMode((m) => (m === 'edit' ? 'view' : 'edit'))
   }, [])
 
-  // ── 진행 중 ──
+  // ── 진행 중 — 실제 파이프라인 공정 공개 ──
   if (status !== 'DONE' && status !== 'ERROR') {
-    return (
-      <div className="flex items-center justify-center h-screen bg-canvas-subtle">
-        <div className="text-center">
-          <div className="w-8 h-8 border-2 border-forest-green border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-          <p className="text-[13px] text-ink-3">덱 생성 중… {stage && `(${stage})`}</p>
-        </div>
-      </div>
-    )
+    return <GenerationTheater stage={stage || 'S1'} progress={progress} />
   }
 
   // ── 실패 ──
@@ -146,7 +214,11 @@ function DeckPageInner() {
         <div className="text-center max-w-md px-6">
           <p className="text-4xl mb-3">⚠️</p>
           <p className="text-[14px] text-ink-2 font-medium">{reason || '덱을 생성하지 못했습니다.'}</p>
-          <p className="text-[12px] text-ink-3 mt-2">다른 논문 PDF로 다시 시도해 주세요.</p>
+          <p className="text-[12px] text-ink-3 mt-2">스캔본(이미지) PDF는 텍스트를 못 읽어요 — 텍스트가 살아있는 PDF로 다시 시도해 주세요.</p>
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <Link href="/deck/new" className="btn btn-primary">다시 시도</Link>
+            <Link href="/dashboard" className="btn btn-outline">← 대시보드</Link>
+          </div>
         </div>
       </div>
     )
