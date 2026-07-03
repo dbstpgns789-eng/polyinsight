@@ -4,15 +4,12 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useRef, useEffect } from 'react';
-import UploadModal from '@/components/UploadModal';
-import useUiStore from '@/store/uiStore';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [email, setEmail] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
-  const { uploadModalOpen, openUploadModal, closeUploadModal } = useUiStore();
 
   useEffect(() => {
     setEmail(localStorage.getItem('userEmail') ?? 'user@example.com');
@@ -50,15 +47,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="app-header__actions">
-            <button
-              className="btn btn-primary app-header__cta"
-              onClick={openUploadModal}
-            >
+            <Link href="/deck/new" className="btn btn-primary app-header__cta">
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
                 <path d="M6.5 1.5v10M1.5 6.5h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
               </svg>
               새 카드뉴스
-            </button>
+            </Link>
 
             <div className="app-avatar" ref={menuRef}>
               <button
@@ -98,8 +92,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </header>
 
       <main className="app-main">{children}</main>
-
-      <UploadModal isOpen={uploadModalOpen} onClose={closeUploadModal} />
     </>
   );
 }

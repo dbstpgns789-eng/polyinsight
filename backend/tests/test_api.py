@@ -228,6 +228,25 @@ async def test_projects_lists_uploaded(client, dummy_pdf):
 
 
 @pytest.mark.asyncio
+async def test_projects_kind_distinguishes_legacy_and_deck(client, dummy_pdf):
+    """card_data 보유 잡=legacy(/editor행), 미보유=deck(/deck행) — 앞문 재배선 분기 근거."""
+    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
+        await client.post(
+            "/api/upload",
+            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
+            data={"card_count": "5"},
+        )
+
+    resp = await client.get("/api/projects")
+    project = resp.json()["projects"][0]
+    assert project["kind"] == "deck"  # card_data 없음 = 덱 취급
+
+    await _db.save_card_data(project["jobId"], json.dumps({"cards": []}))
+    resp = await client.get("/api/projects")
+    assert resp.json()["projects"][0]["kind"] == "legacy"
+
+
+@pytest.mark.asyncio
 async def test_projects_stats_counts(client, dummy_pdf):
     with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
         for _ in range(3):

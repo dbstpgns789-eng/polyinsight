@@ -324,6 +324,18 @@ async def get_card_data(job_id: str) -> str | None:
             return row[0] if row else None
 
 
+async def card_data_job_ids(job_ids: list[str]) -> set[str]:
+    """card_data 행 보유 잡 = 옛(legacy) 파이프라인 산출물. 목록의 kind 판정용."""
+    if not job_ids:
+        return set()
+    placeholders = ",".join("?" * len(job_ids))
+    async with _connect() as conn:
+        async with conn.execute(
+            f"SELECT job_id FROM card_data WHERE job_id IN ({placeholders})", job_ids
+        ) as cursor:
+            return {row[0] for row in await cursor.fetchall()}
+
+
 # ── 단일 저작 덱 (헌법 v3.0) ───────────────────────────────────────────────
 
 async def save_authored_deck(

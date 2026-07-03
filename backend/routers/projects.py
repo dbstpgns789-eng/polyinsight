@@ -22,11 +22,15 @@ async def list_projects(
     if status:
         rows = [r for r in rows if r["status"] == status.upper()]
 
+    # card_data 보유 = 옛 파이프라인 잡 → /editor, 나머지 = v3 덱 → /deck
+    legacy_ids = await db.card_data_job_ids([r["job_id"] for r in rows])
+
     projects = [
         {
             "jobId": r["job_id"],
             "title": r["title"],
             "status": r["status"],
+            "kind": "legacy" if r["job_id"] in legacy_ids else "deck",
             "createdAt": r["created_at"],
             "updatedAt": r["updated_at"],
         }
