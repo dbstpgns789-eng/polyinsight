@@ -118,6 +118,16 @@ async def migrate() -> None:
                 used_at TEXT
             );
 
+            -- 소셜 로그인(2026-07-03): 제공자 신원 ↔ users 연결. 한 유저가 여러 제공자 가능.
+            CREATE TABLE IF NOT EXISTS oauth_accounts (
+                provider TEXT NOT NULL,
+                provider_user_id TEXT NOT NULL,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                email TEXT,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (provider, provider_user_id)
+            );
+
             CREATE TABLE IF NOT EXISTS events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -670,6 +680,30 @@ async def consume_invite(code: str, user_id: int) -> bool:
         )
         await conn.commit()
         return (cursor.rowcount or 0) > 0
+
+
+# ── 소셜 로그인: oauth_accounts (2026-07-03) ───────────────────────────────
+
+async def get_oauth_account(provider: str, provider_user_id: str) -> dict | None:
+    async with aiosqlite.connect(_db_path()) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT * FROM oauth_accounts WHERE provider = ? AND provider_user_id = ?",
+            (provider, provider_user_id),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def link_oauth_account(provider: str, provider_user_id: str, user_id: int, email: str | None) -> None:
+    now = _utc_now_iso()
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute(
+            "INSERT OR IGNORE INTO oauth_accounts (provider, provider_user_id, user_id, email, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (provider, provider_user_id, user_id, email, now),
+        )
+        await conn.commit()
 
 
 # ── 이메일 인증: auth_tokens (2026-07-02) ──────────────────────────────────

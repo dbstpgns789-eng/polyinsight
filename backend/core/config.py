@@ -43,6 +43,14 @@ class Settings(BaseSettings):
     UPLOAD_UNVERIFIED_LIMIT: int = 3     # 미인증 계정은 낮은 상한(grace 유지·남용 차단) → email_verified가 경제적 신뢰신호
     UPLOAD_USER_WINDOW_S: int = 86400    # 24h
 
+    # ── 소셜 로그인 OAuth (Google, 2026-07-03) ──────────────────
+    # 비우면 dormant(버튼 눌러도 /login 복귀, 앱 안 깨짐). Google Cloud Console에서 발급.
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    # OAuth 콜백이 등록되는 '브라우저-대면 프론트 오리진'. 비우면 PUBLIC_BASE_URL→WEB_BASE_URL 폴백.
+    # dev=http://localhost:3000 (Next rewrite가 /api를 백엔드로 프록시 → 세션쿠키 동일 오리진).
+    OAUTH_REDIRECT_BASE: str = ""
+
     # ── 이메일 인증 (Resend, 2026-07-02) ──────────────────────
     RESEND_API_KEY: str = ""             # 비우면 발송 no-op(dormant). https://resend.com
     EMAIL_FROM: str = "onboarding@resend.dev"   # 도메인 DKIM 검증 전엔 이걸로 본인 메일함 테스트

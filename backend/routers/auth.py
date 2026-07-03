@@ -5,11 +5,13 @@ import logging
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..core import auth as auth_core
 from ..core import db
 from ..core import email as email_mod
+from ..core import oauth as oauth_core
 from ..core import ratelimit
 from ..core.config import settings
 
@@ -182,6 +184,65 @@ async def request_verify(user: dict = Depends(auth_core.get_current_user)):
         ratelimit.record(k)
     await _issue_verification(user["id"], user["email"])
     return {"ok": True}
+
+
+# ── 소셜 로그인 (Google OAuth, grace — 2026-07-03) ─────────────────────────
+OAUTH_STATE_COOKIE = "oauth_state"
+
+
+def _web_base() -> str:
+    """브라우저-대면 프론트 오리진(리다이렉트 목적지)."""
+    return (settings.PUBLIC_BASE_URL or settings.WEB_BASE_URL).rstrip("/")
+
+
+async def _find_or_create_oauth_user(provider: str, sub: str, email: str) -> int:
+    """제공자 신원 → users. 순서: 기존 연결 → 동일 이메일 연결 → 신규 생성.
+    OAuth 유저는 비번 없음(빈 해시=비번로그인 불가), 제공자가 이메일 검증했으므로 email_verified=1."""
+    acct = await db.get_oauth_account(provider, sub)
+    if acct:
+        return acct["user_id"]
+    existing = await db.get_user_by_email(email)
+    if existing:
+        user_id = existing["id"]
+    else:
+        user_id = await db.create_user(email, "")   # 빈 해시 → 비번 로그인 불가(소셜 전용)
+        await db.set_email_verified(user_id)          # 제공자 검증 이메일 → 인증됨
+    await db.link_oauth_account(provider, sub, user_id, email)
+    return user_id
+
+
+@router.get("/oauth/google/start")
+async def oauth_google_start():
+    """구글 동의화면으로 redirect. 크리덴셜 없으면(dormant) 조용히 /login 복귀."""
+    if not oauth_core.google_enabled():
+        return RedirectResponse(url=f"{_web_base()}/login?error=oauth_disabled", status_code=302)
+    state = secrets.token_urlsafe(24)
+    resp = RedirectResponse(url=oauth_core.google_authorize_url(state), status_code=302)
+    resp.set_cookie(OAUTH_STATE_COOKIE, state, max_age=600, httponly=True,
+                    samesite="lax", secure=settings.COOKIE_SECURE, path="/")  # lax=구글 top-level 복귀 시 전달
+    return resp
+
+
+@router.get("/oauth/google/callback")
+async def oauth_google_callback(request: Request, code: str = "", state: str = ""):
+    """구글 콜백 → 신원확인 → 세션 발급 → 대시보드. 실패는 /login?error=로 표면화."""
+    web = _web_base()
+    cookie_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not code or not state or not cookie_state or state != cookie_state:
+        return RedirectResponse(url=f"{web}/login?error=oauth_state", status_code=302)  # CSRF/state 불일치
+    try:
+        info = await oauth_core.google_exchange(code)
+    except Exception:
+        logging.getLogger(__name__).exception("google oauth 교환 실패")
+        return RedirectResponse(url=f"{web}/login?error=oauth_failed", status_code=302)
+    if not info.get("email") or not info.get("email_verified"):
+        return RedirectResponse(url=f"{web}/login?error=oauth_no_email", status_code=302)
+    user_id = await _find_or_create_oauth_user("google", info["sub"], info["email"])
+    resp = RedirectResponse(url=f"{web}/dashboard", status_code=302)
+    await _start_session(resp, user_id)
+    resp.delete_cookie(OAUTH_STATE_COOKIE, path="/")
+    await db.log_event("oauth_login", user_id=user_id, payload={"provider": "google"})
+    return resp
 
 
 @router.post("/confirm-verify")
