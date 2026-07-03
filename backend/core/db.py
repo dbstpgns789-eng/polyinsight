@@ -788,6 +788,17 @@ async def mark_token_used(token_hash: str) -> None:
         await conn.commit()
 
 
+async def invalidate_auth_tokens(user_id: int, purpose: str) -> int:
+    """유저의 미사용 토큰 일괄 무효화 — 비번 재설정 성공 시 형제 재설정 토큰 잔존 차단."""
+    async with _connect() as conn:
+        cursor = await conn.execute(
+            "UPDATE auth_tokens SET used_at = ? WHERE user_id = ? AND purpose = ? AND used_at IS NULL",
+            (_utc_now_iso(), user_id, purpose),
+        )
+        await conn.commit()
+        return cursor.rowcount or 0
+
+
 async def set_email_verified(user_id: int) -> None:
     async with _connect() as conn:
         await conn.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))

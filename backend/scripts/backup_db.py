@@ -51,16 +51,22 @@ def backup(db_path: str, dest: str, keep: int = 7, min_bytes: int = 1_000_000) -
     if os.path.exists(tmp):
         os.remove(tmp)  # VACUUM INTO는 선존재 파일에 실패
     with sqlite3.connect(db_path) as src:
+        # 기준 행 수를 VACUUM 직전에 읽음 — 검증 시점에 다시 읽으면
+        # 라이브 쓰기가 끼어들어 정상 스냅샷을 실패로 오판(TOCTOU)
+        pre = {t: _count(src, t) for t in ("users", "jobs")}
         src.execute("VACUUM INTO ?", (tmp,))
     os.replace(tmp, final)
 
-    # 사후검증 — 백업본 ro로 열어 integrity + 행 수 원본 대조
-    with _ro_connect(db_path) as src, _ro_connect(final) as bak:
+    # 사후검증 — 백업본 ro로 열어 integrity + 스냅샷 직전 행 수와 대조
+    with _ro_connect(final) as bak:
         ok = bak.execute("PRAGMA integrity_check").fetchone()[0]
-        counts = {t: (_count(src, t), _count(bak, t)) for t in ("users", "jobs")}
+        counts = {t: (pre[t], _count(bak, t)) for t in ("users", "jobs")}
     print(f"백업: {final} ({os.path.getsize(final):,} bytes) integrity={ok} counts={counts}")
     if ok != "ok" or any(s != b for s, b in counts.values()):
-        raise RuntimeError("사후검증 실패 — 백업본은 삭제하지 않음. 수동 확인 필요")
+        # 실패본을 타임스탬프 이름 그대로 두면 보존정리 슬롯을 차지해
+        # 검증된 옛 백업을 밀어냄 — 패턴 밖으로 rename해 증거만 보존
+        os.replace(final, final + ".unverified")
+        raise RuntimeError(f"사후검증 실패 — {final}.unverified 로 보존. 수동 확인 필요")
 
     # 보존 — 타임스탬프 정확 패턴만 대상. 수동 네이밍 백업은 건드리지 않음.
     snaps = sorted(f for f in os.listdir(dest) if _PATTERN.fullmatch(f))
@@ -74,12 +80,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SQLite VACUUM INTO 백업")
     parser.add_argument("--keep", type=int, default=7, help="보존 개수 (기본 7)")
     parser.add_argument("--dest", default="backups", help="백업 폴더 (기본 backups/)")
+    parser.add_argument("--min-bytes", type=int, default=1_000_000,
+                        help="원본 최소 크기 가드 (기본 1MB — 신규 소형 DB는 낮춰서 실행)")
     args = parser.parse_args()
 
     from backend.core.db import _db_path
 
     try:
-        backup(_db_path(), args.dest, keep=args.keep)
+        backup(_db_path(), args.dest, keep=args.keep, min_bytes=args.min_bytes)
     except RuntimeError as e:
         print(f"실패: {e}")
         sys.exit(1)

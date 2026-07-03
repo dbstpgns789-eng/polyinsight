@@ -355,3 +355,21 @@ async def test_forgot_password_skips_oauth_only_user(client, monkeypatch):
     r = await client.post("/api/auth/forgot-password", json={"email": "social@x.com"})
     assert r.status_code == 200 and r.json() == {"ok": True}
     assert sent == []
+
+
+@pytest.mark.asyncio
+async def test_reset_password_invalidates_sibling_tokens(client):
+    """재설정 성공 시 같은 유저의 다른 미사용 재설정 토큰도 무효화 — 재탈취 차단."""
+    import hashlib
+    from backend.core import db
+    from backend.core.auth import hash_password
+    uid = await db.create_user("sib@x.com", hash_password("oldpass!!9"))
+    raws = ["sib-token-1", "sib-token-2"]
+    for raw in raws:
+        await db.create_auth_token(hashlib.sha256(raw.encode()).hexdigest(), uid, "reset_password", 2)
+
+    r = await client.post("/api/auth/reset-password", json={"token": raws[0], "password": "newpass!!10"})
+    assert r.status_code == 200
+    # 형제 토큰으로 재시도 → 400 (무효화됨)
+    r2 = await client.post("/api/auth/reset-password", json={"token": raws[1], "password": "hijack!!11"})
+    assert r2.status_code == 400

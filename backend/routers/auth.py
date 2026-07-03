@@ -4,7 +4,7 @@ import hashlib
 import logging
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
@@ -197,9 +197,23 @@ class ResetPasswordBody(BaseModel):
     password: str
 
 
+async def _issue_reset(user_id: int, email: str) -> None:
+    """재설정 토큰 발급+발송 — 응답 후 백그라운드 실행(타이밍 오라클 차단)."""
+    try:
+        raw = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw.encode()).hexdigest()
+        await db.create_auth_token(token_hash, user_id, "reset_password", settings.RESET_TOKEN_TTL_HOURS)
+        base = settings.PUBLIC_BASE_URL or settings.WEB_BASE_URL
+        link = f"{base}/reset-password?token={raw}"
+        await email_mod.send_reset_email(email, link)
+    except Exception:
+        logging.getLogger(__name__).exception("재설정 메일 발급 실패 user_id=%s", user_id)
+
+
 @router.post("/forgot-password")
-async def forgot_password(body: ForgotPasswordBody, request: Request):
-    """재설정 메일 요청 — 유저 존재 여부와 무관하게 동일 200 응답(열거 대칭, login 패턴 준수)."""
+async def forgot_password(body: ForgotPasswordBody, request: Request, background_tasks: BackgroundTasks):
+    """재설정 메일 요청 — 유저 존재 여부와 무관하게 동일 200 응답(열거 대칭, login 패턴 준수).
+    토큰 발급+발송은 응답 후 백그라운드 — 가입자만 Resend 왕복을 기다리면 타이밍 오라클."""
     email = body.email.strip().lower()
     ip = ratelimit.public_ip(request)
     if settings.RATE_LIMIT_ENABLED and ip is not None:
@@ -212,15 +226,7 @@ async def forgot_password(body: ForgotPasswordBody, request: Request):
     user = await db.get_user_by_email(email)
     # OAuth 전용 유저(빈 해시)는 재설정할 비번이 없음 — 발송 생략, 응답은 동일
     if user is not None and user["password_hash"]:
-        try:
-            raw = secrets.token_urlsafe(32)
-            token_hash = hashlib.sha256(raw.encode()).hexdigest()
-            await db.create_auth_token(token_hash, user["id"], "reset_password", settings.RESET_TOKEN_TTL_HOURS)
-            base = settings.PUBLIC_BASE_URL or settings.WEB_BASE_URL
-            link = f"{base}/reset-password?token={raw}"
-            await email_mod.send_reset_email(email, link)
-        except Exception:  # 발송 실패도 응답 대칭 유지(존재 오라클 차단)
-            logging.getLogger(__name__).exception("재설정 메일 발급 실패 user_id=%s", user["id"])
+        background_tasks.add_task(_issue_reset, user["id"], email)
     return {"ok": True}
 
 
@@ -236,7 +242,8 @@ async def reset_password(body: ResetPasswordBody):
     if tok is None:
         raise HTTPException(400, detail={"code": "ERR-AUTH-006", "message": "유효하지 않거나 만료된 재설정 링크입니다."})
     await db.update_password_hash(tok["user_id"], auth_core.hash_password(body.password))
-    await db.mark_token_used(token_hash)
+    # 사용 토큰 포함 이 유저의 모든 미사용 재설정 토큰 무효화 — 형제 토큰으로 재탈취 차단
+    await db.invalidate_auth_tokens(tok["user_id"], "reset_password")
     await db.delete_sessions_by_user(tok["user_id"])
     await db.log_event("password_reset", user_id=tok["user_id"])
     return {"ok": True}

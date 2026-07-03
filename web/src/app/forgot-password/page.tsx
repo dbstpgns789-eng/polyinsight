@@ -18,11 +18,19 @@ export default function ForgotPasswordPage() {
     setError('');
     setLoading(true);
     try {
-      await fetch('/api/auth/forgot-password', {
+      const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
+      if (res.status === 429) {
+        setError('요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요.');
+        return;
+      }
+      if (!res.ok) {
+        setError('요청에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        return;
+      }
       // 존재 여부와 무관하게 항상 성공 화면 (열거 대칭)
       setSent(true);
     } catch {
