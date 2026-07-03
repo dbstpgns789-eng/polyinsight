@@ -1151,14 +1151,39 @@ h1, h2, h3, h4, h5 {
 }
 
 .auth-brand {
-  /* 다크 에메랄드 스포트라이트 — 해자 카드와 동일 언어(radial 글로우 + jewel 그라디언트) */
+  /* 다크 에메랄드 jewel 스포트라이트 — 상단좌 딥글로우 + 하단우 bright sweep으로 깊이. 해자 다크섹션 언어 */
+  position: relative;
+  isolation: isolate;
   background:
-    radial-gradient(115% 85% at 12% -5%, oklch(38% 0.095 163 / 0.55), transparent 55%),
-    linear-gradient(160deg, oklch(24% 0.055 164), oklch(30% 0.076 163));
+    radial-gradient(120% 95% at 100% 6%, oklch(56% 0.135 162 / 0.50), transparent 46%),
+    radial-gradient(95% 90% at 114% 118%, oklch(75% 0.145 161 / 0.55), transparent 48%),
+    linear-gradient(148deg, oklch(17% 0.045 167) 6%, oklch(30% 0.085 162) 52%, oklch(43% 0.108 160));
   display: flex;
   flex-direction: column;
   padding: var(--s12) clamp(var(--s8), 6vw, var(--s16));
   overflow: hidden;
+}
+/* 떠오르는 jewel 글로우 — 평면 그라디언트에 입체감 */
+.auth-brand::before {
+  content: '';
+  position: absolute;
+  inset: auto -12% -28% 5%;
+  height: 80%;
+  background: radial-gradient(60% 64% at 65% 100%, oklch(76% 0.145 161 / 0.42), transparent 66%);
+  filter: blur(6px);
+  z-index: -1;
+  pointer-events: none;
+}
+/* 미세 그레인 — 그라디언트 밴딩 제거 + 프리미엄 질감 */
+.auth-brand::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.4;
+  mix-blend-mode: overlay;
+  z-index: -1;
+  pointer-events: none;
 }
 
 .auth-brand__inner {
@@ -1201,6 +1226,15 @@ h1, h2, h3, h4, h5 {
   color: var(--dark-text-2);
   line-height: 1.7;
   letter-spacing: -0.01em;
+}
+
+.auth-brand__content { animation: authRise 760ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes authRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-brand__content { animation: none; }
 }
 
 
