@@ -8,12 +8,21 @@ import { useRouter } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
 import { uploadDeck } from '@/lib/api'
 
+// 칩 = 영감 팔레트(선택 강제 아님). 이름은 한국어 감각어만 — 비전공자가 읽고 느낌이 와야 함.
+// 클릭 시 풀 서술이 입력창에 들어가 "말로 지시" 문법을 가르친다.
 const STYLE_CHIPS = [
-  '미드나잇 네온 (어두운 배경 + 형광 강조선)',
-  '웜 페이퍼 에디토리얼 (종이빛 + 형광펜)',
-  '학교 칠판 (분필 손글씨 느낌)',
-  '지브리풍 (부드러운 수채 파스텔)',
-  '깔끔한 공공기관 (절제된 네이비·그레이)',
+  '미드나잇 네온 — 어두운 배경 + 형광 강조선',
+  '따뜻한 종이 잡지 — 종이빛 바탕 + 형광펜 강조',
+  '학교 칠판 — 분필 손글씨 느낌',
+  '지브리풍 — 부드러운 수채 파스텔',
+  '깔끔한 공공기관 — 절제된 네이비·그레이',
+]
+
+// 예시 발화 = 소프트 스키마: 축(색감/독자/강조점)을 하나씩 가르친다. 코드 파싱 없음(헌법 §1).
+const EXAMPLE_UTTERANCES = [
+  '어두운 배경에 형광 강조로, 표지는 임팩트 있게',
+  '고등학생도 이해할 수 있는 난이도로',
+  'Table 3 결과를 표지 메인으로 강조해줘',
 ]
 
 function formatSize(bytes: number): string {
@@ -56,7 +65,9 @@ function DeckNewInner() {
     <div className="min-h-screen bg-canvas-subtle flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-[560px] bg-surface rounded-2xl border border-border p-8" style={{ wordBreak: 'keep-all' }}>
         <h1 className="text-[20px] font-extrabold text-ink mb-1">논문으로 카드뉴스 만들기</h1>
-        <p className="text-[13px] text-ink-3 mb-6">PDF 한 편 → 발행 가능한 7장. 원문 수치는 코드가 대조합니다.</p>
+        <p className="text-[13px] text-ink-3 mb-6">
+          PDF 한 편 → 발행 가능한 카드뉴스. <strong className="text-forest-green font-semibold">원문 수치는 코드가 대조합니다.</strong>
+        </p>
 
         {/* PDF — 드롭존 히어로: 논문이 무대 주인공 */}
         <input
@@ -99,20 +110,32 @@ function DeckNewInner() {
           </button>
         )}
 
-        {/* 아트 디렉션 */}
-        <label className="block text-[13px] font-semibold text-ink-2 mb-1">아트 디렉션 <span className="text-ink-3 font-normal">(선택 — 비우면 AI가 논문에 맞게 자유 선택)</span></label>
-        <p className="text-[12px] text-ink-3 mb-2">원하는 미감을 자연어로. 같은 논문도 방향을 바꿔 다르게 나옵니다.</p>
-        <div className="flex flex-wrap gap-2 mb-2">
-          {STYLE_CHIPS.map((c) => (
-            <button key={c} type="button" onClick={() => setStyle(c)}
-              className={`text-[12px] px-3 py-1.5 rounded-full border transition-colors ${style === c ? 'bg-forest-green text-canvas border-forest-green' : 'border-border text-ink-2 hover:bg-canvas-subtle'}`}>
-              {c.split(' (')[0]}
+        {/* 아트디렉터에게 한마디 — 방향 위임(선택). 비우면 AI 자유 = 1급 경로 */}
+        <label className="block text-[13px] font-semibold text-ink-2 mb-1">아트디렉터에게 한마디 <span className="text-ink-3 font-normal">(선택)</span></label>
+        <p className="text-[12px] text-ink-3 mb-3">비우면 AI가 논문에 맞게 정합니다 · 내용은 논문이 정합니다 — 수치는 검증돼요</p>
+
+        <p className="text-[12px] text-ink-3 mb-1.5">💡 이렇게 말해보세요</p>
+        <div className="mb-2.5">
+          {EXAMPLE_UTTERANCES.map((u) => (
+            <button key={u} type="button" onClick={() => setStyle(u)}
+              className="block w-full text-left text-[12.5px] text-ink-2 border border-border rounded-lg px-3 py-2 mb-1.5 bg-canvas-subtle/60 hover:border-forest-green/50 hover:bg-canvas-subtle transition-colors">
+              &ldquo;{u}&rdquo;
             </button>
           ))}
         </div>
+
+        <div className="flex flex-wrap gap-2 mb-2.5">
+          {STYLE_CHIPS.map((c) => (
+            <button key={c} type="button" onClick={() => setStyle(c)}
+              className={`text-[12px] px-3 py-1.5 rounded-full border transition-colors ${style === c ? 'bg-forest-green text-canvas border-forest-green' : 'border-border text-ink-2 hover:bg-canvas-subtle'}`}>
+              {c.split(' — ')[0]}
+            </button>
+          ))}
+        </div>
+
         <textarea
           value={style} onChange={(e) => setStyle(e.target.value)}
-          placeholder="예: 미드나잇 네온, 학교 칠판, 지브리풍, 깔끔한 공공기관…"
+          placeholder="색감, 난이도, 강조점 — 뭐든 말로 지시하세요… (비워도 됩니다)"
           rows={2}
           className="block w-full text-[13px] rounded-lg border border-border p-3 mb-5 resize-none"
         />
