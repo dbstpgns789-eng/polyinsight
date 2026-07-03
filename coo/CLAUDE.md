@@ -37,10 +37,14 @@
 - LLM: Haiku ~$0.01/편, Sonnet Architect ~$0.03/편 → 편당 약 $0.05
 - 도메인·CDN: Cloudflare 무료
 
+**백업 정책 (확정 2026-07-03)**
+- 일 1회 `python -m backend.scripts.backup_db` — `VACUUM INTO` 스냅샷 (WAL 라이브 중 안전)
+- `backups/` 최근 7개 보존 — 타임스탬프 패턴(`polyinsight_YYYYMMDD_HHMMSS.db`)만 정리, 수동 네이밍 백업은 안 지움
+- 복원 = 서버 정지 후 파일 교체 (6단계 절차: `backend/scripts/backup_db.py` docstring)
+
 **미결 운영 결정**
 - 회원가입 방식: 이메일 직접 vs OAuth(Google) 미정
 - 크레딧 과금 시스템: 미구현
-- 백업 정책: 미정
 - 모니터링: 미구축
 
 ## 참조
