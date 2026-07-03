@@ -5,6 +5,7 @@
 // 아트 디렉션 = 동질화 방지의 핵심: 같은 논문도 방향을 바꿔 다르게 뽑는다.
 
 import { useCallback, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
 import { uploadDeck } from '@/lib/api'
@@ -90,24 +91,15 @@ function DeckNewInner() {
     <div className="min-h-screen bg-canvas-subtle flex justify-center px-6 pt-13 pb-19" style={{ wordBreak: 'keep-all' }}>
       <div className="w-full max-w-[560px] deck-fade-up">
 
-        {/* 아이브로 */}
-        <div className="flex items-center gap-2 mb-6">
-          <span className="w-[9px] h-[9px] rounded-full bg-forest-green" aria-hidden="true" />
-          <span className="text-[14px] font-bold text-ink-2 tracking-wide">PolyInsight</span>
+        {/* 슬림 헤더 — 작업 화면은 길잡이만, 연설 금지. 세리프 대제목·배지는 랜딩 문법이라 은퇴 */}
+        <nav className="flex items-center gap-2.5 mb-6" aria-label="페이지 내비게이션">
+          <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-ink-3 hover:text-forest-green-deep transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+            대시보드
+          </Link>
           <span className="w-[3px] h-[3px] rounded-full bg-border" aria-hidden="true" />
-          <span className="text-[13.5px] font-semibold text-ink-3 whitespace-nowrap">새 카드뉴스</span>
-        </div>
-
-        <h1 className="text-[37px] leading-[1.26] font-bold text-ink mb-3 tracking-[-0.01em]" style={{ fontFamily: 'var(--font-serif)' }}>
-          논문으로 카드뉴스 만들기
-        </h1>
-        <p className="text-[16px] leading-relaxed text-ink-2 mb-3.5">PDF 한 편 → 발행 가능한 카드뉴스.</p>
-
-        {/* 검증 배지 — 해자 */}
-        <div className="inline-flex items-center gap-2 bg-forest-green-wash border border-forest-green/25 text-forest-green-deep px-3.5 py-2 rounded-full text-[13.5px] font-bold mb-7">
-          <CheckIcon size={15} />
-          원문 수치는 코드가 대조합니다
-        </div>
+          <h1 className="text-[15px] font-bold text-ink">새 카드뉴스</h1>
+        </nav>
 
         {/* 드롭존 / 논문 카드 */}
         <input
@@ -140,7 +132,7 @@ function DeckNewInner() {
               onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
               onDragLeave={() => setDragOver(false)}
               onDrop={(e) => { e.preventDefault(); setDragOver(false); acceptFile(e.dataTransfer.files?.[0]) }}
-              className={`w-full rounded-[20px] border-2 border-dashed px-7 py-11 text-center transition-colors ${
+              className={`w-full rounded-[20px] border-2 border-dashed px-7 py-8 text-center transition-colors ${
                 dragOver ? 'border-forest-green bg-forest-green-wash' : 'border-forest-green/35 bg-forest-green-ghost hover:border-forest-green hover:bg-forest-green-wash'
               }`}
             >
@@ -185,8 +177,8 @@ function DeckNewInner() {
           <textarea
             value={style} onChange={(e) => setStyle(e.target.value)}
             placeholder="색감, 난이도, 강조점 — 뭐든 말로 지시하세요… (비워도 됩니다)"
-            rows={3}
-            className="block w-full min-h-[92px] text-[14.5px] leading-relaxed rounded-[14px] border border-border p-4 resize-y text-ink outline-none transition-shadow focus:border-forest-green focus:ring-4 focus:ring-forest-green-wash"
+            rows={2}
+            className="block w-full min-h-[72px] text-[14.5px] leading-relaxed rounded-[14px] border border-border p-4 resize-y text-ink outline-none transition-shadow focus:border-forest-green focus:ring-4 focus:ring-forest-green-wash"
             style={{ background: 'var(--surface)' }}
           />
         </div>
@@ -226,7 +218,11 @@ function DeckNewInner() {
             </>
           ) : '카드뉴스 생성'}
         </button>
-        <p className="text-center text-[12.5px] text-ink-3 mt-3">생성 후 에디터에서 자유롭게 다듬을 수 있어요 · 보통 2~3분</p>
+        {/* 신뢰 문구의 제자리 = 결심하는 순간 옆 */}
+        <p className="text-center text-[12.5px] text-ink-3 mt-3 inline-flex items-center gap-1.5 w-full justify-center">
+          <span className="text-forest-green-deep inline-flex"><CheckIcon size={12} stroke={3} /></span>
+          모든 수치는 원문과 자동 대조됩니다 · 보통 2~3분
+        </p>
 
       </div>
     </div>
