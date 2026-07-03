@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.core import ratelimit
 from backend.core.auth import get_current_user
 from backend.core.config import settings
-from backend.core.db import cleanup_expired_blobs, migrate
+from backend.core.db import cleanup_expired_blobs, migrate, recover_stale_jobs
 from backend.routers import auth, deck, export, images, jobs, projects
 
 
@@ -51,6 +51,9 @@ async def lifespan(app: FastAPI):
     _setup_file_logging()   # uvicorn 핸들러 설정 완료 후 FileHandler 추가
     _validate_prod_config()  # 프로덕션 필수 보안 설정 fail-closed 검증
     await migrate()
+    recovered = await recover_stale_jobs()
+    if recovered:
+        logging.getLogger(__name__).info("stale job %d건 ERROR로 회수 (서버 재시작 고아)", recovered)
     task = asyncio.create_task(_ttl_cleaner())
     try:
         yield

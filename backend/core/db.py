@@ -1,5 +1,6 @@
 import hashlib
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
 import aiosqlite
@@ -22,6 +23,14 @@ def _db_path() -> str:
     return url
 
 
+@asynccontextmanager
+async def _connect():
+    """모든 DB 접근의 중앙 연결 지점. busy_timeout으로 동시 쓰기 시 SQLITE_BUSY 즉사 방지."""
+    async with aiosqlite.connect(_db_path()) as conn:
+        await conn.execute("PRAGMA busy_timeout=5000;")
+        yield conn
+
+
 def _utc_now() -> datetime:
     return datetime.utcnow()
 
@@ -31,7 +40,7 @@ def _utc_now_iso() -> str:
 
 
 async def migrate() -> None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute("PRAGMA journal_mode=WAL;")
         await conn.execute("PRAGMA foreign_keys=ON;")
         await conn.executescript(
@@ -186,7 +195,7 @@ async def migrate() -> None:
 async def create_job(job_id: str, title: str | None, user_id: int | None = None) -> None:
     now = _utc_now_iso()
     warnings = json.dumps([])
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             """
             INSERT INTO jobs (
@@ -199,7 +208,7 @@ async def create_job(job_id: str, title: str | None, user_id: int | None = None)
 
 
 async def get_job(job_id: str) -> dict | None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)) as cursor:
             row = await cursor.fetchone()
@@ -236,7 +245,7 @@ async def update_job(
     fields.append("updated_at = ?")
     params.append(_utc_now_iso())
     params.append(job_id)
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = ?", params
         )
@@ -264,7 +273,7 @@ async def update_job_status(
     params.append(_utc_now_iso())
     params.append(job_id)
 
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             f"UPDATE jobs SET {', '.join(fields)} WHERE job_id = ?",
             params,
@@ -273,7 +282,7 @@ async def update_job_status(
 
 
 async def append_warning(job_id: str, warning: str) -> None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT warnings FROM jobs WHERE job_id = ?", (job_id,)
@@ -292,7 +301,7 @@ async def append_warning(job_id: str, warning: str) -> None:
 
 async def save_card_data(job_id: str, card_data_json: str) -> None:
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             """
             INSERT INTO card_data (job_id, data_json, updated_at)
@@ -307,7 +316,7 @@ async def save_card_data(job_id: str, card_data_json: str) -> None:
 
 
 async def get_card_data(job_id: str) -> str | None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         async with conn.execute(
             "SELECT data_json FROM card_data WHERE job_id = ?", (job_id,)
         ) as cursor:
@@ -326,7 +335,7 @@ async def save_authored_deck(
 ) -> None:
     """덱 저장. paper_text=None(편집 저장)이면 기존 원문을 보존(덮어쓰지 않음)."""
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             """
             INSERT INTO authored_deck (job_id, html, verify_json, card_count, paper_text, updated_at)
@@ -344,7 +353,7 @@ async def save_authored_deck(
 
 
 async def get_authored_deck(job_id: str) -> dict | None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT html, verify_json, card_count, paper_text, updated_at "
@@ -371,7 +380,7 @@ async def save_deck_asset(
 ) -> None:
     now = _utc_now_iso()
     expires_at = (_utc_now() + timedelta(hours=ttl_hours)).isoformat()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             """
             INSERT INTO deck_assets (
@@ -392,7 +401,7 @@ async def save_deck_asset(
 
 async def get_deck_asset(job_id: str, asset_id: str) -> dict | None:
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT asset_id, bytes, mime, source_type, source_url, provider, "
@@ -406,7 +415,7 @@ async def get_deck_asset(job_id: str, asset_id: str) -> dict | None:
 
 async def list_deck_assets(job_id: str) -> list[dict]:
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT asset_id, mime, source_type FROM deck_assets "
@@ -416,9 +425,24 @@ async def list_deck_assets(job_id: str) -> list[dict]:
             return [dict(r) for r in await cursor.fetchall()]
 
 
+async def recover_stale_jobs() -> int:
+    """서버 시작 시 고아 잡 회수. startup 시점엔 이 프로세스가 만든 잡이 아직 없으므로
+    PENDING/RUNNING = 전부 이전 프로세스의 고아 — 시간 조건 불필요.
+    (단일 프로세스 운영 전제 — 다중 프로세스면 살아있는 잡을 오판할 수 있음)"""
+    warnings = json.dumps(["서버 재시작으로 작업이 중단되었습니다. 다시 업로드해 주세요."])
+    async with _connect() as conn:
+        cursor = await conn.execute(
+            "UPDATE jobs SET status = 'ERROR', warnings = ?, updated_at = ? "
+            "WHERE status IN ('PENDING', 'RUNNING')",
+            (warnings, _utc_now_iso()),
+        )
+        await conn.commit()
+        return cursor.rowcount or 0
+
+
 async def update_job_title(job_id: str, title: str) -> bool:
     """job 표시명(title) 갱신. 존재하면 True."""
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         cursor = await conn.execute(
             "UPDATE jobs SET title = ?, updated_at = ? WHERE job_id = ?",
             (title, _utc_now().isoformat(), job_id),
@@ -429,7 +453,7 @@ async def update_job_title(job_id: str, title: str) -> bool:
 
 async def delete_job(job_id: str) -> bool:
     """job과 연관 데이터(card_data·card_images·exports·authored_deck) 일괄 삭제. job 존재 시 True."""
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute("DELETE FROM card_images WHERE job_id = ?", (job_id,))
         await conn.execute("DELETE FROM deck_assets WHERE job_id = ?", (job_id,))
         await conn.execute("DELETE FROM card_data WHERE job_id = ?", (job_id,))
@@ -447,7 +471,7 @@ async def save_card_image(
     ttl_hours: int = 24,
 ) -> None:
     expires_at = (_utc_now() + timedelta(hours=ttl_hours)).isoformat()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             "DELETE FROM card_images WHERE job_id = ? AND card_num = ?",
             (job_id, card_num),
@@ -464,7 +488,7 @@ async def save_card_image(
 
 async def delete_card_images_above(job_id: str, max_card_num: int) -> None:
     """card_num > max_card_num 인 카드 이미지 삭제 (편집으로 카드 수가 줄었을 때 잔재 정리)."""
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             "DELETE FROM card_images WHERE job_id = ? AND card_num > ?",
             (job_id, max_card_num),
@@ -475,7 +499,7 @@ async def delete_card_images_above(job_id: str, max_card_num: int) -> None:
 async def get_card_images(job_id: str) -> dict[int, bytes]:
     now = _utc_now_iso()
     images: dict[int, bytes] = {}
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             """
@@ -501,7 +525,7 @@ async def save_export(
 ) -> None:
     now = _utc_now_iso()
     expires_at = (_utc_now() + timedelta(hours=ttl_hours)).isoformat()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             """
             INSERT INTO exports (
@@ -521,7 +545,7 @@ async def save_export(
 
 async def get_export(export_job_id: str) -> dict | None:
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             """
@@ -537,7 +561,7 @@ async def get_export(export_job_id: str) -> dict | None:
 async def cleanup_expired_blobs() -> int:
     now = _utc_now_iso()
     deleted = 0
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         cursor = await conn.execute(
             "DELETE FROM card_images WHERE expires_at <= ?",
             (now,),
@@ -567,7 +591,7 @@ async def cleanup_expired_blobs() -> int:
 async def list_jobs(limit: int = 20, offset: int = 0, user_id: int | None = None) -> list[dict]:
     where = "WHERE user_id = ?" if user_id is not None else ""
     params: list[object] = ([user_id] if user_id is not None else []) + [limit, offset]
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             f"""
@@ -593,7 +617,7 @@ async def list_jobs(limit: int = 20, offset: int = 0, user_id: int | None = None
 
 async def create_user(email: str, password_hash: str, role: str = "user") -> int:
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         cursor = await conn.execute(
             "INSERT INTO users (email, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
             (email, password_hash, role, now),
@@ -603,7 +627,7 @@ async def create_user(email: str, password_hash: str, role: str = "user") -> int
 
 
 async def get_user_by_email(email: str) -> dict | None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute("SELECT * FROM users WHERE email = ?", (email,)) as cur:
             row = await cur.fetchone()
@@ -611,7 +635,7 @@ async def get_user_by_email(email: str) -> dict | None:
 
 
 async def get_user_by_id(user_id: int) -> dict | None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)) as cur:
             row = await cur.fetchone()
@@ -621,7 +645,7 @@ async def get_user_by_id(user_id: int) -> dict | None:
 async def create_session(token: str, user_id: int, ttl_hours: int) -> None:
     now = _utc_now()
     expires_at = (now + timedelta(hours=ttl_hours)).isoformat()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             "INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
             (_hash_token(token), user_id, now.isoformat(), expires_at),
@@ -631,7 +655,7 @@ async def create_session(token: str, user_id: int, ttl_hours: int) -> None:
 
 async def get_valid_session(token: str) -> dict | None:
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT * FROM sessions WHERE token = ? AND expires_at > ?", (_hash_token(token), now)
@@ -641,20 +665,20 @@ async def get_valid_session(token: str) -> dict | None:
 
 
 async def delete_session(token: str) -> None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute("DELETE FROM sessions WHERE token = ?", (_hash_token(token),))
         await conn.commit()
 
 
 async def update_password_hash(user_id: int, password_hash: str) -> None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
         await conn.commit()
 
 
 async def create_invite(code: str) -> None:
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             "INSERT INTO invites (code, created_at, used_by, used_at) VALUES (?, ?, NULL, NULL)",
             (code, now),
@@ -663,7 +687,7 @@ async def create_invite(code: str) -> None:
 
 
 async def get_invite(code: str) -> dict | None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute("SELECT * FROM invites WHERE code = ?", (code,)) as cur:
             row = await cur.fetchone()
@@ -673,7 +697,7 @@ async def get_invite(code: str) -> dict | None:
 async def consume_invite(code: str, user_id: int) -> bool:
     """미사용 초대코드면 사용 처리하고 True. 없거나 이미 사용됐으면 False."""
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         cursor = await conn.execute(
             "UPDATE invites SET used_by = ?, used_at = ? WHERE code = ? AND used_by IS NULL",
             (user_id, now, code),
@@ -685,7 +709,7 @@ async def consume_invite(code: str, user_id: int) -> bool:
 # ── 소셜 로그인: oauth_accounts (2026-07-03) ───────────────────────────────
 
 async def get_oauth_account(provider: str, provider_user_id: str) -> dict | None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT * FROM oauth_accounts WHERE provider = ? AND provider_user_id = ?",
@@ -697,7 +721,7 @@ async def get_oauth_account(provider: str, provider_user_id: str) -> dict | None
 
 async def link_oauth_account(provider: str, provider_user_id: str, user_id: int, email: str | None) -> None:
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             "INSERT OR IGNORE INTO oauth_accounts (provider, provider_user_id, user_id, email, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -712,7 +736,7 @@ async def link_oauth_account(provider: str, provider_user_id: str, user_id: int,
 async def create_auth_token(token_hash: str, user_id: int, purpose: str, ttl_hours: int) -> None:
     now = _utc_now()
     expires_at = (now + timedelta(hours=ttl_hours)).isoformat()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             "INSERT INTO auth_tokens (token_hash, user_id, purpose, created_at, expires_at, used_at) "
             "VALUES (?, ?, ?, ?, ?, NULL)",
@@ -724,7 +748,7 @@ async def create_auth_token(token_hash: str, user_id: int, purpose: str, ttl_hou
 async def get_auth_token(token_hash: str, purpose: str) -> dict | None:
     """미사용·미만료·purpose 일치 토큰만 반환."""
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT * FROM auth_tokens WHERE token_hash = ? AND purpose = ? "
@@ -736,7 +760,7 @@ async def get_auth_token(token_hash: str, purpose: str) -> dict | None:
 
 
 async def mark_token_used(token_hash: str) -> None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             "UPDATE auth_tokens SET used_at = ? WHERE token_hash = ?",
             (_utc_now_iso(), token_hash),
@@ -745,7 +769,7 @@ async def mark_token_used(token_hash: str) -> None:
 
 
 async def set_email_verified(user_id: int) -> None:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))
         await conn.commit()
 
@@ -760,7 +784,7 @@ async def log_event(
 ) -> None:
     """행동 감사 이벤트 1건 기록. 실패해도 호출자 흐름을 막지 않도록 호출부에서 감싼다."""
     now = _utc_now_iso()
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         await conn.execute(
             "INSERT INTO events (user_id, event_type, job_id, payload, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -770,7 +794,7 @@ async def log_event(
 
 
 async def list_events(limit: int = 100, offset: int = 0) -> list[dict]:
-    async with aiosqlite.connect(_db_path()) as conn:
+    async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT * FROM events ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset)
