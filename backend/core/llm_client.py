@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextvars
 import logging
 
@@ -86,6 +87,7 @@ class LLMClient:
         stop_sequences: list[str] | None = None,
         model: str | None = None,
         stream: bool = False,
+        images: list[bytes] | None = None,
     ) -> str:
         # per-call 모델 오버라이드 (없으면 인스턴스 기본). 팀별 라우팅용.
         resolved = model or self.model
@@ -96,12 +98,26 @@ class LLMClient:
         logger.info("LLM call | model=%s | prompt_len=%d | max_tokens=%d",
                     resolved, len(user_prompt), capped_tokens)
 
+        # 비전 입력(폴리시 비평자용): 이미지가 있으면 [image블록…, text블록] 리스트로,
+        # 없으면 기존처럼 문자열 content (하위호환).
+        if images:
+            content: list | str = [
+                {"type": "image", "source": {
+                    "type": "base64", "media_type": "image/png",
+                    "data": base64.b64encode(png).decode(),
+                }}
+                for png in images
+            ]
+            content.append({"type": "text", "text": user_prompt})
+        else:
+            content = user_prompt
+
         kwargs: dict = dict(
             model=resolved,
             max_tokens=capped_tokens,
             temperature=temperature,
             system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+            messages=[{"role": "user", "content": content}],
         )
         if stop_sequences:
             kwargs["stop_sequences"] = stop_sequences
