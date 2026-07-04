@@ -51,7 +51,6 @@ async def author_deck(
         return mock_deck_html(card_count)
 
     system = P.AUTHORING_SYSTEM.format(
-        design_tokens=P.design_tokens(),
         persona=persona or P.DEFAULT_PERSONA,
     )
     user = P.AUTHORING_USER.format(
