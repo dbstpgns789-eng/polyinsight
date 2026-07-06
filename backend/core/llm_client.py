@@ -11,6 +11,12 @@ from .config import settings
 
 logger = logging.getLogger(__name__)
 
+# sampling 파라미터(temperature/top_p/top_k)를 거부하는 모델 — 전송 시 400.
+_NO_SAMPLING_PREFIXES = (
+    "claude-fable-5", "claude-mythos-5",
+    "claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-5",
+)
+
 
 # ── per-job LLM 사용량 집계 (행동/비용 로깅용) ──────────────────────────────
 # 오케스트레이터가 job 시작 시 start_usage_capture()로 버킷을 설정하고,
@@ -115,10 +121,13 @@ class LLMClient:
         kwargs: dict = dict(
             model=resolved,
             max_tokens=capped_tokens,
-            temperature=temperature,
             system=system_prompt,
             messages=[{"role": "user", "content": content}],
         )
+        # Fable 5·Opus 4.7+·Sonnet 5는 sampling 파라미터를 거부한다(temperature 전송 시 400).
+        # 지원 모델(Sonnet 4.6·Opus 4.6·Haiku 등)에만 temperature를 붙인다.
+        if not resolved.startswith(_NO_SAMPLING_PREFIXES):
+            kwargs["temperature"] = temperature
         if stop_sequences:
             kwargs["stop_sequences"] = stop_sequences
 
@@ -139,7 +148,8 @@ class LLMClient:
         except anthropic.APIError as exc:
             raise LLMAPIError(str(exc), status_code=getattr(exc, "status_code", None)) from exc
 
-        text = message.content[0].text if message.content else ""
+        # Fable 5 등 thinking-on 모델은 thinking 블록이 앞에 올 수 있어 content[0]이 text가 아닐 수 있다.
+        text = next((b.text for b in message.content if getattr(b, "type", None) == "text"), "")
         logger.info("LLM call done | input_tokens=%d | output_tokens=%d | stop_reason=%s",
                     message.usage.input_tokens, message.usage.output_tokens, message.stop_reason)
         # 잘림 여부와 무관하게 실제 발생한 토큰을 집계 (비용 가시화).
