@@ -138,7 +138,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
   }, [])
 
   return (
-    <div ref={wrapRef} className="w-full" style={{ height: contentH * scale }}>
+    <div ref={wrapRef} className="w-full" style={{ height: contentH * scale, overflow: 'hidden' }}>
       <iframe
         ref={frameRef}
         title="deck-editor"
