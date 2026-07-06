@@ -8,10 +8,11 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "./polyinsight.db"
     LLM_MODEL: str = "claude-haiku-4-5-20251001"
     LLM_MODEL_ARCHITECT: str = "claude-sonnet-4-6"  # 설계팀(레이아웃 판단) 전용 — 토큰 작아 비용 낮음
-    # 헌법 v3.0 단일 저작(Deck Authoring) — 제일 강력한 디자인 저작 모델(Fable 5, 벤치마크 레퍼런스 산출 모델).
-    # ⚠️ Fable 5: sampling 파라미터 거부(llm_client가 temperature 자동 생략), thinking 항상 on, $10/$50 per MTok.
-    # 되돌리려면 이 값을 "claude-sonnet-4-6"(반값) 등으로 교체. .env override 가능.
-    LLM_MODEL_AUTHOR: str = "claude-fable-5"
+    # 헌법 v3.0 단일 저작(Deck Authoring) — 강력한 모델의 현실적 상한 = Opus 4.8.
+    # (Fable 5는 thinking always-on으로 토큰 과다 → 비용/속도 부담. Opus 4.8=반값 $5/$25,
+    #  thinking 파라미터 생략 시 off라 토큰 효율↑. llm_client가 sampling 파라미터 자동 생략.)
+    # 더 저렴하게: "claude-sonnet-4-6"($3/$15). 더 강하게: "claude-fable-5". .env override 가능.
+    LLM_MODEL_AUTHOR: str = "claude-opus-4-8"
     AUTHOR_TIMEOUT_S: int = 600          # 대용량 HTML 1회 저작 — 기본 120s로 부족
     AUTHOR_MAX_TOKENS: int = 32000       # 정교한 아트디렉션 덱도 안 잘리게(streaming으로 호출 → 10분 제한 무관)
     AUTHOR_MAX_CARDS: int = 7            # 카드 max 장수(티어로 확장 예정)
