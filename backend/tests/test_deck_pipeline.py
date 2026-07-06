@@ -67,7 +67,7 @@ def test_prompts_format_without_keyerror():
     P0: 검증배지·용어번역 규칙(SYSTEM)과 publisher 필드(USER) 주입 확인."""
     from backend.agents.deck import authoring_prompts as P
     sys = P.AUTHORING_SYSTEM.format(persona="p")
-    assert "검증 크롬" in sys and "반드시 번역" in sys
+    assert "왜 브릿지" in sys and "반드시 번역" in sys
     usr = P.AUTHORING_USER.format(
         few_shot_refs="", section_map_text="본문", title="t", authors="a",
         year=2024, card_count=7, art_direction="", publisher="한국생산기술연구원",
