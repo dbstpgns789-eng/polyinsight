@@ -62,6 +62,19 @@ def test_strip_code_fence():
     assert authoring._strip_code_fence("<div>y</div>") == "<div>y</div>"
 
 
+def test_prompts_format_without_keyerror():
+    """SYSTEM/USER 프롬프트가 리터럴 중괄호 없이 포맷된다(mock이 건너뛰는 배관을 실호출 전 검증).
+    P0: 검증배지·용어번역 규칙(SYSTEM)과 publisher 필드(USER) 주입 확인."""
+    from backend.agents.deck import authoring_prompts as P
+    sys = P.AUTHORING_SYSTEM.format(persona="p")
+    assert "검증 크롬" in sys and "반드시 번역" in sys
+    usr = P.AUTHORING_USER.format(
+        few_shot_refs="", section_map_text="본문", title="t", authors="a",
+        year=2024, card_count=7, art_direction="", publisher="한국생산기술연구원",
+    )
+    assert "발행 주체" in usr and "한국생산기술연구원" in usr
+
+
 async def test_render_deck_produces_pngs():
     html = mock.mock_deck_html(7)
     images, warnings = await deck_renderer.render_deck(html, scale=1)
