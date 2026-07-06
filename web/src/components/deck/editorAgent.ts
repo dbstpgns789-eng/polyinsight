@@ -584,7 +584,11 @@ const AGENT_BODY = `
     if (pageStyle) return;
     pageStyle = document.createElement('style');
     pageStyle.setAttribute('data-pi-artifact', '1');
-    pageStyle.textContent = '.pi-hidden{display:none !important;}';
+    // 편집 모드: body 캔버스(프리뷰 배경·패딩·gap)를 정규화 — 현재 카드가 iframe에 꽉 차게.
+    // pageStyle은 data-pi-artifact라 serialize에서 제거됨 → 저장/발행 HTML의 body 원본은 보존.
+    pageStyle.textContent = '.pi-hidden{display:none !important;}' +
+      'html,body{margin:0 !important;padding:0 !important;background:transparent !important;}' +
+      'body{display:block !important;}';
     (document.head || document.documentElement).appendChild(pageStyle);
   }
   function applyPaging() {
