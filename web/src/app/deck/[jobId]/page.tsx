@@ -119,7 +119,10 @@ function DeckPageInner() {
   const [proposing, setProposing] = useState(false)
   const [committing, setCommitting] = useState(false)
   const [reverting, setReverting] = useState(false)
-  const [pending, setPending] = useState<{ html: string; verify: VerifyData; afterText: string | null } | null>(null)
+  const [pending, setPending] = useState<{
+    html: string; verify: VerifyData; afterText: string | null
+    target?: { eid?: string; cardIndex?: number; quotedText?: string }; beforeText: string | null
+  } | null>(null)
   const [snapshots, setSnapshots] = useState<string[]>([])
   const [history, setHistory] = useState<HistoryState>({ canUndo: false, canRedo: false })
   const [page, setPage] = useState<PageState>({ index: 0, count: 0 })
@@ -190,14 +193,18 @@ function DeckPageInner() {
     setProposing(true)
     try {
       const html = await editorRef.current.getHtml()   // 라이브 serialize(미저장 편집+eid 포함)
-      const target = selected?.eid
+      // pending이 있으면(=[다른 안]) 제안 시점 타깃을 동결 사용. 없으면(신규 제안) 현재 선택에서.
+      const target = pending?.target ?? (selected?.eid
         ? { eid: selected.eid, cardIndex: selected.cardIndex, quotedText: selected.quotedText }
-        : undefined
+        : undefined)
+      const beforeText = pending?.beforeText ?? selected?.quotedText ?? null
       const r = await nlProposeDeck(jobId, instruction, html, target)
-      const afterText = selected?.eid ? extractEidText(r.data.html, selected.eid) : null
-      setPending({ html: r.data.html, verify: r.data.verify, afterText })
+      const afterText = target?.eid ? extractEidText(r.data.html, target.eid) : null
+      setPending({ html: r.data.html, verify: r.data.verify, afterText, target, beforeText })
+    } catch {
+      setEditWarnings(['AI 제안을 받지 못했어요. 잠시 후 다시 시도해 주세요.'])
     } finally { setProposing(false) }
-  }, [jobId, selected])
+  }, [jobId, selected, pending])
 
   const handleCommit = useCallback(async () => {
     if (!pending) return
@@ -358,7 +365,7 @@ function DeckPageInner() {
               mode={mode}
               onSelected={setSelected}
               onDeselected={() => setSelected(null)}
-              onDirty={() => setDirty(true)}
+              onDirty={() => { setDirty(true); setPending(null) }}
               onHistory={setHistory}
               onPage={setPage}
             />
@@ -403,7 +410,7 @@ function DeckPageInner() {
               proposing={proposing}
               pending={!!pending}
               committing={committing}
-              beforeText={selected?.quotedText ?? null}
+              beforeText={pending?.beforeText ?? selected?.quotedText ?? null}
               afterText={pending?.afterText ?? null}
               onPropose={handlePropose}
               onCommit={handleCommit}

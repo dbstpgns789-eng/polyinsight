@@ -30,5 +30,5 @@ export function extractEidText(html: string, eid: string): string | null {
       depth++
     }
   }
-  return html.slice(bodyStart, end).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  return html.slice(bodyStart, end).replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
 }
