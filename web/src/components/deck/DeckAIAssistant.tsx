@@ -81,7 +81,7 @@ export default function DeckAIAssistant({
           <div className="flex gap-2 mt-1">
             <button
               onClick={onCommit}
-              disabled={committing}
+              disabled={busy}
               className="flex-1 h-8 rounded-lg bg-forest-green text-canvas text-[12px] font-semibold disabled:opacity-40"
             >
               {committing ? '적용 중…' : '✓ 적용'}
@@ -96,7 +96,8 @@ export default function DeckAIAssistant({
             </button>
             <button
               onClick={onDiscard}
-              disabled={committing}
+              disabled={busy}
+              aria-label="제안 취소"
               className="h-8 px-3 rounded-lg border border-border text-ink-3 text-[12px] disabled:opacity-40"
             >✕</button>
           </div>
