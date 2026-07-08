@@ -381,6 +381,38 @@ source_type: string  (선택, 기본 upload-owned) — upload-owned | upload-dat
 
 > **금지**: `data-pi-artifact`/`data-pi-*` 부착 — editorAgent serialize()가 제거해 소실된다. 메타는 반드시 `data-asset-id`/`data-source-type` 등으로.
 
+#### `POST /api/deck/:jobId/nlpatch/propose` — AI 편집 제안 (미커밋)
+
+자연어/원클릭 지시로 덱 HTML을 **최소 변경 수정한 결과를 미리보기용으로 반환**한다. **저장하지 않고 PNG도 렌더하지 않는다**(유료 LLM 1콜). 사용자가 확인 후 `PATCH /api/deck/:jobId`(commit)로만 반영된다.
+
+**Request** — `application/json`
+```json
+{
+  "instruction": "한 줄로 짧게",
+  "html": "<!DOCTYPE html>…",
+  "target": { "eid": "eab12cd3", "cardIndex": 2, "quotedText": "현재 요소 텍스트" }
+}
+```
+- `html`: **캔버스 라이브 `serialize()` 결과**(DB의 `deck.html`이 아님). 선택 시 스탬프된 `data-eid`가 이 html에 존재해야 하고, 미저장 직접편집도 여기에 보존된다.
+- `target`(선택): 편집 대상 요소 앵커. `eid`는 iframe이 선택 시 부여한 불투명 난수. 있으면 프롬프트가 "이 요소만" 수정하도록 앵커하고, LLM은 `data-eid`를 원형 보존한다.
+
+**Response** `200 OK`
+```json
+{ "html": "<!DOCTYPE html>…(수정본)", "verify": { "verified": 12, "unverified": 1, "claims": [ … ] } }
+```
+- `verify`: 수정본을 원문(`paper_text`)과 대조한 결과. 원문 없으면 `{verified:0, unverified:0, claims:[], skipped:true}`.
+- **DB·PNG 불변**(저장/렌더는 commit 전용).
+
+**에러**: 잡/덱 없음 404(ERR-JOB-001) · 수정 결과가 카드 구조 이탈(`data-screen-label` 소실) 422(ERR-EDIT-001, 원본 보존).
+
+#### `PATCH /api/deck/:jobId` (commit — 기재 보강)
+
+직접조작 저장과 **AI 제안 적용(commit)** 공용. 요청 `{ "html": "…" }` 저장 → 재검증 + PNG 재렌더. AI 되돌리기는 클라이언트가 commit 직전 html을 스냅샷해 두었다가 이 엔드포인트로 재저장한다(서버는 무상태).
+
+#### `<element data-eid>` — 편집 앵커 규약
+
+iframe editorAgent가 요소 선택 시 부여하는 **불투명 난수 id**(예: `data-eid="eab12cd3"`). 위치·서수 기반이 아니라 요소에 고정된다(MOVE/DELETE/INSERT로 서수가 밀려도 충돌 없음). `data-pi-*`가 아니므로 `serialize()`에서 생존하며 propose·commit·DB까지 보존된다. LLM 편집 시 원형 유지가 강제된다(EDIT_SYSTEM 규칙).
+
 ---
 
 ## 2. 핵심 데이터 모델
