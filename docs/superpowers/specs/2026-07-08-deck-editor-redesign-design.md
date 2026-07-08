@@ -63,15 +63,15 @@
 이를 위해 **propose/commit 2단 + 요소 target**을 신설한다(rev1의 "nlPatchDeck 확장" 구체화):
 
 - **요소 타겟팅**
-  - editorAgent가 선택 시 요소에 **안정 id를 스탬프**(`data-eid`, `data-pi-*`가 아니어야 `serialize` 생존 — 현 `serialize`는 `data-pi-*` 제거). id는 카드 index + 카드 내 서수 기반 결정적 생성.
+  - editorAgent가 선택 시 요소에 **안정 id를 스탬프**(`data-eid` — `data-pi-*`가 아니어야 `serialize` 생존, 현 `serialize`는 `data-pi-*`만 제거). **id는 불투명 난수를 1회 생성해 요소에 고정**(위치·서수 기반 아님 — MOVE/DELETE/INSERT로 서수가 밀려 충돌하므로).
   - `SELECTED` 페이로드에 `{ eid, cardIndex, tag, quotedText(전체, 절단 상향) }` 추가.
   - 프론트가 propose 요청에 `target: { eid, cardIndex, quotedText }`를 실어 프롬프트에 "이 요소만" 앵커.
 - **propose (미커밋, 유료 1콜)** — 신규 `POST /deck/{id}/nlpatch/propose` (또는 `nlpatch`에 `persist=false`)
-  - 입력: `{ instruction, target }`. 출력: `{ html, verify, change: { eid, before, after } }`. **DB 저장·PNG 렌더 안 함.**
+  - 입력: `{ instruction, target, html }` — **html은 캔버스 라이브 `serialize()` 결과**(DB `deck["html"]`가 아님). 이래야 선택 시 스탬프한 `data-eid`가 대상 html에 존재하고 **미저장 직접편집도 보존**된다(현 nlpatch는 DB html을 써서 둘 다 누락). 출력: `{ html, verify }`. **DB 저장·PNG 렌더 안 함.**
   - 원클릭 제안(한 줄로·크게·쉽게·색)도 각각 1콜(비용 고지). **[↻ 다른 안] = propose 재호출(추가 1콜)**.
 - **commit (적용)** — 기존 `PATCH /deck/{id}`(`patchDeck`) 재사용: propose된 html을 저장 → 재검증 + PNG 렌더. **[✓ 적용] 시에만.**
 - **취소 [✕]** — 서버 무변(propose 미저장). 프론트 pending proposal 폐기.
-- **before/after**: propose 응답의 `change.before/after`(백엔드가 target 요소 텍스트 대조 반환) — 프론트 diff 계산 불필요.
+- **before/after**: 백엔드에 HTML 파서가 없으므로(fidelity=regex only) **프론트에서 target 요소의 이전/이후 텍스트를 DOM 비교**해 표시. EDIT_SYSTEM에 **`data-eid` 원형 보존 규칙**을 추가해 전체 재작성 LLM이 편집 요소의 eid를 떨구지 않게 한다(after 매칭 보장).
 - **되돌리기(§ AI 편집 이력)**: 전역 undo(iframe 커맨드)와 **별개**. AI commit은 iframe 재마운트로 커맨드 스택을 지우므로, **부모(React)가 commit 직전 html을 스냅샷 스택에 push** → "되돌리기" = 스냅샷을 `patchDeck`으로 재저장(재검증+PNG 재렌더, "되돌리는 중…" 표기). 상단바 undo/redo는 직접조작(iframe)용, AI 되돌리기는 스냅샷용 — UI에서 분리 표기.
 - **1차 제안 세트**(요소 종류별, 구현 근거):
   - 텍스트(제목/본문): `한 줄로 짧게`(줄 수 힌트는 SELECTED rect/줄바꿈으로 근사), `더 크게`, `더 쉬운 말로`, `색 바꾸기`.
@@ -147,10 +147,12 @@
 
 ## 9. 미결정 (구현 전 확정 vs 구현 중 OK)
 
-**구현 전 확정 (계획 착수 전):**
-- propose 엔드포인트 형태: 신규 route vs `persist` 파라미터 (→ docs/07).
-- `data-eid` 생성 규칙(카드index+서수 결정성) + serialize 생존 검증.
-- 자동저장 render 분리 방식(지연 vs `render=false` 옵션).
+**구현 전 확정 (② AI 계약 서브스펙 착수 전 — 재리뷰 major 반영):**
+- **propose 입력 = 라이브 `serialize()` html**(DB html 아님) — eid 도달 + 미저장편집 보존.
+- **eid = 불투명 난수 1회 스탬프**(위치·서수 폐기, MOVE/DELETE/INSERT 충돌 방지).
+- **before/after = 프론트 DOM 텍스트 비교**(백엔드 파서 없음) + EDIT_SYSTEM `data-eid` 보존 규칙.
+- propose 엔드포인트 형태(신규 route vs `persist=false`) → `docs/contracts/07` 갱신 선행.
+- 자동저장 render 분리 시 **뷰 카드 stale 처리**(html만 저장 시 PNG는 뷰 진입/명시 트리거로 갱신).
 
 **구현 중 OK:**
 - 제안 세트 요소별 미세 조정(1차 세트는 §4.2에 명시).
