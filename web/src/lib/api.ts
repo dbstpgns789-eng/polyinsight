@@ -64,6 +64,13 @@ export const patchDeck = (jobId: string, html: string) =>
 export const nlPatchDeck = (jobId: string, instruction: string) =>
   api.post(`/deck/${jobId}/nlpatch`, { instruction }, { timeout: 180_000 })
 
+export interface NLTarget { eid?: string; cardIndex?: number; quotedText?: string }
+
+// AI 편집 제안 (미커밋, 유료 LLM 1콜). html=캔버스 라이브 serialize 결과. 응답 {html, verify}.
+export const nlProposeDeck = (
+  jobId: string, instruction: string, html: string, target?: NLTarget,
+) => api.post(`/deck/${jobId}/nlpatch/propose`, { instruction, html, target }, { timeout: 180_000 })
+
 export const exportDeck = (jobId: string) =>
   api.post(`/deck/${jobId}/export`, {}, { timeout: 120_000 })
 

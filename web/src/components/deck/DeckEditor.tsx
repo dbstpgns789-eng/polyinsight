@@ -17,6 +17,9 @@ export interface SelectedInfo {
   absolute: boolean
   styles: { color: string; fontSize: string; textAlign: string; fontWeight: string; background: string }
   text: string
+  eid?: string                // 선택 요소 앵커(단일 선택 시). 다중=''
+  cardIndex?: number          // 선택 요소가 속한 카드 index(단일). 다중=-1
+  quotedText?: string         // 요소 전체 텍스트(AI 앵커용, ≤2000자)
   count?: number              // 선택 요소 수(다중선택). 미존재/1=단일
   rect?: ElementRect | null   // 자연 카드좌표(단일=요소, 다중=집합 바운딩박스)
   mixed?: boolean             // 다중선택에서 W/H 혼합 여부
