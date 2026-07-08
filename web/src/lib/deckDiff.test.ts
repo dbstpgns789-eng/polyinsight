@@ -8,8 +8,8 @@ describe('extractEidText', () => {
   })
 
   it('중첩된 동일 태그를 depth로 올바르게 닫음', () => {
-    const html = '<section data-eid="ex"><div>안<div>쪽</div></div></section>'
-    expect(extractEidText(html, 'ex')).toBe('안 쪽')
+    const html = '<div data-eid="ex">겉 <div>안</div> 끝</div>'
+    expect(extractEidText(html, 'ex')).toBe('겉 안 끝')
   })
 
   it('없는 eid는 null', () => {
