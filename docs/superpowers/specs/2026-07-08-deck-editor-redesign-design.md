@@ -1,194 +1,182 @@
-# /deck/[jobId] 뷰·편집 리디자인 — 설계 (Design Spec)
+# /deck/[jobId] 뷰·편집 리디자인 — 설계 (Design Spec, rev2)
 
-- 날짜: 2026-07-08
-- 대상: `web/src/app/deck/[jobId]/` 뷰·편집 화면 (앱 크롬)
-- 상태: 브레인스토밍 확정 → 구현 계획(writing-plans) 대기
+- 날짜: 2026-07-08 (rev2 — 5-렌즈 리뷰 blocker 14/major 23 반영 전면 개정)
+- 대상: `web/src/app/deck/[jobId]/` 뷰·편집 (앱 크롬) + 이를 지탱하는 **백엔드 계약·editorAgent 확장**
+- 상태: 재리뷰 대기
+
+> **rev2 개정 요지**: rev1은 UX만 설계하고 이를 지탱할 계약(AI 편집 propose/commit·요소 타겟팅·editorAgent 확장·되돌리기)을 "확장" 한 단어로 감췄다. 리뷰가 이를 blocker로 잡음. rev2는 그 계약을 **스코프 안으로 끌어와 명세**하고, 진짜 불변 자산을 바로잡고, 실현 불가한 약속(도형/펜 도구·팩트 출처 카피)을 축소·강등하며, **4개 서브프로젝트로 분해**한다.
 
 ---
 
 ## 1. 목표
 
-`/deck/:jobId`(v3 정본)의 **뷰·편집 화면을 "전문 마케팅 에디터 도구" 인상으로 전면 재설계**하되,
-**타깃 유저가 연구원**(디자이너 툴 비숙련)이라는 점을 중심에 둔다. 따라서:
-
-- **AI 편집을 1급(주된) 편집 수단**으로 — 요소를 고르면 원클릭 제안 + 자연어. 디자이너 수치 편집은 몰라도 완결.
-- **전문 인스펙터는 보조**(원하는 사람만) — 세밀 조정용 탭 뒤로.
-- 클로드디자인 `PolyInsight.dc.html`의 `isEditor` 레이아웃·UX·모션을 채택하되 **팔레트만 forest-green으로 재매핑**.
-
-레퍼런스: `design_reference/claude-design/PolyInsight.dc.html`(isEditor), 사용자 제공 Image #6(도구 툴바)·#7(속성 인스펙터).
+연구원(디자이너 툴 비숙련)을 위해 **AI로 편하게 고치는 것을 주(主)** 편집 수단으로. 전문 인스펙터는 보조. dc.html `isEditor` 레이아웃·모션 채택, **팔레트는 forest-green 유지**.
 
 ## 2. 스코프
 
 **포함**
-- 편집 화면 전면 재설계 (상단바 + 좌 도구 + 중앙 캔버스 + 우 패널)
-- AI 도우미 (요소 선택 → 제안 → before/after → 적용)
-- 직접 편집 인스펙터 (보조 탭)
-- 뷰(완성 덱 보기) 화면 (큰 카드 1장 + 썸네일 스트립 + 바로 편집)
-- 팩트 체크 UX (적응형 배지 + 상세)
+- 편집 화면 재설계 (상단바·좌 도구·중앙 캔버스·우 탭)
+- **AI 도우미 + 이를 위한 백엔드/iframe 계약** (propose/commit·요소 target·되돌리기 — §4.2)
+- 직접 편집 인스펙터 (보조 — 1차는 현 SELECTED 필드 범위)
+- 뷰 화면 (큰 카드 + 썸네일 + 바로 편집)
+- 팩트 체크 UX (적응형 배지)
+- Export modal (v3 덱용, 소프트 경고)
+- **필요한 계약 변경**: `nlpatch` propose/commit·target 필드(`docs/contracts/07_api_data_model.md` 갱신 선행), editorAgent SELECTED 페이로드 + 안정 요소 id, `patchDeck` render 분리 옵션.
 
-**제외 (YAGNI / 별도 프로젝트)**
-- 멀티포맷 리퍼포징·발행 예약·애널리틱스 등 확장 화면
-- 팔레트 재브랜딩(바이올렛) — forest-green 유지
-- **카드 자체 시각(`CardRenderer`)** — render/editor 공유 소스라 손대지 않음. 앱 크롬만 대상.
-- `/editor/:jobId`(legacy 3패널) — 유지, 무관
-- `/render/[jobId]/[cardNum]`(백엔드 스크린샷 라우트) — 무관
+**제외 (defer / 별도 스펙)**
+- **도형·원·선·화살표·펜·차트·신규 텍스트박스 삽입 도구** — editorAgent에 삽입 명령이 없음(현재 `INSERT_IMAGE`만). 별도 스펙(Phase 3f급). 1차 좌측 도구 = **선택 · 이미지 · (기존 텍스트 편집)**만.
+- 인스펙터 확장 필드(자간·줄간격·모서리·투명도·그림자·회전) **읽기** — styleSnapshot 확장 필요, 1차 제외(§4.3).
+- 멀티포맷·발행예약·애널리틱스, 팔레트 재브랜딩(바이올렛), legacy `/editor`·`/render`.
 
 ## 3. 하드 제약 (변경 불가)
 
-1. **forest-green 단색 원칙** — accent = `var(--accent)` (oklch 52% 0.15 163). @theme에 hex/rgb 직접 작성 금지, 전부 토큰 경유. (cdo/DESIGN_SYSTEM.md, web/CLAUDE.md §6)
-2. **토큰 네임스페이스 분리** — 앱 크롬 `--*` ↔ 카드 `--set-*` 혼용 금지.
-3. **`CardRenderer` 불변** — 캔버스(iframe)·render 라우트가 공유. 카드 렌더 로직/시각 변경 금지.
-4. **Export = modal(React Portal), 소프트 경고** — 별도 페이지 금지, 하드블록 금지(최종 판단은 사용자).
-5. **`@layer base` 리셋** — 전역 `*` 리셋은 반드시 base 레이어 안(무계층이면 Tailwind 여백 유틸을 죽임 — 기존 사고).
-6. **이식 전 토큰 매핑 테이블 필수**(§7), 완료 기준 = 시각 검증(빌드 성공 아님).
+1. **forest-green 단색** — accent = `var(--accent)`(oklch 52% 0.15 163). @theme에 hex/rgb 금지, 토큰 경유. 화려한 그라디언트 배경·파스텔·포인트컬러 2개+ 금지(cdo/DESIGN_SYSTEM.md).
+2. **다크 배경은 auth/CTA 한정** — 편집기 사이드바/툴바/상단바는 **라이트**. 다크 사이드바(dc.html 이식) 금지.
+3. **토큰 네임스페이스** — 앱 크롬 `--*` ↔ 카드 `--set-*` 혼용 금지.
+4. **진짜 불변 공유 자산**(rev1의 "CardRenderer 불변"은 오지목 — v3 캔버스는 CardRenderer를 안 쓰고 저작 HTML을 srcDoc 직접 마운트):
+   - **저작 HTML 구조**(`data-screen-label` 카드 경계) 불변 — 편집 캔버스와 발행 PNG(`deck_renderer.py` `page.set_content` 직접 렌더)가 같은 HTML 소비.
+   - **editorAgent 직렬화 계약**(`serialize()`: 편집 아티팩트 제거 후 클린 HTML) 불변 — 저장/렌더가 이에 의존.
+   - editorAgent **명령·SELECTED 페이로드는 확장 허용**(§4.2·§4.3이 요구). 단 직렬화 산출물은 원본 저작 HTML과 호환 유지.
+5. **Export = modal(React Portal), 소프트 경고**(하드블록 금지).
+6. **`@layer base` 리셋**, **이식 전 토큰 매핑 테이블 필수**, 완료 기준 = 시각 검증.
 
 ## 4. 화면 설계
 
-### 4.1 편집 화면 레이아웃
+### 4.1 편집 레이아웃
 
 ```
-┌───────────────────── 상단바 ─────────────────────┐
-│ P PolyInsight  파일명.deck  ↶ ↷   ● 저장됨  [내보내기] │
-├──────┬────────────────────────┬──────────────────┤
-│ 도구 │      캔버스(iframe)      │   우측 패널 (탭)   │
-│ ▸선택 │   ‹ 카드 1/7 ›          │  [AI 도우미]      │
-│ T텍스트│   ┌──────────┐         │  [직접 편집]      │
-│ ▢도형 │   │ 카드+선택핸들│        │  [팩트 체크]      │
-│ ◯원   │   └──────────┘         │                  │
-│ ↗선   │                        │                  │
-│ ✎펜   │                        │                  │
-│ ──    │                        │                  │
-│ 🖼이미지│                        │                  │
-│ ▦차트 │                        │                  │
-└──────┴────────────────────────┴──────────────────┘
+상단바: P PolyInsight  파일명.deck  ↶ ↷   ● 저장됨  [내보내기]
+├ 좌 도구(세로): 선택 · 이미지 · (텍스트 편집)   ← 1차. 도형/펜/차트는 defer
+├ 중앙 캔버스: DeckEditor(iframe) — 카드 네비 ‹n/7› + 선택 핸들
+└ 우 패널(탭): [AI 도우미] · [직접 편집] · [팩트 체크]
 ```
 
-- **상단바**: 로고 락업 + 파일명(mono) + undo/redo + 저장 상태(자동저장 5초 idle: 저장 중/저장됨) + 내보내기(→ Export modal). NL을 상단 pill로 두지 않음(우측 AI 도우미로 통합).
-- **좌측 도구 툴바(세로, ≈44px)**: 아이콘 도구 — 선택 / 텍스트 / 도형 / 원 / 선·화살표 / 펜, 구분선, 이미지 / 차트 / 스톡. (Image #6 아이콘 행을 세로 aside로.) 미디어 업로드는 이미지 도구로 진입(드롭존).
-- **중앙 캔버스**: 기존 `DeckEditor`(iframe WYSIWYG) 유지. 카드 네비(‹ n/7 ›) + 선택 요소 emerald 핸들. **iframe 내부(editorAgent/CardRenderer) 변경 없음** — 이미 별도 이슈로 정규화 완료.
-- **우측 패널(탭 전환)**: 기본 = **AI 도우미**. 다른 탭 = 직접 편집 / 팩트 체크. 요소 선택 시 AI 도우미가 그 요소 맥락으로 갱신(탭 자동 전환은 하지 않음 — 사용자가 탭 유지).
+- **상단바**: 로고 락업 · 파일명(mono) · undo/redo · 저장 상태 · 내보내기(→ Export modal §4.6).
+- **좌측 도구(1차 축소)**: 선택 / 이미지(드롭존, 현 DeckMediaPanel 흡수) / 기존 텍스트 편집(캔버스 contenteditable). **도형·원·선·펜·차트·신규 텍스트박스는 defer** — editorAgent 삽입 명령이 `INSERT_IMAGE`뿐이라 1차 스코프에서 제외(§2). "AI 중심·연구원" 논지와도 정합(드로잉 도구 불필요).
+- **중앙 캔버스**: `DeckEditor`(iframe) 유지. iframe **내부 CardRenderer 없음**(저작 HTML srcDoc). editorAgent는 §4.2·§4.3 위해 **명령·SELECTED 확장**(제약 4 허용 범위).
+- **우 패널 탭**: 기본 = AI 도우미. 요소 선택 시 AI 도우미 맥락 갱신(탭 자동전환 안 함).
 
-### 4.2 AI 도우미 (우측 기본 탭)
+### 4.2 AI 도우미 (핵심 — 계약 명세)
 
-**흐름**: 요소 선택 → 제안 대기 → (원클릭 or 자연어) → AI 제안 → before/after 확인 → 적용.
+**흐름**: 요소 선택 → 제안 대기 → (원클릭 or 자연어) → **AI 제안(미커밋)** → before/after → [✓ 적용] / [↻ 다른 안] / [✕].
 
-- **헤더**: ✦ 스파클 아이콘 + "AI 도우미".
-- **맥락 카드**: 고른 요소 미니 프리뷰 + 종류("제목") + 실제 문구 인용.
-- **제안 카드(원클릭)**: 아이콘 + 라벨 + 한 줄 설명. 기본 세트 = `한 줄로 짧게` / `더 크게·눈에 띄게` / `더 쉬운 말로 풀기` / `색 바꾸기`. (요소 종류·상태에 따라 가변 — 예: 제목이 4줄이면 "지금 4줄" 힌트.)
-- **자유 입력**: 큰 라운드 입력창 + placeholder 예시 + 인라인 ✦ 보내기 버튼. 힌트 "전문 용어 몰라도 됩니다".
-- **AI 제안 후**: 말풍선 설명 + **before(취소선) → after(강조)** 대조 + `[✓ 적용] [↻ 다른 안] [✕]`.
-- **최근 편집**: 최근 N개 + 항목별 되돌리기. (전역 undo/redo와 별개 표시, 실제 되돌리기는 히스토리 커맨드로.)
+이를 위해 **propose/commit 2단 + 요소 target**을 신설한다(rev1의 "nlPatchDeck 확장" 구체화):
 
-**호출 규약**: 명시적 전송만(타이핑 중 자동 LLM 호출 금지 — 유료 1콜). 원클릭 제안도 1콜. 결과(수정 HTML + verify)를 받아 에디터 재마운트 + 팩트 체크 갱신. (기존 `nlPatchDeck` 확장.)
+- **요소 타겟팅**
+  - editorAgent가 선택 시 요소에 **안정 id를 스탬프**(`data-eid`, `data-pi-*`가 아니어야 `serialize` 생존 — 현 `serialize`는 `data-pi-*` 제거). id는 카드 index + 카드 내 서수 기반 결정적 생성.
+  - `SELECTED` 페이로드에 `{ eid, cardIndex, tag, quotedText(전체, 절단 상향) }` 추가.
+  - 프론트가 propose 요청에 `target: { eid, cardIndex, quotedText }`를 실어 프롬프트에 "이 요소만" 앵커.
+- **propose (미커밋, 유료 1콜)** — 신규 `POST /deck/{id}/nlpatch/propose` (또는 `nlpatch`에 `persist=false`)
+  - 입력: `{ instruction, target }`. 출력: `{ html, verify, change: { eid, before, after } }`. **DB 저장·PNG 렌더 안 함.**
+  - 원클릭 제안(한 줄로·크게·쉽게·색)도 각각 1콜(비용 고지). **[↻ 다른 안] = propose 재호출(추가 1콜)**.
+- **commit (적용)** — 기존 `PATCH /deck/{id}`(`patchDeck`) 재사용: propose된 html을 저장 → 재검증 + PNG 렌더. **[✓ 적용] 시에만.**
+- **취소 [✕]** — 서버 무변(propose 미저장). 프론트 pending proposal 폐기.
+- **before/after**: propose 응답의 `change.before/after`(백엔드가 target 요소 텍스트 대조 반환) — 프론트 diff 계산 불필요.
+- **되돌리기(§ AI 편집 이력)**: 전역 undo(iframe 커맨드)와 **별개**. AI commit은 iframe 재마운트로 커맨드 스택을 지우므로, **부모(React)가 commit 직전 html을 스냅샷 스택에 push** → "되돌리기" = 스냅샷을 `patchDeck`으로 재저장(재검증+PNG 재렌더, "되돌리는 중…" 표기). 상단바 undo/redo는 직접조작(iframe)용, AI 되돌리기는 스냅샷용 — UI에서 분리 표기.
+- **1차 제안 세트**(요소 종류별, 구현 근거):
+  - 텍스트(제목/본문): `한 줄로 짧게`(줄 수 힌트는 SELECTED rect/줄바꿈으로 근사), `더 크게`, `더 쉬운 말로`, `색 바꾸기`.
+  - 이미지: `교체`, `크기 맞추기`.
+  - (도형/차트 없음 — defer.)
 
-### 4.3 직접 편집 인스펙터 (보조 탭)
+### 4.3 직접 편집 인스펙터 (보조 탭, 1차 범위)
 
-Image #7 스타일. 요소 선택 시 세밀 조정. 기본/고급/코드 서브탭(기본 = 자주 쓰는 것).
+현 `SelectedInfo.styles`(color/fontSize/textAlign/fontWeight/background)로 **읽기·쓰기 되는 필드만** 1차. Image #7식 시각(섹션 그룹·인라인 필드)은 이 범위에서.
 
-- **타이포그래피**: 글꼴 / 크기 / 색 / 굵기 / 정렬 / 자간 / 줄간격 / 대소문자
-- **외형**: 배경 / 모서리 / 투명도 / 그림자 / 변형(X·Y·회전)
-- **테두리**: 굵기 / 스타일 / 색
-- **선택 요소만 내보내기**(Export selection)
-- 조건부: `↺ 흐름으로 복귀`(자유배치 해제), 요소 삭제, `↺ AI 제안값으로 되돌리기`.
+- **1차**: 글자색 · 크기 · 정렬 · 굵기 · 배경 + 위치/크기(`SET_RECT`) + 순서·삭제·`↺ 흐름 복귀`(`REVERT_FLOW`)·다중 정렬/분배.
+- **확장(defer)**: 자간·줄간격·모서리·투명도·그림자·회전 — **읽기(현재값 표시)**가 `styleSnapshot` 확장을 요하므로 별도. 쓰기는 `APPLY_STYLE`로 가능하나 현재값 미표시는 UX 저하 → 1차 제외.
+- 기존 `DeckElementPanel` 계약(`SelectedInfo`·`applyStyle`·`setRect`·`revertFlow`·`align`·`distribute`) 재구성. 직접조작(드래그/리사이즈/핸들) 불변.
 
-기존 `DeckElementPanel`의 계약(`SelectedInfo` / `applyStyle` / `setRect` / `revertFlow` / `align` / `distribute` / 순서·삭제)을 이 인스펙터로 재구성·확장. **직접조작(캔버스 드래그/리사이즈/핸들)은 그대로.**
+### 4.4 뷰(완성 덱 보기) — "한 장씩 + 썸네일"
 
-### 4.4 뷰(완성 덱 보기) 화면 — "A. 한 장씩 + 썸네일"
+- 상단바(편집과 통일) · 팩트 배지(§4.5) · 내보내기.
+- 큰 카드 1장 + 좌우 네비 + 썸네일 스트립(전체 조망·클릭 전환·키보드 ←/→).
+- **"이 카드 편집"** → 편집 모드로 **그 카드 index로 진입**(`SET_PAGE` 핸드셰이크: 뷰의 현재 index를 편집 마운트 시 전달).
+- **엣지**: PNG 렌더 미완/실패 → 카드·썸네일에 "그리는 중…"/재시도(빈 화면 금지). 카드 0장/1장 덱 상태 정의(네비·스트립 숨김).
 
-```
-┌────────── 상단바 (편집과 통일) ──────────┐
-│ P PolyInsight 파일명  [✓수치36확인] [내보내기]│
-├─────────────────────────────────────────┤
-│         ‹   ┌───────────┐   ›            │
-│             │ 큰 카드 1장 │                │
-│             │ ✎ 이 카드 편집│               │
-│             └───────────┘                │
-│         ▪ ▫ ▫ ▪ ▫ ▪ ▫  (썸네일 스트립)     │
-└─────────────────────────────────────────┘
-```
+### 4.5 팩트 체크 (적응형, 카피 강등)
 
-- **상단바**: 편집 화면과 통일. 팩트 체크는 **배지**로(§4.5). 내보내기.
-- **큰 카드 1장**(현재 카드, 완성 PNG) + 좌우 네비 + 하단 **썸네일 스트립**(전체 조망 + 클릭 전환, 키보드 ←/→).
-- **카드에서 바로 편집**: `✎ 이 카드 편집` → 편집 모드로 **그 카드가 열린 상태**로 진입(모드 전환 이질감 제거). 카드 PNG 로드 실패/렌더 미완 시 "카드를 그리는 중…" 안내(빈 화면 방지 — 별도 view 렌더 타이밍 이슈 대응).
-- 그리드(B안)는 채택하지 않음(조망 좋지만 편집 동선 +1단).
+"충실성 검증·해자" 폐기 → **"팩트 체크"**. **verify 데이터는 `{value, context, verified}`뿐 — 섹션·페이지 없음.**
 
-### 4.5 팩트 체크 (적응형)
+- **배지(뷰·편집 공통)**: 확인 필요 0 → 초록 `✓ 수치 N 확인`; ≥1 → 주황 `⚠ N개 확인 필요`(클릭 → 상세).
+- **상세**: 부제 "원문에 없는 수치는 따로 표시해요." + 스탯(확인 N / 확인 필요 N) + 항목: `값` + 배지(`원문에서 찾음` green / `원문에 없음` amber) + **context 스니펫 인용**(있는 데이터).
+  - ⚠️ **금지**: "Results, p.7", "정확히 일치" 등 코드가 증명 못 하는 출처·정합 주장(헌법 `NEVER label verified unless code proves it`). 위치 표기가 필요하면 `fidelity.py` 매치 오프셋→섹션 추정을 **별도 백엔드 작업**으로(이 스펙 밖).
+- **상태**: 재검증 불가(`canReverify=false`·원문 없음) → "재검증 안 됨" 안내(막지 않음). N 카운트는 `verify.claims`에서 `verified` 집계(프론트).
 
-"충실성 검증 · 해자" 용어 폐기. **"팩트 체크"** + 친근 카피.
+### 4.6 Export modal
 
-- **상단 배지(뷰·편집 공통)**:
-  - 확인 필요 0 → 초록 `✓ 수치 N 확인` (안심만).
-  - 확인 필요 ≥1 → 주황 `⚠ N개 확인 필요` (눈에 띔). 클릭 → 상세.
-- **상세**(배지 클릭 시 드로어/패널, 또는 편집의 팩트 체크 탭):
-  - 부제 "원문에 없는 수치는 따로 표시해요. 최종 판단은 직접 하세요."
-  - 스탯 2: 논문 근거 확인 N / 확인 필요 N.
-  - 항목 리스트: 값 + 배지(`확인됨` green / `확인 필요` amber) + 출처("Results, p.7 · 원문과 정확히 일치" / "원문에 없음 · AI가 더한 표현인지 확인하세요").
-- 기존 `verify`(`VerifyData{verified, unverified, claims[]}`) 데이터 그대로 사용, 표현만 재설계. **막지 않고 표면화**(소프트) 원칙 유지.
+- 내보내기 → **modal**(React Portal). 기존 `ExportModal`은 legacy(`/editor`, `Card.fields[].risk_level`·uiStore 결합)라 **v3 덱용 신규/어댑테이션**.
+- **소프트 경고**: `verify.unverified ≥ 1`이면 "확인 필요한 수치가 있어요" 경고 표시, **그래도 내보내기 가능**(하드블록 없음). 데이터는 `getDeck` 응답에 이미 있음.
 
-## 5. 컴포넌트 변경
+## 5. 컴포넌트 · 계약 변경
 
-| 현재 | 변경 |
+| 대상 | 변경 |
 |---|---|
-| `deck/[jobId]/page.tsx` | 뷰/편집 레이아웃 전면 재구성(상단바·좌도구·우탭). 상태·API 배선 유지·확장. |
-| `DeckEditor.tsx` (iframe) | 유지(캔버스). 앱 크롬만 주변 재배치. |
-| `DeckElementPanel.tsx` | → **직접 편집 인스펙터**(탭)로 재구성·확장(외형/테두리 필드 추가). |
-| `DeckMediaPanel.tsx` | → 좌측 **이미지 도구**로 통합(드롭존은 도구 진입 시). |
-| `DeckNLBar.tsx` | → **AI 도우미**로 확장(맥락·제안 칩·before/after·최근). |
-| (신규) | `DeckTopBar`, `DeckToolbar`(좌), `DeckAIAssistant`, `DeckInspector`, `DeckFactBadge`+`DeckFactDetail`, 뷰 `DeckViewer`(큰카드+스트립). |
+| `deck/[jobId]/page.tsx` | 뷰/편집 레이아웃 재구성 + AI 스냅샷 스택 상태 + 뷰↔편집 index 핸드셰이크. |
+| `DeckEditor.tsx` / `editorAgent.ts` | **SELECTED에 `{eid, cardIndex, quotedText}` 추가 + 선택 시 `data-eid` 스탬프**(serialize 생존). 직렬화 산출물 원본 호환 유지. |
+| `DeckNLBar.tsx` | → `DeckAIAssistant` (맥락·제안·propose/before-after·commit·다른안·스냅샷 되돌리기). |
+| `DeckElementPanel.tsx` | → `DeckInspector`(1차 필드 범위, §4.3). |
+| `DeckMediaPanel.tsx` | → 좌측 이미지 도구. |
+| **백엔드** | `nlpatch` **propose(persist=false, `{html,verify,change}`) 신설** + `DeckNLPatch`에 `target` 필드. `docs/contracts/07_api_data_model.md` **갱신 선행**(docs-first). |
+| (신규 FE) | `DeckTopBar`, `DeckToolbar`(좌), `DeckViewer`(큰카드+스트립), `DeckFactBadge`+`DeckFactDetail`, `DeckExportModal`(v3). |
 
-각 컴포넌트는 단일 책임 + 명확한 props 경계. `page.tsx`가 비대해지지 않게 뷰/편집을 하위 컴포넌트로 분리.
+## 6. 토큰 매핑 (바이올렛 → forest-green, **실제 토큰명**)
 
-## 6. 토큰 매핑 (바이올렛 → forest-green)
-
-dc.html isEditor의 시각 언어를 shipped 토큰으로. **hex 직접 금지 — 아래는 매핑, 실제 값은 `var()`.**
-
-| dc.html (바이올렛) | shipped 토큰 (앱 크롬 `--*`) |
+| dc.html | shipped 토큰 |
 |---|---|
-| primary `#8256E6~#5B8DEF` | `var(--accent)` (emerald), 그라디언트는 `--accent`→`--accent-bright` |
-| 사이드바 보라 | `var(--surface)` / 다크는 `--dark-bg`(auth/CTA 한정 규칙 준수) |
-| 라벤더 틴트 `#F5F1FE` | `var(--accent-subtle)` / `--bg-subtle` |
-| green(검증 시맨틱) | `var(--accent)` 그대로(이미 green) |
-| amber(확인필요) | `var(--risk-medium-*)` / `status` 계열 |
-| ink/보더/그림자 | 기존 `--ink-1/2/3`, `--border`, `--shadow-*` |
+| primary/그라디언트 | `var(--accent)`→`var(--accent-bright)` |
+| 라벤더 틴트 | `var(--accent-subtle)` / `var(--bg-subtle)` |
+| 사이드바(보라·**다크**) | `var(--surface)` — **라이트만**(제약 2, `--dark-bg` 사용 금지) |
+| green(검증) | `var(--accent)` |
+| amber(확인필요) | `var(--risk-medium-*)` |
+| 텍스트/보더/그림자 | `var(--text-1)`·`var(--text-2)`·`var(--text-3)`, `var(--border)`, `var(--shadow-*)` |
 
-카드 미리보기 내부 색은 **건드리지 않음**(`--set-*` / CardRenderer).
+(별칭 `--ink-1`은 존재하지 않음 → 원본 `--text-1` 사용. `--ink-2/3`은 별칭 존재.) 카드 내부 색은 `--set-*`/저작HTML — 불변.
 
 ## 7. 카피
 
-- "충실성 검증 · 해자" → **"팩트 체크"** (+ "원문에 없는 수치는 따로 표시해요").
-- "자연어로 고치기" → **"AI 도우미"** (잠정) + 버튼 "✦ AI에게 맡기기". (최종 문구는 스펙 리뷰에서 확정 가능 — 대안: "말로 고치기".)
-- 배지: `✓ 수치 N 확인` / `⚠ N개 확인 필요`.
-- 전반: 연구원 눈높이, 명령형·친근. 기술 용어(자연어·해자·검증) 지양.
+- "충실성 검증·해자" → **"팩트 체크"** (+ "원문에 없는 수치는 따로 표시해요").
+- 항목 배지: `원문에서 찾음` / `원문에 없음`. (출처 위치·"정확히 일치" 표기 금지 — §4.5.)
+- "자연어로 고치기" → **"AI 도우미"** + "✦ AI에게 맡기기". (대안 "말로 고치기" — §9 미결정.)
 
-## 8. 데이터 흐름·연동
+## 8. 데이터 흐름 · 자동저장
 
-- 상태 폴링(`getStatus` → DONE/ERROR) → `getDeck`(html·verify·cardCount) — 유지.
-- 편집 저장(`patchDeck`) → 재검증 + PNG 재렌더 → 팩트 배지·카드 갱신 — 유지.
-- AI 도우미(`nlPatchDeck` 확장) → 수정 html·verify → 재마운트·배지 갱신.
-- 뷰↔편집: 같은 라우트 내 모드 상태. 카드에서 "이 카드 편집" → 편집 모드 + 해당 카드 인덱스로 진입.
-- 카드 이미지 URL(`getDeckCardUrl`) — 유지. 렌더 미완 시 뷰 fallback 안내.
+- 폴링(`getStatus`→DONE/ERROR)→`getDeck`. 유지.
+- **직접 편집 저장**: 자동저장(5초 idle)은 **html 저장 + 재검증만**(값싼 경로). **PNG 재렌더는 지연/명시적 트리거 or 백그라운드** — 5초마다 전 카드 Playwright 재렌더(120초)는 금지. `patchDeck`에 `render=false` 옵션(백엔드) 검토. **저장 시 선택 유지**(현 `setSelected(null)` 제거) — AI 도우미 "제안 대기"(=idle)가 자동저장에 파괴되지 않도록.
+- **AI 편집**: §4.2 propose(미저장)→commit(`patchDeck`, 렌더). 되돌리기=스냅샷 `patchDeck`.
+- 카드 이미지(`getDeckCardUrl`) 유지, 미완 fallback(§4.4).
 
-## 9. 에러·엣지
+## 9. 미결정 (구현 전 확정 vs 구현 중 OK)
 
-- PNG 렌더 미완/실패 → 뷰·썸네일에 "그리는 중…"/재시도(빈 화면 금지).
-- verify 없음/원문 없음(canReverify=false) → 팩트 배지 "재검증 불가" 안내(막지 않음).
-- AI 도우미 LLM 실패 → 인라인 에러 + 원본 유지(파괴적 변경 없음).
-- 자동저장 상태(저장 중/됨/에러) 상단바 표기.
+**구현 전 확정 (계획 착수 전):**
+- propose 엔드포인트 형태: 신규 route vs `persist` 파라미터 (→ docs/07).
+- `data-eid` 생성 규칙(카드index+서수 결정성) + serialize 생존 검증.
+- 자동저장 render 분리 방식(지연 vs `render=false` 옵션).
 
-## 10. 테스트 전략
+**구현 중 OK:**
+- 제안 세트 요소별 미세 조정(1차 세트는 §4.2에 명시).
+- 팩트 상세 진입(배지 클릭 드로어 vs 편집 탭).
+- 카피 최종("AI 도우미" vs "말로 고치기").
 
-- 컴포넌트: 탭 전환, 요소 선택→AI 도우미 맥락 갱신, 팩트 배지 초록/주황 분기, 뷰 "이 카드 편집" 진입 인덱스.
-- 회귀: 기존 `web` vitest + 편집 저장/자연어/직접조작 계약(`SelectedInfo`·align·revertFlow) 유지.
-- 시각 검증(완료 기준): 브라우저에서 forest-green 일치, 카드 미리보기 색 불변, 편집↔뷰 크롬 통일.
-- 실 브라우저 E2E: 뷰→편집→AI 제안→적용→저장→팩트 갱신 흐름.
+## 10. 테스트
 
-## 11. 미결정 / 향후
+- 실제 인프라 확인: `web` vitest(`vitest.config.mts`) 스위트 존재 여부·범위 우선 점검(rev1 가정 검증).
+- 컴포넌트: 탭 전환, 요소 선택→target 페이로드, propose→before/after→commit/취소, 팩트 배지 초록/주황·재검증불가, 뷰 "이 카드 편집" index, Export 경고(+하드블록 부재).
+- 회귀: 직접조작 계약(`SelectedInfo`·align·revertFlow), serialize 산출물 원본 호환.
+- 시각 검증(완료 기준): forest-green 일치, 카드 색 불변, 뷰↔편집 크롬 통일.
+- 백엔드: propose 미저장 보장, target 앵커 정확도.
+- 접근성·키보드·반응형·빈/1장 덱 — 최소 케이스 명시.
 
-- AI 도우미 제안 세트의 요소별 규칙(제목/본문/이미지별 제안 목록) — 구현 중 확정.
-- 팩트 상세를 배지 클릭 드로어로 vs 편집의 탭으로만 — 구현 시 UX 확인.
-- 카피 최종("AI 도우미" vs "말로 고치기") — 리뷰에서 확정.
-- 직접 편집 인스펙터 "고급/코드" 서브탭 범위 — 1차는 "기본"만, 나머지 점진.
+## 11. 분해 (서브프로젝트 · 순서)
+
+단일 계획으로 과대 → 4개로. **② 선행**(최대 리스크·나머지 의존).
+
+- **① 앱 크롬 + 뷰** (순수 프론트): 상단바·좌 도구(축소)·탭 셸·`DeckViewer`(큰카드+스트립+바로편집)·팩트 배지·Export modal. 백엔드 무변.
+- **② AI 도우미 계약** (백엔드+iframe, **최대 리스크·선행**): editorAgent `data-eid`+SELECTED 확장, `nlpatch` propose+target(docs/07), 스냅샷 되돌리기, before/after. → §4.2 전체.
+- **③ 직접 편집 인스펙터** (1차 필드): `DeckInspector`. ②의 SELECTED 확장에 일부 의존.
+- **④ 자동저장 분리 + 팩트 상세**: render 분리, 팩트 드로어.
+
+각 서브프로젝트는 별도 스펙→플랜→구현 사이클. 이 문서는 상위 설계이며, 실제 착수는 ②(또는 ①) 서브스펙부터.
 
 ---
 
-**한 줄 요약**: 연구원이 **AI로 편하게 고치는 것**을 주로, 전문 인스펙터는 보조로, 뷰는 **넘겨보다 그 카드 바로 편집**, 팩트 체크는 **적응형 배지**로 — forest-green 유지, 카드 렌더 불변.
+**한 줄 요약(rev2)**: AI 편집을 주로 하되 그 **계약(propose/commit·요소 target·스냅샷 되돌리기·editorAgent 확장)을 스코프 안에 명세**하고, 실현 불가한 도형/펜 도구·출처 카피는 축소·강등하며, 진짜 불변 자산(저작HTML·직렬화·deck_renderer)을 바로잡고, **② AI 계약을 선행하는 4개 서브프로젝트로 분해**한다.
