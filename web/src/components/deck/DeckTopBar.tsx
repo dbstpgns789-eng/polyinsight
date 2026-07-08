@@ -42,9 +42,9 @@ export default function DeckTopBar({
       {/* 편집: undo/redo + 저장상태 */}
       {editing && (
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={onUndo} disabled={!canUndo} title="실행 취소 (Ctrl+Z)"
+          <button onClick={onUndo} disabled={!canUndo} title="실행 취소 (Ctrl+Z)" aria-label="실행 취소"
             className="w-8 h-8 rounded-lg border border-border text-ink-2 disabled:opacity-30">↶</button>
-          <button onClick={onRedo} disabled={!canRedo} title="다시 실행 (Ctrl+Shift+Z)"
+          <button onClick={onRedo} disabled={!canRedo} title="다시 실행 (Ctrl+Shift+Z)" aria-label="다시 실행"
             className="w-8 h-8 rounded-lg border border-border text-ink-2 disabled:opacity-30">↷</button>
           <span className="text-[12px] text-ink-3 ml-1 min-w-[52px] text-center">{saveLabel}</span>
         </div>

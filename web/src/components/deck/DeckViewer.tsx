@@ -18,6 +18,8 @@ export default function DeckViewer({ jobId, cardCount, ver, onEditCard }: Props)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       if (e.key === 'ArrowLeft') setIdx((i) => clamp(i - 1))
       else if (e.key === 'ArrowRight') setIdx((i) => clamp(i + 1))
     }

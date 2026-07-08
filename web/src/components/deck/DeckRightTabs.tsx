@@ -32,9 +32,9 @@ export default function DeckRightTabs({ active, onTab, ai, inspector, fact }: Pr
         ))}
       </div>
       <div className="flex-1 overflow-y-auto p-5">
-        {active === 'ai' && ai}
-        {active === 'inspector' && inspector}
-        {active === 'fact' && fact}
+        <div hidden={active !== 'ai'}>{ai}</div>
+        <div hidden={active !== 'inspector'}>{inspector}</div>
+        <div hidden={active !== 'fact'}>{fact}</div>
       </div>
     </div>
   )
