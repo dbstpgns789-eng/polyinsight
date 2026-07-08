@@ -49,6 +49,9 @@
   --color-risk-high-bg:     var(--risk-high-faint);
   --color-risk-medium:      var(--risk-medium);
   --color-risk-medium-bg:   var(--risk-medium-faint);
+  --color-risk-medium-faint:  var(--risk-medium-faint);
+  --color-risk-medium-border: var(--risk-medium-border);
+  --color-bg-subtle:          var(--bg-subtle);
 
   /* shadows */
   --shadow-card:       var(--shadow-sm);
