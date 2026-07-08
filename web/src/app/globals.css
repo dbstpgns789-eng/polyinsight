@@ -2251,3 +2251,11 @@ h1, h2, h3, h4, h5 {
   display: inline-block;
 }
 @keyframes deck-spin { to { transform: rotate(360deg); } }
+
+/* 카드 렌더 조기입장 스켈레톤 셔머 (RENDER 조기입장, 2026-07-08) */
+@keyframes pi-shimmer-move { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.pi-shimmer {
+  background: linear-gradient(100deg, var(--bg-subtle) 40%, var(--surface) 50%, var(--bg-subtle) 60%);
+  background-size: 200% 100%;
+  animation: pi-shimmer-move 1.4s ease-in-out infinite;
+}

@@ -113,6 +113,8 @@ function DeckPageInner() {
   const [stage, setStage] = useState<string>('')
   const [progress, setProgress] = useState(0)
   const [deck, setDeck] = useState<DeckPayload | null>(null)
+  const [rendering, setRendering] = useState(false)
+  const deckLoadedRef = useRef(false)
 
   // 편집 상태
   const [mode, setMode] = useState<'view' | 'edit'>('view')
@@ -161,8 +163,17 @@ function DeckPageInner() {
         setProgress(r.data.progress ?? 0)
         if (r.data.status === 'DONE' || r.data.status === 'ERROR') {
           const d = await getDeck(jobId)
-          if (!cancelled) setDeck(d.data as DeckPayload)
+          if (!cancelled) { setDeck(d.data as DeckPayload); setRendering(false) }
           return
+        }
+        // 콘텐츠 준비됨(RENDER 단계) → 조기 입장(카드는 렌더되는 대로 채워짐)
+        if (r.data.stage === 'RENDER' && !deckLoadedRef.current) {
+          try {
+            const d = await getDeck(jobId)
+            if ((d.data as DeckPayload)?.html && !cancelled) {
+              setDeck(d.data as DeckPayload); setRendering(true); deckLoadedRef.current = true
+            }
+          } catch { /* 아직 → 다음 폴링 */ }
         }
       } catch { /* 폴링 재시도 */ }
       if (!cancelled) timer = setTimeout(poll, 1500)
@@ -257,8 +268,8 @@ function DeckPageInner() {
 
   const onBadgeClick = useCallback(() => { if (mode === 'edit') setRightTab('fact') }, [mode])
 
-  // ── 진행 중 — 실제 파이프라인 공정 공개 ──
-  if (status !== 'DONE' && status !== 'ERROR') {
+  // 진행 중이라도 콘텐츠(html)가 준비되면(RENDER 조기입장) 뷰로. 아니면 진행화면.
+  if ((status !== 'DONE' && status !== 'ERROR') && !deck?.html) {
     return <GenerationTheater stage={stage || 'S1'} progress={progress} />
   }
 
@@ -341,7 +352,7 @@ function DeckPageInner() {
               </div>
             </div>
           ) : (
-            <DeckViewer jobId={jobId} cardCount={deck.cardCount || 7} ver={ver} onEditCard={enterEditAt} />
+            <DeckViewer jobId={jobId} cardCount={deck.cardCount || 7} ver={ver} rendering={rendering} onEditCard={enterEditAt} />
           )}
         </main>
 
