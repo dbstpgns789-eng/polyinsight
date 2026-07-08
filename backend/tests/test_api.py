@@ -565,3 +565,52 @@ async def test_nlpatch_rejects_broken_contract(client, monkeypatch):
     # 원본은 그대로(거부 후 보존)
     deck = await _db.get_authored_deck("jbad")
     assert deck["html"] == _DECK_HTML
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_propose_returns_html_verify_without_persist(client, monkeypatch):
+    """propose는 수정본 html+verify를 반환하되 DB 저장·PNG 렌더를 하지 않는다."""
+    monkeypatch.setattr(settings, "DEV_MOCK_LLM", True)
+    render_mock = AsyncMock(return_value=([b"\x89PNG"], []))
+    monkeypatch.setattr("backend.agents.deck.pipeline.render_deck", render_mock)
+    await _db.create_job("jprop", "p.pdf", user_id=1)
+    await _db.save_authored_deck("jprop", _DECK_HTML, json.dumps({"verified": 1, "unverified": 0}),
+                                 1, paper_text="The model scored 28.4 BLEU.")
+    live_html = _DECK_HTML.replace("BLEU 28.4", 'BLEU 28.4 <span data-eid="e1">최고</span>')
+    resp = await client.post(
+        "/api/deck/jprop/nlpatch/propose",
+        json={"instruction": "한 줄로", "html": live_html,
+              "target": {"eid": "e1", "cardIndex": 0, "quotedText": "최고"}},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "html" in body and "verify" in body
+    assert "data-screen-label" in body["html"]
+    assert "nlpatch-mock" in body["html"]
+    assert "verified" in body["verify"]
+    render_mock.assert_not_called()
+    deck = await _db.get_authored_deck("jprop")
+    assert deck["html"] == _DECK_HTML
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_propose_404_when_no_deck(client):
+    resp = await client.post("/api/deck/nope/nlpatch/propose",
+                             json={"instruction": "x", "html": "<html></html>"})
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_propose_422_on_broken_contract(client, monkeypatch):
+    """수정 결과가 카드 구조를 벗어나면 422(원본 보존, 저장 안 함)."""
+    monkeypatch.setattr(
+        "backend.routers.deck.apply_nl_patch",
+        AsyncMock(return_value="<html><body>카드 라벨 없는 깨진 출력</body></html>"),
+    )
+    await _db.create_job("jpbad", "p.pdf", user_id=1)
+    await _db.save_authored_deck("jpbad", _DECK_HTML, json.dumps({"verified": 1}), 1, paper_text="x")
+    resp = await client.post("/api/deck/jpbad/nlpatch/propose",
+                             json={"instruction": "전부 지워", "html": _DECK_HTML})
+    assert resp.status_code == 422
+    deck = await _db.get_authored_deck("jpbad")
+    assert deck["html"] == _DECK_HTML

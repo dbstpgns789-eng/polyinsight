@@ -42,6 +42,12 @@ def _verify_to_json(html: str, paper_text: str | None) -> tuple[str, dict]:
     return json.dumps(payload, ensure_ascii=False), payload
 
 
+def compute_verify(html: str, paper_text: str | None) -> dict:
+    """검증만 수행(저장·렌더 없음) — nlpatch propose 미커밋 미리보기용."""
+    _, payload = _verify_to_json(html, paper_text)
+    return payload
+
+
 async def persist_edited_deck(job_id: str, html: str) -> dict:
     """편집된 덱 HTML 영속화 — 재검증(원문 있으면) → 저장 → PNG 재렌더.
 

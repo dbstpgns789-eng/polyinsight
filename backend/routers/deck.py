@@ -11,7 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Re
 from pydantic import BaseModel, Field
 
 from ..agents.deck.nl_patch import apply_nl_patch
-from ..agents.deck.pipeline import persist_edited_deck, run_authoring_pipeline
+from ..agents.deck.pipeline import compute_verify, persist_edited_deck, run_authoring_pipeline
 from ..core import db, ratelimit
 from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
@@ -133,6 +133,43 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
     await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
                        payload={"kind": "nl", "card_count": result["cardCount"]})
     return result
+
+
+class DeckNLTarget(BaseModel):
+    eid: str | None = None
+    cardIndex: int | None = None
+    quotedText: str | None = Field(default=None, max_length=4000)
+
+
+class DeckNLPropose(BaseModel):
+    instruction: str = Field(min_length=1, max_length=2000)
+    html: str = Field(min_length=1, max_length=2_000_000)
+    target: DeckNLTarget | None = None
+
+
+@router.post("/deck/{job_id}/nlpatch/propose")
+async def nlpatch_propose(job_id: str, body: DeckNLPropose, user: dict = Depends(get_current_user)):
+    """AI 편집 제안 — 미저장·미렌더. 라이브 캔버스 html + target으로 최소 변경 수정본을
+    만들어 verify와 함께 반환한다. 실제 반영은 PATCH /deck/{id}(commit)에서만."""
+    await require_owned_job(job_id, user)
+    deck = await db.get_authored_deck(job_id)
+    if deck is None or not deck.get("html"):
+        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
+
+    new_html = await apply_nl_patch(
+        body.html, body.instruction, deck.get("paper_text"),
+        target=body.target.model_dump() if body.target else None,
+    )
+    if "data-screen-label" not in new_html:
+        raise HTTPException(
+            422,
+            detail={"code": "ERR-EDIT-001",
+                    "message": "수정 결과가 덱 구조를 벗어나 제안하지 않았습니다. 원본은 그대로입니다."},
+        )
+
+    verify = compute_verify(new_html, deck.get("paper_text"))
+    await db.log_event("deck_edit", user_id=user["id"], job_id=job_id, payload={"kind": "nl-propose"})
+    return {"html": new_html, "verify": verify}
 
 
 @router.post("/deck/{job_id}/assets", status_code=201)
