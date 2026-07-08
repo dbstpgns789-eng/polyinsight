@@ -213,6 +213,7 @@ function DeckPageInner() {
       setVer((x) => x + 1)
       setPending(null)
       setDirty(false)
+      setSelected(null)
     } finally { setCommitting(false) }
   }, [jobId, pending, deck])
 
@@ -231,6 +232,7 @@ function DeckPageInner() {
       setEditWarnings(r.data.warnings ?? [])
       setVer((x) => x + 1)
       setPending(null)
+      setSelected(null)
     } finally { setReverting(false) }
   }, [jobId, snapshots])
 
