@@ -359,16 +359,26 @@ function DeckPageInner() {
                 >›</button>
               </div>
             )}
-            <DeckEditor
-              ref={editorRef}
-              html={deck.html as string}
-              mode={mode}
-              onSelected={setSelected}
-              onDeselected={() => setSelected(null)}
-              onDirty={() => { setDirty(true); setPending(null) }}
-              onHistory={setHistory}
-              onPage={setPage}
-            />
+            <div className="relative">
+              <DeckEditor
+                ref={editorRef}
+                html={deck.html as string}
+                mode={mode}
+                onSelected={setSelected}
+                onDeselected={() => setSelected(null)}
+                onDirty={() => { setDirty(true); setPending(null) }}
+                onHistory={setHistory}
+                onPage={setPage}
+              />
+              {/* AI 제안 중/대기 중엔 캔버스 잠금 — in-flight 직접편집·재선택으로 제안이 스테일해지는 것 차단 */}
+              {(proposing || !!pending) && (
+                <div
+                  className="absolute inset-0 z-10 cursor-not-allowed"
+                  aria-hidden="true"
+                  title={proposing ? 'AI가 제안 중…' : 'AI 제안 확인 중 — 적용/취소 후 편집하세요'}
+                />
+              )}
+            </div>
           </div>
         ) : (
           cardNums.map((n) => (
