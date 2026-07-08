@@ -72,6 +72,14 @@ const AGENT_BODY = `
       fontWeight: cs.fontWeight, background: el.style.background || el.style.backgroundColor || ''
     };
   }
+  // 선택 요소에 불투명 난수 data-eid 스탬프(1회, 위치·서수 무관). data-pi-*가 아니라 serialize 생존.
+  // setAttribute는 'input' 이벤트를 안 내므로 dirty·undo에 영향 없음(메타 부여이지 콘텐츠 편집 아님).
+  function ensureEid(el) {
+    if (!el.getAttribute('data-eid')) {
+      el.setAttribute('data-eid', 'e' + Math.random().toString(36).slice(2, 10));
+    }
+    return el.getAttribute('data-eid');
+  }
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
   function primary() { return selection.length ? selection[selection.length - 1] : null; }
@@ -186,13 +194,17 @@ const AGENT_BODY = `
     var p = primary(); if (!p) return;
     var n = selection.length;
     var rect = (n > 1) ? groupNatRect() : natRectOf(p);
+    var single = (n === 1);
     post('SELECTED', {
       tag: n > 1 ? ('(다중 ' + n + ')') : p.tagName.toLowerCase(),
       count: n,
-      editable: n === 1 && isTextLeaf(p),
+      editable: single && isTextLeaf(p),
       absolute: isAbsolute(p),
       styles: styleSnapshot(p),
-      text: n === 1 ? (p.textContent || '').slice(0, 80) : '',
+      text: single ? (p.textContent || '').slice(0, 80) : '',
+      eid: single ? ensureEid(p) : '',
+      cardIndex: single ? cardIndexOf(p) : -1,
+      quotedText: single ? (p.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 2000) : '',
       rect: rect,
       mixed: n > 1 && !sameSize(),
       canDistribute: n >= 3
