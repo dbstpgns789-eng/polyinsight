@@ -20,6 +20,7 @@ EDIT_SYSTEM = """당신은 이미 완성된 인스타그램 카드뉴스 '덱'(s
 - 각 카드 최상위 div의 width:1080px; height:1350px; overflow:hidden 을 유지한다.
 - 모든 스타일은 인라인 또는 <head><style>. 외부 JS·애니메이션 의존 금지.
 - 코드펜스(```), 설명문 없이 <!DOCTYPE html> … </html> **전문만** 출력한다(부분 출력 금지).
+- **data-eid 보존**: `data-eid` 속성이 붙은 요소는 그 속성을 **원형 그대로 유지**한다(편집 후에도 동일한 data-eid). 제거·변경·재부여 금지.
 
 [충실성 — 헌법 §2 (해자)]
 - 원문에 없는 수치를 새로 만들지 않는다. 사용자가 수치 변경을 지시해도, 원문 근거 없는 수치는
@@ -32,7 +33,7 @@ EDIT_USER = """## 원문 (유일한 사실 소스 — 수치 판단 기준)
 
 ## 현재 덱 HTML (이 문서를 보존하며 최소 수정)
 {html}
-
+{target_block}
 ---
 ## 사용자 지시
 {instruction}
@@ -40,12 +41,29 @@ EDIT_USER = """## 원문 (유일한 사실 소스 — 수치 판단 기준)
 ---
 위 지시대로 현재 덱을 최소 변경으로 수정한 **HTML 전문**만 출력하라(코드펜스·설명 없이)."""
 
+_TARGET_TMPL = """
+---
+## 편집 대상 요소 (이 요소에만 지시 적용 — data-eid로 식별)
+- data-eid="{eid}" — 이 속성을 **원형 그대로 유지**한다(제거·변경 금지).
+- 현재 텍스트: {quoted}
+다른 요소·카드·색·레이아웃은 그대로 둔다."""
+
 _NO_PAPER = "(원문 없음 — 수치를 새로 만들지 말고 표현만 다듬을 것)"
 
 
-def build_user_prompt(html: str, instruction: str, paper_text: str | None, *, html_cap: int) -> str:
+def build_user_prompt(
+    html: str, instruction: str, paper_text: str | None, *,
+    html_cap: int, target: dict | None = None,
+) -> str:
+    target_block = ""
+    if target and target.get("eid"):
+        target_block = _TARGET_TMPL.format(
+            eid=target["eid"],
+            quoted=(target.get("quotedText") or "")[:500],
+        )
     return EDIT_USER.format(
         paper_text=(paper_text or _NO_PAPER)[:html_cap],
         html=html[:html_cap],
         instruction=instruction.strip(),
+        target_block=target_block,
     )

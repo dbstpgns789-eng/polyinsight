@@ -19,7 +19,9 @@ logger = logging.getLogger(__name__)
 _MAX_INPUT_CHARS = 80000
 
 
-async def apply_nl_patch(html: str, instruction: str, paper_text: str | None) -> str:
+async def apply_nl_patch(
+    html: str, instruction: str, paper_text: str | None, target: dict | None = None,
+) -> str:
     """현재 덱 HTML + 자연어 지시 → 최소 변경 수정된 HTML 전문.
 
     DEV_MOCK_LLM 시 LLM 없이 마커 주석만 주입(무비용 배관 검증 — 계약/구조 보존).
@@ -31,7 +33,7 @@ async def apply_nl_patch(html: str, instruction: str, paper_text: str | None) ->
             return html.replace("</body>", marker + "</body>", 1)
         return html + marker
 
-    user = P.build_user_prompt(html, instruction, paper_text, html_cap=_MAX_INPUT_CHARS)
+    user = P.build_user_prompt(html, instruction, paper_text, html_cap=_MAX_INPUT_CHARS, target=target)
     raw = await llm_client.call(
         system_prompt=P.EDIT_SYSTEM,
         user_prompt=user,
