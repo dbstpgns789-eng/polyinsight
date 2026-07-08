@@ -71,7 +71,9 @@ async def persist_edited_deck(job_id: str, html: str) -> dict:
     if not images:
         warnings.append("deck render: 0 cards rendered")
     else:
-        await db.delete_card_images_above(job_id, len(images))
+        # 프루닝 임계값 = html 카드 수(= 유효 최대 card_num). len(images)는 성공 수라
+        # 중간 카드 실패 시 유효한 상위 카드를 삭제해버린다(무성 데이터 손실).
+        await db.delete_card_images_above(job_id, card_count)
 
     return {"verify": verify, "cardCount": len(images) or card_count, "warnings": warnings}
 
@@ -182,7 +184,9 @@ async def _execute(
     if not images:
         warnings.append("deck render: 0 cards rendered")
     else:
-        await db.delete_card_images_above(job_id, len(images))
+        # 프루닝 임계값 = html 카드 수(= 유효 최대 card_num). len(images)는 성공 수라
+        # 중간 카드 실패 시 유효한 상위 카드를 삭제해버린다(무성 데이터 손실).
+        await db.delete_card_images_above(job_id, html.count("data-screen-label"))
 
     # ── 완료 ───────────────────────────────────────────────────────────────
     status = JobStatus.DONE if images else JobStatus.ERROR

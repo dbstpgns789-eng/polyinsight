@@ -456,6 +456,28 @@ async def test_nlpatch_404_when_no_deck(client):
     assert resp.status_code == 404
 
 
+@pytest.mark.asyncio
+async def test_partial_render_does_not_delete_valid_higher_card(client, monkeypatch):
+    """중간 카드 렌더 실패로 성공 수 < 총 카드 수여도, 유효하게 저장된 상위 카드가 삭제되지 않는다."""
+    # 7-card html, but render returns only 6 images (card 3 failed) — cards saved by render_deck itself in real path;
+    # here we mock render_deck to (a) save cards 1,2,4,5,6,7 to DB, (b) return 6 images.
+    seven = '<!DOCTYPE html><html><body>' + ''.join(
+        f'<div data-screen-label="{i:02d}" style="width:1080px;height:1350px;">c{i}</div>' for i in range(1, 8)
+    ) + '</body></html>'
+    async def fake_render(html, **kw):
+        for n in [1, 2, 4, 5, 6, 7]:
+            await _db.save_card_image('jpr', n, b'\x89PNG' + bytes([n]))
+        return ([b'\x89PNG'] * 6, [])   # 6 successes
+    monkeypatch.setattr('backend.agents.deck.pipeline.render_deck', fake_render)
+    await _db.create_job('jpr', 'p.pdf', user_id=1)
+    await _db.save_authored_deck('jpr', seven, json.dumps({'verified': 0, 'unverified': 0}), 7, paper_text=None)
+    from backend.agents.deck.pipeline import persist_edited_deck
+    await persist_edited_deck('jpr', seven)
+    imgs = await _db.get_card_images('jpr')
+    assert 7 in imgs, 'valid card 7 must survive (threshold must be html card count, not len(images))'
+    assert set(imgs.keys()) == {1, 2, 4, 5, 6, 7}
+
+
 # ── 덱 이미지 자산 업로드/서빙 (S1) ──────────────────────────────────────────
 
 def _png_bytes() -> bytes:
