@@ -10,12 +10,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
-import { getStatus, getDeck, patchDeck, nlProposeDeck, exportDeck, getDeckCardUrl, getExportDownloadUrl } from '@/lib/api'
+import { getStatus, getDeck, patchDeck, nlProposeDeck } from '@/lib/api'
 import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState, type PageState } from '@/components/deck/DeckEditor'
 import DeckElementPanel from '@/components/deck/DeckElementPanel'
 import DeckMediaPanel from '@/components/deck/DeckMediaPanel'
 import DeckAIAssistant from '@/components/deck/DeckAIAssistant'
 import { extractEidText } from '@/lib/deckDiff'
+import DeckTopBar from '@/components/deck/DeckTopBar'
+import DeckViewer from '@/components/deck/DeckViewer'
+import DeckRightTabs, { type DeckTab } from '@/components/deck/DeckRightTabs'
+import DeckFactPanel from '@/components/deck/DeckFactPanel'
+import DeckExportModal from '@/components/deck/DeckExportModal'
+import { factBadgeState } from '@/lib/factBadge'
 
 interface VerifyClaim { value: string; context: string; verified: boolean }
 interface VerifyData { verified: number; unverified: number; claims: VerifyClaim[] }
@@ -107,7 +113,6 @@ function DeckPageInner() {
   const [stage, setStage] = useState<string>('')
   const [progress, setProgress] = useState(0)
   const [deck, setDeck] = useState<DeckPayload | null>(null)
-  const [exporting, setExporting] = useState(false)
 
   // 편집 상태
   const [mode, setMode] = useState<'view' | 'edit'>('view')
@@ -126,6 +131,8 @@ function DeckPageInner() {
   const [snapshots, setSnapshots] = useState<string[]>([])
   const [history, setHistory] = useState<HistoryState>({ canUndo: false, canRedo: false })
   const [page, setPage] = useState<PageState>({ index: 0, count: 0 })
+  const [rightTab, setRightTab] = useState<DeckTab>('ai')
+  const [showExport, setShowExport] = useState(false)
   const editorRef = useRef<DeckEditorHandle>(null)
 
   // 편집 모드 ←/→ 로 페이지 이동 (입력창·텍스트 편집 중엔 캐럿 우선 → 무시)
@@ -162,14 +169,6 @@ function DeckPageInner() {
     }
     poll()
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [jobId])
-
-  const handleExport = useCallback(async () => {
-    setExporting(true)
-    try {
-      const r = await exportDeck(jobId)
-      window.location.href = getExportDownloadUrl(r.data.exportId)
-    } finally { setExporting(false) }
   }, [jobId])
 
   const handleSave = useCallback(async () => {
@@ -250,6 +249,14 @@ function DeckPageInner() {
     setMode((m) => (m === 'edit' ? 'view' : 'edit'))
   }, [])
 
+  const enterEditAt = useCallback((index: number) => {
+    setMode('edit')
+    // 마운트 후 해당 카드로 이동(EDITOR_READY 뒤 setPage 반영 위해 다음 틱)
+    setTimeout(() => editorRef.current?.setPage(index), 0)
+  }, [])
+
+  const onBadgeClick = useCallback(() => { if (mode === 'edit') setRightTab('fact') }, [mode])
+
   // ── 진행 중 — 실제 파이프라인 공정 공개 ──
   if (status !== 'DONE' && status !== 'ERROR') {
     return <GenerationTheater stage={stage || 'S1'} progress={progress} />
@@ -274,201 +281,125 @@ function DeckPageInner() {
   }
 
   const v = deck.verify
-  const flagged = v?.claims.filter((c) => !c.verified) ?? []
   const editing = mode === 'edit'
-  const cardNums = Array.from({ length: deck.cardCount || 7 }, (_, i) => i + 1)
+  const badge = factBadgeState(v, deck.canReverify !== false)
+  const saveLabel = saving ? '저장 중…' : dirty ? '저장' : '저장됨'
 
   return (
-    <div className="flex h-screen overflow-hidden bg-canvas-subtle" style={{ wordBreak: 'keep-all' }}>
-      {/* 카드 영역 */}
-      <main className="flex-1 overflow-y-auto py-10 flex flex-col items-center gap-8">
-        <div className="w-full max-w-[460px] flex items-center justify-between px-1 gap-2">
-          <span className="text-[14px] font-semibold text-ink truncate flex-1">{deck.filename}</span>
+    <div className="flex flex-col h-screen overflow-hidden bg-canvas-subtle" style={{ wordBreak: 'keep-all' }}>
+      <DeckTopBar
+        filename={deck.filename ?? '덱'}
+        editing={editing}
+        badge={badge}
+        onBadgeClick={onBadgeClick}
+        onToggleMode={toggleMode}
+        onExport={() => setShowExport(true)}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
+        onUndo={() => editorRef.current?.undo()}
+        onRedo={() => editorRef.current?.redo()}
+        saveLabel={saveLabel}
+      />
 
-          <button
-            onClick={toggleMode}
-            className={`text-[13px] font-semibold px-3 py-2 rounded-lg border ${
-              editing ? 'border-forest-green text-forest-green' : 'border-border text-ink-2'
-            }`}
-          >
-            {editing ? '편집 종료' : '편집'}
-          </button>
+      {editWarnings.length > 0 && (
+        <div className="mx-auto mt-3 w-full max-w-[460px] rounded-lg border border-risk-medium-border bg-risk-medium-faint p-3 shrink-0">
+          {editWarnings.map((w, i) => <p key={i} className="text-[11px] text-risk-medium leading-snug">{w}</p>)}
+        </div>
+      )}
 
-          {editing && (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => editorRef.current?.undo()}
-                disabled={!history.canUndo}
-                title="실행 취소 (Ctrl+Z)"
-                className="w-9 h-9 rounded-lg border border-border text-ink-2 disabled:opacity-30"
-              >↶</button>
-              <button
-                onClick={() => editorRef.current?.redo()}
-                disabled={!history.canRedo}
-                title="다시 실행 (Ctrl+Shift+Z)"
-                className="w-9 h-9 rounded-lg border border-border text-ink-2 disabled:opacity-30"
-              >↷</button>
-            </div>
-          )}
-
+      <div className="flex flex-1 min-h-0">
+        {/* 중앙 */}
+        <main className="flex-1 min-w-0 overflow-hidden">
           {editing ? (
-            <button
-              onClick={handleSave}
-              disabled={!dirty || saving}
-              className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-forest-green text-canvas disabled:opacity-40"
-            >
-              {saving ? '저장 중…' : dirty ? '저장' : '저장됨'}
-            </button>
-          ) : (
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-forest-green text-canvas disabled:opacity-50"
-            >
-              {exporting ? '내보내는 중…' : 'ZIP 내보내기'}
-            </button>
-          )}
-        </div>
-
-        {editWarnings.length > 0 && (
-          <div className="w-full max-w-[460px] rounded-lg border border-amber-300 bg-amber-50 p-3">
-            {editWarnings.map((w, i) => (
-              <p key={i} className="text-[11px] text-amber-700 leading-snug">{w}</p>
-            ))}
-          </div>
-        )}
-
-        {editing ? (
-          <div className="w-full max-w-[460px] flex flex-col gap-3">
-            {page.count > 1 && (
-              <div className="flex items-center justify-center gap-3 select-none">
-                <button
-                  onClick={() => editorRef.current?.setPage(page.index - 1)}
-                  disabled={page.index <= 0}
-                  aria-label="이전 카드"
-                  className="w-9 h-9 rounded-full border border-border text-ink-2 disabled:opacity-30"
-                >‹</button>
-                <span className="text-[13px] tabular-nums text-ink-2 min-w-[52px] text-center">
-                  {page.index + 1} / {page.count}
-                </span>
-                <button
-                  onClick={() => editorRef.current?.setPage(page.index + 1)}
-                  disabled={page.index >= page.count - 1}
-                  aria-label="다음 카드"
-                  className="w-9 h-9 rounded-full border border-border text-ink-2 disabled:opacity-30"
-                >›</button>
-              </div>
-            )}
-            <div className="relative">
-              <DeckEditor
-                ref={editorRef}
-                html={deck.html as string}
-                mode={mode}
-                onSelected={setSelected}
-                onDeselected={() => setSelected(null)}
-                onDirty={() => { setDirty(true); setPending(null) }}
-                onHistory={setHistory}
-                onPage={setPage}
-              />
-              {/* AI 제안 중/대기 중엔 캔버스 잠금 — in-flight 직접편집·재선택으로 제안이 스테일해지는 것 차단 */}
-              {(proposing || !!pending) && (
-                <div
-                  className="absolute inset-0 z-10 cursor-not-allowed"
-                  aria-hidden="true"
-                  title={proposing ? 'AI가 제안 중…' : 'AI 제안 확인 중 — 적용/취소 후 편집하세요'}
-                />
+            <div className="h-full overflow-y-auto flex flex-col items-center py-6 gap-3">
+              {page.count > 1 && (
+                <div className="flex items-center justify-center gap-3 select-none">
+                  <button onClick={() => editorRef.current?.setPage(page.index - 1)} disabled={page.index <= 0}
+                    aria-label="이전 카드" className="w-9 h-9 rounded-full border border-border text-ink-2 disabled:opacity-30">‹</button>
+                  <span className="text-[13px] tabular-nums text-ink-2 min-w-[52px] text-center">{page.index + 1} / {page.count}</span>
+                  <button onClick={() => editorRef.current?.setPage(page.index + 1)} disabled={page.index >= page.count - 1}
+                    aria-label="다음 카드" className="w-9 h-9 rounded-full border border-border text-ink-2 disabled:opacity-30">›</button>
+                </div>
               )}
+              <div className="relative w-full max-w-[460px]">
+                <DeckEditor
+                  ref={editorRef}
+                  html={deck.html as string}
+                  mode={mode}
+                  onSelected={setSelected}
+                  onDeselected={() => setSelected(null)}
+                  onDirty={() => { setDirty(true); setPending(null) }}
+                  onHistory={setHistory}
+                  onPage={setPage}
+                />
+                {(proposing || !!pending) && (
+                  <div className="absolute inset-0 z-10 cursor-not-allowed" aria-hidden="true"
+                    title={proposing ? 'AI가 제안 중…' : 'AI 제안 확인 중 — 적용/취소 후 편집하세요'} />
+                )}
+              </div>
             </div>
-          </div>
-        ) : (
-          cardNums.map((n) => (
-            <img
-              key={n}
-              src={getDeckCardUrl(deck.jobId, n, ver || undefined)}
-              alt={`card ${n}`}
-              className="w-full max-w-[460px] rounded-[10px] shadow-md"
-              style={{ aspectRatio: '1080 / 1350', objectFit: 'cover', background: '#11152B' }}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-            />
-          ))
-        )}
-      </main>
+          ) : (
+            <DeckViewer jobId={jobId} cardCount={deck.cardCount || 7} ver={ver} onEditCard={enterEditAt} />
+          )}
+        </main>
 
-      {/* 우측 패널: 편집 시 요소 패널, 항상 충실성 검증(해자) */}
-      <aside className="w-[360px] shrink-0 border-l border-border bg-surface overflow-y-auto p-6">
-        {editing && (
-          <section className="mb-7">
-            <h2 className="text-[15px] font-bold text-ink mb-3">요소 편집</h2>
-            <DeckMediaPanel
-              jobId={jobId}
-              onInsert={(p) => { editorRef.current?.insertImage(p); setDirty(true) }}
+        {/* 우측 */}
+        <aside className="w-[360px] shrink-0 border-l border-border bg-surface min-h-0">
+          {editing ? (
+            <DeckRightTabs
+              active={rightTab}
+              onTab={setRightTab}
+              ai={
+                <DeckAIAssistant
+                  selected={selected}
+                  proposing={proposing}
+                  pending={!!pending}
+                  committing={committing}
+                  beforeText={pending?.beforeText ?? selected?.quotedText ?? null}
+                  afterText={pending?.afterText ?? null}
+                  onPropose={handlePropose}
+                  onCommit={handleCommit}
+                  onDiscard={handleDiscard}
+                  canRevert={snapshots.length > 0}
+                  reverting={reverting}
+                  onRevert={handleRevert}
+                />
+              }
+              inspector={
+                <div className="flex flex-col gap-5">
+                  <DeckMediaPanel jobId={jobId} onInsert={(p) => { editorRef.current?.insertImage(p); setDirty(true) }} />
+                  <div className="h-px bg-border" />
+                  <DeckElementPanel
+                    selected={selected}
+                    onStyle={(prop, value) => editorRef.current?.applyStyle(prop, value)}
+                    onDelete={() => editorRef.current?.deleteElement()}
+                    onMove={(dir) => editorRef.current?.moveElement(dir)}
+                    onRevertFlow={() => editorRef.current?.revertFlow()}
+                    onAlign={(axis) => editorRef.current?.align(axis)}
+                    onDistribute={(axis) => editorRef.current?.distribute(axis)}
+                    onSetRect={(r) => editorRef.current?.setRect(r)}
+                  />
+                </div>
+              }
+              fact={<DeckFactPanel verify={v} canReverify={deck.canReverify !== false} />}
             />
-            <div className="h-px bg-border my-6" />
-            <DeckElementPanel
-              selected={selected}
-              onStyle={(prop, value) => editorRef.current?.applyStyle(prop, value)}
-              onDelete={() => editorRef.current?.deleteElement()}
-              onMove={(dir) => editorRef.current?.moveElement(dir)}
-              onRevertFlow={() => editorRef.current?.revertFlow()}
-              onAlign={(axis) => editorRef.current?.align(axis)}
-              onDistribute={(axis) => editorRef.current?.distribute(axis)}
-              onSetRect={(r) => editorRef.current?.setRect(r)}
-            />
-            <div className="h-px bg-border my-6" />
-            <DeckAIAssistant
-              selected={selected}
-              proposing={proposing}
-              pending={!!pending}
-              committing={committing}
-              beforeText={pending?.beforeText ?? selected?.quotedText ?? null}
-              afterText={pending?.afterText ?? null}
-              onPropose={handlePropose}
-              onCommit={handleCommit}
-              onDiscard={handleDiscard}
-              canRevert={snapshots.length > 0}
-              reverting={reverting}
-              onRevert={handleRevert}
-            />
-            <div className="h-px bg-border mt-6" />
-          </section>
-        )}
+          ) : (
+            <div className="p-5 overflow-y-auto h-full">
+              <DeckFactPanel verify={v} canReverify={deck.canReverify !== false} />
+            </div>
+          )}
+        </aside>
+      </div>
 
-        <h2 className="text-[15px] font-bold text-ink mb-1">충실성 검증</h2>
-        <p className="text-[12px] text-ink-3 mb-5">
-          {deck.canReverify === false
-            ? '이 덱은 원문이 없어 편집 시 재검증되지 않습니다. 재생성하면 복원됩니다.'
-            : '막지 않고, 출처를 분류해 보여줍니다. 최종 판단은 사용자.'}
-        </p>
-
-        <div className="flex gap-3 mb-6">
-          <div className="flex-1 rounded-xl border border-border p-3 text-center">
-            <div className="text-[22px] font-extrabold text-forest-green">{v?.verified ?? 0}</div>
-            <div className="text-[11px] text-ink-3 mt-1">논문 근거 확인</div>
-          </div>
-          <div className="flex-1 rounded-xl border border-border p-3 text-center">
-            <div className="text-[22px] font-extrabold text-amber-600">{v?.unverified ?? 0}</div>
-            <div className="text-[11px] text-ink-3 mt-1">사용자 판단 필요</div>
-          </div>
-        </div>
-
-        {flagged.length > 0 ? (
-          <div>
-            <p className="text-[12px] font-semibold text-ink-2 mb-2">
-              ⚠️ 원문에 없는 수치 — AI가 더한 맥락/예시인지 확인하세요:
-            </p>
-            <ul className="flex flex-col gap-2">
-              {flagged.map((c, i) => (
-                <li key={i} className="rounded-lg border border-border bg-canvas-subtle p-3">
-                  <span className="text-[14px] font-bold text-ink">{c.value}</span>
-                  <p className="text-[11px] text-ink-3 mt-1 leading-snug">…{c.context}…</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <p className="text-[13px] text-ink-3">모든 수치가 원문에서 추적됐습니다.</p>
-        )}
-      </aside>
+      {showExport && (
+        <DeckExportModal
+          jobId={jobId}
+          filename={deck.filename ?? '덱'}
+          cardCount={deck.cardCount || 7}
+          unverified={v?.unverified ?? 0}
+          onClose={() => setShowExport(false)}
+        />
+      )}
     </div>
   )
 }
