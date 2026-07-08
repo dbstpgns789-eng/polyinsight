@@ -16,6 +16,8 @@ interface Props {
   onUndo?: () => void
   onRedo?: () => void
   saveLabel?: string   // '저장됨' | '저장 중…' | '저장'
+  onSave?: () => void
+  saveDisabled?: boolean
 }
 
 const TONE: Record<BadgeState['tone'], string> = {
@@ -26,7 +28,7 @@ const TONE: Record<BadgeState['tone'], string> = {
 
 export default function DeckTopBar({
   filename, editing, badge, onBadgeClick, onToggleMode, onExport,
-  canUndo, canRedo, onUndo, onRedo, saveLabel,
+  canUndo, canRedo, onUndo, onRedo, saveLabel, onSave, saveDisabled,
 }: Props) {
   return (
     <header className="flex items-center gap-3 px-5 h-14 bg-surface border-b border-border shrink-0">
@@ -46,7 +48,11 @@ export default function DeckTopBar({
             className="w-8 h-8 rounded-lg border border-border text-ink-2 disabled:opacity-30">↶</button>
           <button onClick={onRedo} disabled={!canRedo} title="다시 실행 (Ctrl+Shift+Z)" aria-label="다시 실행"
             className="w-8 h-8 rounded-lg border border-border text-ink-2 disabled:opacity-30">↷</button>
-          <span className="text-[12px] text-ink-3 ml-1 min-w-[52px] text-center">{saveLabel}</span>
+          <button onClick={onSave} disabled={saveDisabled}
+            className={`text-[12px] font-semibold ml-1 px-3 py-1.5 rounded-lg border ${
+              saveDisabled ? 'border-transparent text-ink-3' : 'border-forest-green text-forest-green'}`}>
+            {saveLabel}
+          </button>
         </div>
       )}
 

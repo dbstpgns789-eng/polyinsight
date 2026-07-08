@@ -299,6 +299,8 @@ function DeckPageInner() {
         onUndo={() => editorRef.current?.undo()}
         onRedo={() => editorRef.current?.redo()}
         saveLabel={saveLabel}
+        onSave={handleSave}
+        saveDisabled={!dirty || saving}
       />
 
       {editWarnings.length > 0 && (
