@@ -68,11 +68,6 @@ async def persist_edited_deck(job_id: str, html: str) -> dict:
 
     images, render_warns = await render_deck(html, job_id=job_id)
     warnings.extend(render_warns)
-    for i, png in enumerate(images, start=1):
-        try:
-            await db.save_card_image(job_id, i, png)
-        except Exception as exc:
-            warnings.append(f"deck save_card_image {i} 실패: {exc}")
     if not images:
         warnings.append("deck render: 0 cards rendered")
     else:
@@ -184,13 +179,10 @@ async def _execute(
     await db.update_job(job_id, status=JobStatus.RUNNING, stage="RENDER", progress=85)
     images, render_warns = await render_deck(html, job_id=job_id)
     warnings.extend(render_warns)
-    for i, png in enumerate(images, start=1):
-        try:
-            await db.save_card_image(job_id, i, png)
-        except Exception as exc:
-            warnings.append(f"deck save_card_image {i} 실패: {exc}")
     if not images:
         warnings.append("deck render: 0 cards rendered")
+    else:
+        await db.delete_card_images_above(job_id, len(images))
 
     # ── 완료 ───────────────────────────────────────────────────────────────
     status = JobStatus.DONE if images else JobStatus.ERROR

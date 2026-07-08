@@ -56,7 +56,9 @@ async def _inline_deck_assets(html: str, job_id: str | None) -> str:
     return _ASSET_URL_RE.sub(_repl, html)
 
 
-async def _render_async(html: str, scale: int, timeout_s: float) -> tuple[list[bytes], list[str]]:
+async def _render_async(
+    html: str, scale: int, timeout_s: float, job_id: str | None = None
+) -> tuple[list[bytes], list[str]]:
     images: list[bytes] = []
     warnings: list[str] = []
     timeout_ms = timeout_s * 1000
@@ -120,6 +122,11 @@ async def _render_async(html: str, scale: int, timeout_s: float) -> tuple[list[b
                     )
                     images.append(png)
                     logger.info("deck render: card %d (%d bytes)", i + 1, len(png))
+                    if job_id:
+                        try:
+                            await db.save_card_image(job_id, i + 1, png)
+                        except Exception as exc:
+                            warnings.append(f"deck render: card {i + 1} save error — {exc}")
                 except Exception as exc:
                     warnings.append(f"deck render: card {i + 1} error — {exc}")
         except Exception as exc:
@@ -131,14 +138,16 @@ async def _render_async(html: str, scale: int, timeout_s: float) -> tuple[list[b
     return images, warnings
 
 
-def _render_sync(html: str, scale: int, timeout_s: float) -> tuple[list[bytes], list[str]]:
+def _render_sync(
+    html: str, scale: int, timeout_s: float, job_id: str | None = None
+) -> tuple[list[bytes], list[str]]:
     if sys.platform == "win32":
         loop = asyncio.ProactorEventLoop()
     else:
         loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        return loop.run_until_complete(_render_async(html, scale, timeout_s))
+        return loop.run_until_complete(_render_async(html, scale, timeout_s, job_id))
     finally:
         loop.close()
 
@@ -147,7 +156,7 @@ async def render_deck(
     html: str, scale: int = 2, timeout_s: float = 30.0, job_id: str | None = None
 ) -> tuple[list[bytes], list[str]]:
     """저작 HTML → [PNG bytes], [warnings]. 각 [data-screen-label] 카드 1장씩(×scale 레티나).
-    job_id가 있으면 렌더 전 자산 URL을 data URI로 인라인(스펙 §4.2)."""
+    job_id가 있으면 렌더 전 자산 URL을 data URI로 인라인(스펙 §4.2) + 캡처 즉시 DB 저장(진행 리빌)."""
     html = await _inline_deck_assets(html, job_id)
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(_deck_pool, _render_sync, html, scale, timeout_s)
+    return await loop.run_in_executor(_deck_pool, _render_sync, html, scale, timeout_s, job_id)
