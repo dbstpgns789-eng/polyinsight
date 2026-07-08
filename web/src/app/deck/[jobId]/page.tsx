@@ -10,11 +10,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
-import { getStatus, getDeck, patchDeck, nlPatchDeck, exportDeck, getDeckCardUrl, getExportDownloadUrl } from '@/lib/api'
+import { getStatus, getDeck, patchDeck, nlProposeDeck, exportDeck, getDeckCardUrl, getExportDownloadUrl } from '@/lib/api'
 import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState, type PageState } from '@/components/deck/DeckEditor'
 import DeckElementPanel from '@/components/deck/DeckElementPanel'
 import DeckMediaPanel from '@/components/deck/DeckMediaPanel'
-import DeckNLBar from '@/components/deck/DeckNLBar'
+import DeckAIAssistant from '@/components/deck/DeckAIAssistant'
+import { extractEidText } from '@/lib/deckDiff'
 
 interface VerifyClaim { value: string; context: string; verified: boolean }
 interface VerifyData { verified: number; unverified: number; claims: VerifyClaim[] }
@@ -115,7 +116,11 @@ function DeckPageInner() {
   const [selected, setSelected] = useState<SelectedInfo | null>(null)
   const [ver, setVer] = useState(0)            // PNG 캐시 무력화 버전
   const [editWarnings, setEditWarnings] = useState<string[]>([])
-  const [nlBusy, setNlBusy] = useState(false)
+  const [proposing, setProposing] = useState(false)
+  const [committing, setCommitting] = useState(false)
+  const [reverting, setReverting] = useState(false)
+  const [pending, setPending] = useState<{ html: string; verify: VerifyData; afterText: string | null } | null>(null)
+  const [snapshots, setSnapshots] = useState<string[]>([])
   const [history, setHistory] = useState<HistoryState>({ canUndo: false, canRedo: false })
   const [page, setPage] = useState<PageState>({ index: 0, count: 0 })
   const editorRef = useRef<DeckEditorHandle>(null)
@@ -180,24 +185,59 @@ function DeckPageInner() {
     } finally { setSaving(false) }
   }, [jobId])
 
-  const handleNL = useCallback(async (instruction: string) => {
-    setNlBusy(true)
+  const handlePropose = useCallback(async (instruction: string) => {
+    if (!editorRef.current) return
+    setProposing(true)
     try {
-      const r = await nlPatchDeck(jobId, instruction)
-      // 수정된 html로 deck 갱신 → DeckEditor가 새 srcDoc로 재마운트
+      const html = await editorRef.current.getHtml()   // 라이브 serialize(미저장 편집+eid 포함)
+      const target = selected?.eid
+        ? { eid: selected.eid, cardIndex: selected.cardIndex, quotedText: selected.quotedText }
+        : undefined
+      const r = await nlProposeDeck(jobId, instruction, html, target)
+      const afterText = selected?.eid ? extractEidText(r.data.html, selected.eid) : null
+      setPending({ html: r.data.html, verify: r.data.verify, afterText })
+    } finally { setProposing(false) }
+  }, [jobId, selected])
+
+  const handleCommit = useCallback(async () => {
+    if (!pending) return
+    setCommitting(true)
+    try {
+      const snapshot = deck?.html
+      const r = await patchDeck(jobId, pending.html)
       setDeck((prev) => prev ? {
-        ...prev, html: r.data.html, verify: r.data.verify, cardCount: r.data.cardCount,
+        ...prev, html: pending.html, verify: r.data.verify, cardCount: r.data.cardCount,
       } : prev)
+      if (snapshot) setSnapshots((s) => [...s, snapshot])   // commit 직전 html 스냅샷
       setEditWarnings(r.data.warnings ?? [])
       setVer((x) => x + 1)
+      setPending(null)
       setDirty(false)
-      setSelected(null)
-    } finally { setNlBusy(false) }
-  }, [jobId])
+    } finally { setCommitting(false) }
+  }, [jobId, pending, deck])
+
+  const handleDiscard = useCallback(() => setPending(null), [])
+
+  const handleRevert = useCallback(async () => {
+    const snapshot = snapshots[snapshots.length - 1]
+    if (!snapshot) return
+    setReverting(true)
+    try {
+      const r = await patchDeck(jobId, snapshot)
+      setDeck((prev) => prev ? {
+        ...prev, html: snapshot, verify: r.data.verify, cardCount: r.data.cardCount,
+      } : prev)
+      setSnapshots((s) => s.slice(0, -1))
+      setEditWarnings(r.data.warnings ?? [])
+      setVer((x) => x + 1)
+      setPending(null)
+    } finally { setReverting(false) }
+  }, [jobId, snapshots])
 
   const toggleMode = useCallback(() => {
     setSelected(null)
     setEditWarnings([])
+    setPending(null)
     setMode((m) => (m === 'edit' ? 'view' : 'edit'))
   }, [])
 
@@ -356,7 +396,20 @@ function DeckPageInner() {
               onSetRect={(r) => editorRef.current?.setRect(r)}
             />
             <div className="h-px bg-border my-6" />
-            <DeckNLBar onSend={handleNL} busy={nlBusy} />
+            <DeckAIAssistant
+              selected={selected}
+              proposing={proposing}
+              pending={!!pending}
+              committing={committing}
+              beforeText={selected?.quotedText ?? null}
+              afterText={pending?.afterText ?? null}
+              onPropose={handlePropose}
+              onCommit={handleCommit}
+              onDiscard={handleDiscard}
+              canRevert={snapshots.length > 0}
+              reverting={reverting}
+              onRevert={handleRevert}
+            />
             <div className="h-px bg-border mt-6" />
           </section>
         )}
