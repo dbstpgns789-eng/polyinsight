@@ -9,12 +9,17 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import threading
 import time
 import uuid
-from pathlib import Path
 from typing import Protocol
 
 from .config import settings
+
+# os.replace를 프로세스 전역으로 직렬화 — Windows에서 같은 dest에 동시 replace가 몰리면
+# 일시적 PermissionError(WinError 5). replace는 마이크로초라 직렬화해도 처리량 영향 무시가능.
+# (단일 프로세스 운영 전제 — memory project_lab_deployment. 원자성은 temp+replace가 보장.)
+_replace_lock = threading.Lock()
 
 
 class Storage(Protocol):
@@ -26,36 +31,38 @@ class Storage(Protocol):
 
 class FilesystemStorage:
     def __init__(self, root: str) -> None:
-        self._root = Path(root).resolve()
+        # abspath/normpath = 문자열 연산(cwd만 읽고 파일시스템 stat 없음) → 스레드세이프.
+        self._root = os.path.normpath(os.path.abspath(root))
 
-    def _path(self, key: str) -> Path:
-        # 키는 앱이 uuid로 생성하지만 '..' 탈출 방어.
-        dest = (self._root / key).resolve()
-        if dest != self._root and self._root not in dest.parents:
+    def _path(self, key: str) -> str:
+        # '..' 탈출 방어 — normpath는 순수 문자열(resolve()와 달리 FS 미접근 → 동시 쓰기 경합 없음).
+        dest = os.path.normpath(os.path.join(self._root, key))
+        if dest != self._root and not dest.startswith(self._root + os.sep):
             raise ValueError(f"unsafe storage key: {key!r}")
         return dest
 
     def _put_sync(self, key: str, data: bytes) -> None:
         dest = self._path(key)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        tmp = dest.with_name(f"{dest.name}.{uuid.uuid4().hex}.tmp")
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        tmp = f"{dest}.{uuid.uuid4().hex}.tmp"
         with open(tmp, "wb") as f:
             f.write(data)
         # 같은 파일시스템 내 rename = 원자적(각자 완전한 temp를 스왑 → torn 파일 불가).
-        # Windows: 동일 dest에 동시 os.replace가 몰리면 일시적 PermissionError(WinError 5) →
-        # 원자성은 유지되므로 짧게 재시도로 경합만 흡수(POSIX엔 사실상 미발생).
-        for attempt in range(40):
-            try:
-                os.replace(tmp, dest)
-                return
-            except PermissionError:
-                if attempt == 39:
-                    try:
-                        os.remove(tmp)
-                    except FileNotFoundError:
-                        pass
-                    raise
-                time.sleep(0.005)
+        # 전역 락으로 replace 직렬화(동시 경합 제거) + 소량 재시도(Defender/인덱서가 갓 만든
+        # 파일을 스캔하며 거는 잔여 일시 denial 흡수). 정상 경로는 즉시 성공(락 μs).
+        with _replace_lock:
+            for attempt in range(10):
+                try:
+                    os.replace(tmp, dest)
+                    return
+                except PermissionError:
+                    if attempt == 9:
+                        try:
+                            os.remove(tmp)
+                        except FileNotFoundError:
+                            pass
+                        raise
+                    time.sleep(0.02)
 
     def _get_sync(self, key: str) -> bytes | None:
         try:
