@@ -337,7 +337,7 @@ per_page: integer  (선택, 1~40, 기본 20)
 ### 1-7. 덱 이미지 자산 API (v3 저작 덱 — 스펙 2026-07-01)
 
 > 저작 덱 HTML(iframe WYSIWYG)에 `<img>` 삽입용 바이트 저장소.
-> **설계 심장**: 바이트는 `deck_assets`(SQLite BLOB)에, 저장 HTML엔 짧은 URL만.
+> **설계 심장**: 바이트는 파일시스템(Storage, L1 — `deck_assets.storage_key`가 주소)에, 저장 HTML엔 짧은 URL만.
 > 렌더(S7 `deck_renderer`) 직전에만 URL을 DB 바이트→data URI로 인라인한다
 > (2MB PATCH 한도 준수 + 쿠키 없는 Playwright 401·set_content base 부재 동시 해소).
 
@@ -441,7 +441,7 @@ iframe editorAgent가 요소 선택 시 부여하는 **불투명 난수 id**(예
 |---|---|---|
 | `asset_id` | TEXT | 16-hex. `(job_id, asset_id)` 복합 PK |
 | `job_id` | TEXT | jobs FK |
-| `bytes` | BLOB | 이미지 원본 바이트 |
+| `storage_key` | TEXT | L1: 파일 주소 `jobs/{job_id}/assets/{asset_id}`. 바이트는 파일시스템(Storage). `get_deck_asset`가 `dict['bytes']`로 재조립 |
 | `mime` | TEXT | image/png\|jpeg\|webp\|gif |
 | `source_type` | TEXT | stock\|upload-owned\|upload-data\|paper-figure |
 | `source_url` | TEXT? | (스톡) 원본 CDN URL |

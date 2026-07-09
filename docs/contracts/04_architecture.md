@@ -321,27 +321,28 @@ CREATE TABLE card_data (
     updated_at   TEXT NOT NULL
 );
 
--- S7 출력 (PNG bytes) 저장
+-- S7 출력 (PNG) — L1(2026-07-09): 바이트는 파일시스템(Storage), DB엔 storage_key만
 CREATE TABLE card_images (
     job_id       TEXT NOT NULL REFERENCES jobs(job_id),
     card_num     INTEGER NOT NULL,     -- 1~5
-    png_bytes    BLOB,
+    storage_key  TEXT,                 -- 파일: jobs/{job_id}/cards/{card_num}.png
     size_kb      INTEGER,
     rendered_at  TEXT,
     PRIMARY KEY (job_id, card_num)
 );
 
--- ZIP 패키지
+-- ZIP 패키지 — L1: 바이트는 파일시스템
 CREATE TABLE exports (
     job_id       TEXT PRIMARY KEY REFERENCES jobs(job_id),
-    zip_bytes    BLOB,
+    storage_key  TEXT,                 -- 파일: jobs/{job_id}/exports/{id}.zip
     zip_size_kb  INTEGER,
     file_name    TEXT,                 -- kitech_{slug}_{YYYYMM}.zip
     expires_at   TEXT,                 -- created_at + 24h
     created_at   TEXT NOT NULL
 );
 
--- 기관 프로필 (1회 등록, 전체 적용)
+-- 기관 프로필 (1회 등록, 전체 적용) — profile.logo/character_bytes·researchers.photo_bytes는
+-- 현재 접근 함수 없는 dormant BLOB(L1 범위 밖. 기능 도입 시 그때 storage_key로 신설).
 CREATE TABLE profile (
     id           INTEGER PRIMARY KEY DEFAULT 1,
     org_name     TEXT,
@@ -360,7 +361,7 @@ CREATE TABLE researchers (
 ```
 
 **TTL 정책**:
-- `card_images.png_bytes`, `exports.zip_bytes` → 24시간 후 NULL 처리 (메타데이터 row는 유지)
+- `card_images`·`exports` → 24시간 후 행+파일 삭제 (L1: `cleanup_expired_blobs`가 storage_key 파일도 삭제). `deck_assets`는 30일 TTL(만료 시 행+파일 정리).
 - `jobs`, `card_data` → 영구 보존
 
 ---
