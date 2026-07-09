@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import uuid
@@ -10,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Re
 
 from pydantic import BaseModel, Field
 
+from ..agents.deck.deck_renderer import render_deck
 from ..agents.deck.nl_patch import apply_nl_patch
 from ..agents.deck.pipeline import compute_verify, persist_edited_deck, run_authoring_pipeline
 from ..core import db, ratelimit
@@ -17,6 +19,27 @@ from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
 
 router = APIRouter(prefix="/api", tags=["deck"])
+
+# 카드 PNG는 24h TTL 캐시(만료성) — 저작 HTML만 영구. 만료/미존재 카드를 요청하면
+# 저장된 HTML에서 재렌더해 자가치유한다. job별 락으로 병렬 카드 요청 스탬피드 방지.
+_heal_locks: dict[str, asyncio.Lock] = {}
+
+
+async def _heal_card_images(job_id: str, card_num: int) -> bytes | None:
+    """만료/미존재 카드를 저장된 저작 HTML에서 재렌더(전 카드) → 요청 카드 반환. 복구 불가 시 None."""
+    lock = _heal_locks.setdefault(job_id, asyncio.Lock())
+    async with lock:
+        # 락 대기 중 다른 요청이 이미 재렌더했을 수 있으니 재확인.
+        images = await db.get_card_images(job_id)
+        if card_num in images:
+            return images[card_num]
+        deck = await db.get_authored_deck(job_id)
+        html = deck.get("html") if deck else None
+        if not html:
+            return None
+        await render_deck(html, job_id=job_id)   # 전 카드 재렌더 + DB 저장(fresh 24h TTL)
+        images = await db.get_card_images(job_id)
+        return images.get(card_num)
 
 _MAX_PDF_BYTES = 50 * 1024 * 1024  # 50 MB
 _MAX_ASSET_BYTES = 8 * 1024 * 1024  # 8 MB — 덱 이미지 자산
@@ -231,6 +254,9 @@ async def get_deck_card(job_id: str, card_num: int, user: dict = Depends(get_cur
     await require_owned_job(job_id, user)
     images = await db.get_card_images(job_id)
     png = images.get(card_num)
+    if png is None:
+        # 렌더 캐시 만료(24h) 또는 미존재 → 저장된 HTML에서 자가치유 재렌더.
+        png = await _heal_card_images(job_id, card_num)
     if png is None:
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "카드 이미지가 없습니다."})
     return Response(content=png, media_type="image/png")
