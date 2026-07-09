@@ -10,6 +10,7 @@ interface Props {
   editing: boolean
   badge: BadgeState
   onBadgeClick: () => void
+  factOpen?: boolean    // 팩트체크 드로어 열림 — 배지 disclosure 상태
   onToggleMode: () => void
   onExport: () => void
   dirty?: boolean       // 편집 미저장 — 나가기 전 확인용
@@ -30,7 +31,7 @@ const TONE: Record<BadgeState['tone'], string> = {
 }
 
 export default function DeckTopBar({
-  filename, editing, badge, onBadgeClick, onToggleMode, onExport, dirty,
+  filename, editing, badge, onBadgeClick, factOpen, onToggleMode, onExport, dirty,
   canUndo, canRedo, onUndo, onRedo, saveLabel, onSave, saveDisabled,
 }: Props) {
   // 편집 미저장 상태로 이탈 시 확인(브랜드·브레드크럼 링크 공유)
@@ -68,10 +69,15 @@ export default function DeckTopBar({
         </div>
       )}
 
-      {/* 팩트 배지 */}
+      {/* 팩트 배지 = 팩트체크 드로어 disclosure 트리거(뷰·편집 공통) */}
       <button onClick={onBadgeClick}
-        className={`flex items-center gap-1.5 text-[11.5px] font-semibold rounded-full border px-3 py-1.5 shrink-0 ${TONE[badge.tone]}`}>
+        aria-expanded={!!factOpen} aria-haspopup="dialog" aria-controls="fact-drawer"
+        title="팩트 체크 열기 — 수치 원문 대조 상세"
+        className={`group flex items-center gap-1.5 text-[11.5px] font-semibold rounded-full border pl-3 pr-2 py-1.5 shrink-0 cursor-pointer hover:brightness-[0.98] transition ${TONE[badge.tone]}`}>
         <span aria-hidden="true">{badge.icon}</span>{badge.label}
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+          strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+          className={`opacity-60 transition-transform ${factOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6" /></svg>
       </button>
 
       {/* 편집 토글 */}

@@ -135,12 +135,15 @@ function DeckPageInner() {
   const [page, setPage] = useState<PageState>({ index: 0, count: 0 })
   const [rightTab, setRightTab] = useState<DeckTab>('ai')
   const [showExport, setShowExport] = useState(false)
-  const [showFact, setShowFact] = useState(false)   // 편집 모드 팩트체크 온디맨드 오버레이
+  const [showFact, setShowFact] = useState(false)   // 팩트체크 온디맨드 드로어(뷰·편집 공통)
+  const closeFactRef = useRef<HTMLButtonElement>(null)
+  const restoreFocusRef = useRef<Element | null>(null)
+  const autoRevealedRef = useRef(false)             // warn 시 뷰 진입 1회 자동노출 가드
   const editorRef = useRef<DeckEditorHandle>(null)
 
-  // 편집 모드 ←/→ 로 페이지 이동 (입력창·텍스트 편집 중엔 캐럿 우선 → 무시)
+  // 편집 모드 ←/→ 로 페이지 이동 (입력창·텍스트 편집 중엔 캐럿 우선, 팩트 드로어 열림 중엔 무시)
   useEffect(() => {
-    if (mode !== 'edit') return
+    if (mode !== 'edit' || showFact) return
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
@@ -149,7 +152,7 @@ function DeckPageInner() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [mode, page.index])
+  }, [mode, page.index, showFact])
 
   // 상태 폴링 → DONE이면 덱 로드
   useEffect(() => {
@@ -268,7 +271,31 @@ function DeckPageInner() {
     setTimeout(() => editorRef.current?.setPage(index), 0)
   }, [])
 
-  const onBadgeClick = useCallback(() => { if (mode === 'edit') setShowFact((v) => !v) }, [mode])
+  const onBadgeClick = useCallback(() => setShowFact((v) => !v), [])   // 두 모드 공통 온디맨드
+
+  // 팩트체크 드로어: Esc 닫기 + 포커스 이동(열 때 닫기버튼)/복귀(닫을 때 트리거)
+  useEffect(() => {
+    if (!showFact) return
+    restoreFocusRef.current = document.activeElement
+    const t = setTimeout(() => closeFactRef.current?.focus(), 0)
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowFact(false) }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      clearTimeout(t)
+      window.removeEventListener('keydown', onKey)
+      ;(restoreFocusRef.current as HTMLElement | null)?.focus?.()
+    }
+  }, [showFact])
+
+  // 미확인 수치(warn)가 있는 덱을 뷰로 처음 열면 팩트체크를 1회 자동 노출 — 해자 증거를 필요한 순간 표면화.
+  // all-clear(미확인 0)면 녹색 배지만으로 충분해 자동노출 안 함(카드 감상 방해 금지).
+  useEffect(() => {
+    if (autoRevealedRef.current || mode !== 'view') return
+    if (deck?.html && (deck.verify?.unverified ?? 0) > 0) {
+      autoRevealedRef.current = true
+      setShowFact(true)
+    }
+  }, [deck?.html, deck?.verify?.unverified, mode])
 
   // 진행 중이라도 콘텐츠(html)가 준비되면(RENDER 조기입장) 뷰로. 아니면 진행화면.
   if ((status !== 'DONE' && status !== 'ERROR') && !deck?.html) {
@@ -306,6 +333,7 @@ function DeckPageInner() {
         badge={badge}
         dirty={dirty}
         onBadgeClick={onBadgeClick}
+        factOpen={showFact}
         onToggleMode={toggleMode}
         onExport={() => setShowExport(true)}
         canUndo={history.canUndo}
@@ -323,7 +351,7 @@ function DeckPageInner() {
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0">
+      <div className="relative flex flex-1 min-h-0">
         {/* 중앙 */}
         <main className="flex-1 min-w-0 overflow-hidden">
           {editing ? (
@@ -359,9 +387,9 @@ function DeckPageInner() {
           )}
         </main>
 
-        {/* 우측 */}
-        <aside className="relative w-[372px] shrink-0 border-l border-deck-line bg-surface min-h-0">
-          {editing ? (
+        {/* 우측 도구 패널 — 편집 모드에만(뷰 모드는 뷰어 풀폭) */}
+        {editing && (
+          <aside className="w-[372px] shrink-0 border-l border-deck-line bg-surface min-h-0">
             <DeckRightTabs
               active={rightTab}
               onTab={setRightTab}
@@ -398,26 +426,26 @@ function DeckPageInner() {
                 </div>
               }
             />
-          ) : (
-            <div className="p-5 overflow-y-auto h-full">
-              <DeckFactPanel verify={v} canReverify={deck.canReverify !== false} />
-            </div>
-          )}
+          </aside>
+        )}
 
-          {/* 편집 모드 팩트체크 = 온디맨드 오버레이(상단 배지 토글). 상시 탭 중복 제거 */}
-          {editing && showFact && (
-            <div className="absolute inset-0 z-20 bg-surface flex flex-col">
-              <div className="flex items-center justify-between px-5 h-12 border-b border-deck-line shrink-0">
-                <span className="text-[13px] font-bold text-ink">팩트 체크</span>
-                <button onClick={() => setShowFact(false)} aria-label="닫기"
+        {/* 팩트체크 = 뷰·편집 공통 온디맨드 드로어(상단 배지 토글). 일관된 위치 */}
+        {showFact && (
+          <>
+            <div className="absolute inset-0 z-30 bg-black/10" aria-hidden="true" onClick={() => setShowFact(false)} />
+            <aside id="fact-drawer" role="dialog" aria-modal="true" aria-label="팩트 체크"
+              className="absolute top-0 right-0 z-40 h-full w-[400px] max-w-[88%] bg-surface border-l border-deck-line shadow-modal flex flex-col">
+              {/* 제목은 아래 DeckFactPanel이 소유(중복 방지) — 헤더 바엔 닫기만 */}
+              <div className="flex items-center justify-end px-3 h-11 shrink-0">
+                <button ref={closeFactRef} onClick={() => setShowFact(false)} aria-label="팩트 체크 닫기"
                   className="w-7 h-7 rounded-lg grid place-items-center text-ink-3 hover:text-ink hover:bg-bg-subtle transition-colors">✕</button>
               </div>
-              <div className="flex-1 overflow-y-auto p-5">
+              <div className="flex-1 overflow-y-auto px-5 pb-5">
                 <DeckFactPanel verify={v} canReverify={deck.canReverify !== false} />
               </div>
-            </div>
-          )}
-        </aside>
+            </aside>
+          </>
+        )}
       </div>
 
       {showExport && (
