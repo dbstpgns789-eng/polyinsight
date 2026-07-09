@@ -323,8 +323,11 @@ const AGENT_BODY = `
       var el = els[i], r = rects[i];
       if (getComputedStyle(el).position !== 'absolute') {
         el.style.width = r.width + 'px'; el.style.height = r.height + 'px';
-        el.style.left = (r.left - cr.left) + 'px'; el.style.top = (r.top - cr.top) + 'px';
         el.style.position = 'absolute';
+        // ★ left/top은 카드가 아니라 '실제 offsetParent' 기준이어야 제자리 유지(중첩 요소 좌표 붕괴 수정).
+        // (positioned 조상이 있으면 offsetParent=그 조상 → 카드 상대값을 그대로 쓰면 어긋남/반전)
+        var op = el.offsetParent || card, opr = op.getBoundingClientRect();
+        el.style.left = (r.left - opr.left) + 'px'; el.style.top = (r.top - opr.top) + 'px';
       }
     }
     return snaps; // promote 이전 인라인 스냅(undo용 before)
@@ -388,7 +391,8 @@ const AGENT_BODY = `
       if (additive(e)) return;
       startMarquee(e); return;
     }
-    var el = cardChild(picked) || picked;   // 기하 대상 = 카드 직계 자식(D3)
+    // ★ 기하 대상 = 클릭한 리프(Figma식). cardChild 폐기 — offsetParent-aware promote가 좌표 붕괴 처리.
+    var el = picked;
     var card = cardOf(el);
     if (additive(e)) { e.preventDefault(); toggleSel(el); return; } // Shift/Ctrl+클릭 토글
     if (!card) { select(picked); return; }
@@ -551,8 +555,11 @@ const AGENT_BODY = `
       if (d.height != null) after.height = Math.max(12, parseFloat(d.height) || 0) + 'px';
       applyInline(el, after);
       var w = el.offsetWidth, h = el.offsetHeight;
-      if (d.left != null) after.left = clamp(parseFloat(d.left) || 0, 0, CARD_W - w) + 'px';
-      if (d.top != null) after.top = clamp(parseFloat(d.top) || 0, 0, CARD_H - h) + 'px';
+      // ★ 입력값은 카드 좌표 → offsetParent 좌표로 변환(중첩 요소 반전/어긋남 수정). 클램프는 카드 공간에서.
+      var op = el.offsetParent || card, opr = op.getBoundingClientRect(), cardr = card.getBoundingClientRect();
+      var offX = opr.left - cardr.left, offY = opr.top - cardr.top;
+      if (d.left != null) after.left = (clamp(parseFloat(d.left) || 0, 0, CARD_W - w) - offX) + 'px';
+      if (d.top != null) after.top = (clamp(parseFloat(d.top) || 0, 0, CARD_H - h) - offY) + 'px';
       applyInline(el, after);
       pushCmd(layoutCmd(el, before, after)); emitSelected(); afterMutate();
     } else {
