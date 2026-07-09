@@ -302,6 +302,7 @@ function DeckPageInner() {
         filename={deck.filename ?? '덱'}
         editing={editing}
         badge={badge}
+        dirty={dirty}
         onBadgeClick={onBadgeClick}
         onToggleMode={toggleMode}
         onExport={() => setShowExport(true)}
