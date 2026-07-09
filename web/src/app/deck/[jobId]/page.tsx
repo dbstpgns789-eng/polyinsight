@@ -138,6 +138,7 @@ function DeckPageInner() {
   const [rightTab, setRightTab] = useState<DeckTab>('ai')
   const [showExport, setShowExport] = useState(false)
   const [viewIdx, setViewIdx] = useState(0)         // 뷰 모드 현재 카드(뷰어·개요 레일 동기)
+  const [railCollapsed, setRailCollapsed] = useState(false)   // 개요 레일 접기(선호 기억)
   const [showFact, setShowFact] = useState(false)   // 팩트체크 온디맨드 드로어(뷰·편집 공통)
   const closeFactRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<Element | null>(null)
@@ -303,6 +304,16 @@ function DeckPageInner() {
   // 개요 레일 스토리보드용 카드 역할 라벨(저작 HTML서 best-effort 추출)
   const cardLabels = useMemo(() => extractCardLabels(deck?.html), [deck?.html])
 
+  // 개요 레일 접기 선호 복원/저장(localStorage)
+  useEffect(() => {
+    try { setRailCollapsed(localStorage.getItem('deck.railCollapsed') === '1') } catch { /* no-op */ }
+  }, [])
+  const toggleRail = useCallback(() => setRailCollapsed((v) => {
+    const nv = !v
+    try { localStorage.setItem('deck.railCollapsed', nv ? '1' : '0') } catch { /* no-op */ }
+    return nv
+  }), [])
+
   // 진행 중이라도 콘텐츠(html)가 준비되면(RENDER 조기입장) 뷰로. 아니면 진행화면.
   if ((status !== 'DONE' && status !== 'ERROR') && !deck?.html) {
     return <GenerationTheater stage={stage || 'S1'} progress={progress} />
@@ -394,8 +405,8 @@ function DeckPageInner() {
           )}
         </main>
 
-        {/* 뷰 모드 우측 '덱 개요' 레일 — 편집 모드 도구 레일과 구조 대칭(휑함 해소) */}
-        {!editing && (
+        {/* 뷰 모드 우측 '덱 개요' 레일 — 편집 모드 도구 레일과 구조 대칭(휑함 해소). 접기 가능. */}
+        {!editing && !railCollapsed && (
           <DeckOverviewRail
             jobId={jobId}
             cardCount={deck.cardCount || 7}
@@ -406,7 +417,13 @@ function DeckPageInner() {
             verify={v}
             onOpenFact={() => setShowFact(true)}
             labels={cardLabels}
+            onCollapse={toggleRail}
           />
+        )}
+        {/* 접힘 상태 — 우측 가장자리 펼치기 탭 */}
+        {!editing && railCollapsed && (
+          <button onClick={toggleRail} title="덱 개요 펼치기" aria-label="덱 개요 펼치기"
+            className="absolute top-1/2 -translate-y-1/2 right-0 z-20 h-16 w-6 rounded-l-lg bg-surface border border-r-0 border-deck-line shadow-card grid place-items-center text-ink-3 hover:text-ink transition-colors">‹</button>
         )}
 
         {/* 우측 도구 패널 — 편집 모드에만 */}
