@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 
 import pytest
 
@@ -26,18 +27,22 @@ def mock_llm(monkeypatch):
 
 
 def test_verify_deck_classifies_provenance():
-    """콘텐츠 수치는 원문 대조, CSS(인라인 스타일)는 제외."""
-    paper = "The model scored 28.4 BLEU on EN-DE. Trained in 3.5 days."
+    """해자=정량 수치(단위·소수)만 원문 대조. 맨정수(권/연도/페이지)·CSS는 제외."""
+    paper = "The model scored 28.4 BLEU on EN-DE. Trained in 3.5 days. Loading 19.36%."
     html = (
         '<div data-screen-label="01" style="color:oklch(95.5% 0.012 152)">'
-        '<h1>28.4 BLEU</h1><p>3.5일</p><p>2018 BERT</p></div>'
+        '<h1>28.4 BLEU</h1><p>3.5일</p><p>로딩 19.36 %</p>'
+        '<p>수율 99.9 %</p><p>2018 BERT</p><p>Vol. 372 (2026) · 01 / 07</p></div>'
     )
     claims = verify_deck(html, paper)
     by_val = {c.value.strip(): c.verified for c in claims}
-    assert by_val.get("28.4") is True       # 'BLEU'의 B를 단위로 오인하지 않음
-    assert any(c.verified and c.value.strip().startswith("3.5") for c in claims)
-    # 논문에 없는 맥락(2018)은 UNVERIFIED로 표면화
-    assert any((not c.verified) and "2018" in c.value for c in claims)
+    assert by_val.get("28.4") is True       # 소수 → 정량. 'BLEU'의 B를 단위로 오인하지 않음
+    assert any(c.verified and c.value.strip().startswith("3.5") for c in claims)  # "3.5일"
+    assert by_val.get("19.36 %") is True     # 단위 % → 정량, 원문 존재
+    # 지어낸 정량 수치(원문에 없는 99.9%)는 UNVERIFIED로 표면화 — 날조 잡기
+    assert by_val.get("99.9 %") is False
+    # 맨정수(연도 2018·2026, 권번호 372, 페이지 01/07)는 claim 아님 (서지/네비 노이즈)
+    assert not any(re.fullmatch(r"\d+", c.value.strip()) for c in claims)
     # CSS 토큰(95.5/0.012/152)은 검증 대상에서 제외(오탐 없음)
     assert "95.5" not in by_val and "152" not in by_val
 

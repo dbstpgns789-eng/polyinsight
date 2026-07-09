@@ -8,8 +8,14 @@
   VERIFIED   — 수치가 원문에 존재 (논문 근거)
   UNVERIFIED — 원문에 없음 → 사용자 판단 필요 (AI가 더한 맥락 / 예시 / 오류 중 하나)
 
-★ 핵심 설계: CSS(스타일·OKLCH 토큰)는 검증에서 제외한다. 콘텐츠 텍스트의 수치만 본다.
+★ 핵심 설계 1: CSS(스타일·OKLCH 토큰)는 검증에서 제외한다. 콘텐츠 텍스트의 수치만 본다.
    (이전 순진한 grep이 oklch(95.5% ...) 같은 디자인 토큰을 오탐한 교훈.)
+
+★ 핵심 설계 2 (2026-07-09): 해자는 **정량 수치(quantity)**만 추적한다.
+   = 단위(%, mV, μm, M, h, mg, 배 …) 또는 소수점을 동반한 측정값.
+   맨정수(단위·소수 없음)는 저널 권번호(372)·연도(2026)·페이지번호(01/07)·아티클id(124526)
+   같은 서지/네비게이션 노이즈라 claim에서 제외한다. 헌법 §1 "numbers and statistics"와 정합.
+   → "숫자 다 긁는 정규식"처럼 보이던 문제 시정. 신뢰 가는 원장(ledger)만 남긴다.
 """
 from __future__ import annotations
 
@@ -19,8 +25,8 @@ from dataclasses import dataclass
 
 @dataclass
 class NumberClaim:
-    value: str          # 카드에 쓰인 수치 토큰 (예: "28.4", "175B", "2018")
-    context: str        # 그 수치 주변 콘텐츠 한 토막 (사용자 판단용)
+    value: str          # 카드에 쓰인 정량 수치 토큰 (예: "28.4", "19.36 ± 0.96 %", "+49.3 mV")
+    context: str        # 그 수치 주변 콘텐츠 한 토막 (사용자 판단용, 단어 경계로 정리)
     verified: bool      # 원문에 존재?
 
 
@@ -28,11 +34,28 @@ _STYLE_BLOCK = re.compile(r"<style[^>]*>.*?</style>", re.S | re.I)
 _STYLE_ATTR = re.compile(r'\sstyle="[^"]*"', re.I)
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
-# 의미 있는 수치: 소수, 2자리+ 정수, 단위 접미(%, B, M, 일, 배, 점 등) 포함 토큰.
-# 단위 묶음은 '숫자 바로 뒤 한 칸까지'만, B/M/K는 뒤에 글자가 이어지면 단위 아님(예: "28.4 BLEU"의 B 제외).
-_NUM = re.compile(
-    r"\d[\d,]*\.?\d*(?:\s?(?:%p|%|일|시간|배|점|개|층|억|만|[BMK](?![A-Za-z])))?"
+
+# 과학·정량 단위 (분야: 고분자·화학·생물·물리). ASCII 단위는 뒤에 글자가 이어지면 단위 아님(예: "28.4 BLEU").
+_UNIT = (
+    r"%p|%|‰|"
+    r"mV|kV|μV|µV|V|mA|μA|µA|nA|A|Ω|"
+    r"nm|μm|µm|um|mm|cm|km|Å|"
+    r"mM|μM|µM|nM|pM|mmol|μmol|µmol|mol|M|"
+    r"mg|μg|µg|ng|pg|kg|g|"
+    r"mL|ml|μL|µL|dL|L|"
+    r"kPa|MPa|GPa|Pa|bar|"
+    r"℃|°C|"
+    r"kDa|Da|rpm|kHz|MHz|Hz|"
+    r"ms|μs|µs|ns|min|h|"
+    r"배|점|개|층|일|시간|주|개월|년|억|만"
 )
+# 정량 수치: 숫자(부호·콤마) + 선택적 ±오차(한 claim으로) + 선택적 단위(복합 /cm² 허용).
+_NUM = re.compile(
+    r"[+\-−]?\d[\d,]*\.?\d*"
+    r"(?:\s*±\s*\d[\d,]*\.?\d*)?"
+    r"(?:\s?(?:" + _UNIT + r")(?:\s?/\s?[A-Za-zμµ²³]+|[²³])?(?![A-Za-z]))?"
+)
+_CORE = re.compile(r"\d[\d,]*\.?\d*")
 
 
 def _content_text(html: str) -> str:
@@ -48,17 +71,27 @@ def _flat(s: str) -> str:
 
 
 def _is_meaningful(tok: str) -> bool:
-    """검증 대상 수치인가. 한 자리 정수·페이지번호성 토큰은 노이즈로 제외."""
-    digits = re.sub(r"[^\d]", "", tok)
-    if not digits:
-        return False
-    has_unit = bool(re.search(r"(%p|%|B|M|K|일|시간|배|점|개|층|억|만)$", tok.strip()))
-    has_dot = "." in tok
-    return has_unit or has_dot or len(digits) >= 2
+    """정량 수치(단위 또는 소수점 동반)인가. 맨정수(권/연도/페이지/id 노이즈)는 제외."""
+    t = tok.strip()
+    if "." in t:
+        return True
+    # 숫자·부호·콤마·±·공백을 뺀 나머지 문자 = 단위. 남으면 정량 수치.
+    return bool(re.sub(r"[\d,.\s±+\-−]", "", t))
+
+
+def _clean_context(content: str, start: int, end: int) -> str:
+    """수치 주변 한 토막을 단어 경계로 정리(부분단어 잘림 방지)."""
+    lo, hi = max(0, start - 40), min(len(content), end + 40)
+    ctx = content[lo:hi]
+    if lo > 0:
+        ctx = re.sub(r"^\S*\s", "", ctx, count=1)        # 앞 부분단어 제거
+    if hi < len(content):
+        ctx = re.sub(r"\s\S*$", "", ctx, count=1)        # 뒤 부분단어 제거
+    return _WS.sub(" ", ctx).strip()
 
 
 def verify_deck(html: str, paper_text: str) -> list[NumberClaim]:
-    """덱 HTML의 콘텐츠 수치를 원문과 대조해 NumberClaim 리스트 반환."""
+    """덱 HTML의 정량 수치를 원문과 대조해 NumberClaim 리스트 반환."""
     content = _content_text(html)
     paper_flat = _flat(paper_text)
     seen: set[str] = set()
@@ -68,11 +101,11 @@ def verify_deck(html: str, paper_text: str) -> list[NumberClaim]:
         if not _is_meaningful(tok) or tok in seen:
             continue
         seen.add(tok)
-        # 숫자 코어(단위·콤마 제거)로 원문 대조 — 단위 표기 차이에 견고
-        core = re.sub(r"[,\s]", "", re.sub(r"(%p|%|B|M|K|일|시간|배|점|개|층|억|만)$", "", tok))
+        # 주 수치 코어(첫 숫자 런, 콤마 제거)로 원문 대조 — 단위 표기 차이에 견고
+        cm = _CORE.search(tok)
+        core = cm.group().replace(",", "") if cm else ""
         verified = bool(core) and (core in paper_text or core in paper_flat)
-        ctx = content[max(0, m.start() - 32): m.end() + 24].strip()
-        claims.append(NumberClaim(value=tok, context=ctx, verified=verified))
+        claims.append(NumberClaim(value=tok, context=_clean_context(content, m.start(), m.end()), verified=verified))
     return claims
 
 
