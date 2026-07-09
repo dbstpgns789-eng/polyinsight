@@ -16,6 +16,7 @@ from backend.main import app
 async def mem_db(tmp_path, monkeypatch):
     db_file = str(tmp_path / "events.db")
     monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_file}")
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "blobstore"))
     monkeypatch.setattr(settings, "COOKIE_SECURE", False)
     monkeypatch.setattr(settings, "RENDER_TOKEN", "")
     await _db.migrate()

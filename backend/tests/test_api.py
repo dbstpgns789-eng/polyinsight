@@ -29,6 +29,7 @@ async def use_memory_db(tmp_path, monkeypatch):
     from backend.core.auth import get_current_user
     db_file = str(tmp_path / "test.db")
     monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_file}")
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "blobstore"))
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
     from backend.core import ratelimit
     ratelimit.reset_all()
@@ -204,6 +205,16 @@ async def test_export_download_returns_zip(client):
     assert zipfile.is_zipfile(io.BytesIO(resp.content))
 
 
+@pytest.mark.asyncio
+async def test_export_stored_on_disk_and_key_preserved():
+    """L1: save_export는 파일로, get_export는 여전히 dict['zip_bytes']로 바이트 반환."""
+    job_id = await _new_job()
+    await _db.save_export("exp1", job_id, b"PK-zipdata", "out.zip")
+    row = await _db.get_export("exp1")
+    assert row["zip_bytes"] == b"PK-zipdata"   # export.py download_zip이 쓰는 키
+    assert row["filename"] == "out.zip"
+
+
 # ── 카드 이미지 ────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -222,6 +233,19 @@ async def test_card_image_returns_png(client):
     resp = await client.get(f"/api/cards/{job_id}/image/1")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_card_image_stored_on_disk_not_blob():
+    """L1: save_card_image는 파일로 쓰고 DB엔 storage_key만 — png_bytes 컬럼 미사용."""
+    from backend.core import storage as _storage
+    job_id = await _new_job()
+    await _db.save_card_image(job_id, card_num=1, png_bytes=b"\x89PNG-disk")
+    # 파일이 결정적 키에 존재
+    assert await _storage.get_storage().get(f"jobs/{job_id}/cards/1.png") == b"\x89PNG-disk"
+    # get_card_images는 여전히 {card_num: bytes} 반환
+    imgs = await _db.get_card_images(job_id)
+    assert imgs == {1: b"\x89PNG-disk"}
 
 
 # ── CardEditorData bg_color 필드 ──────────────────────────────────────────
@@ -297,6 +321,33 @@ async def test_delete_job_cascade(client):
     assert await _db.get_card_data("j1") is None
     resp2 = await client.delete("/api/jobs/j1")
     assert resp2.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_job_removes_files():
+    """L1: delete_job은 job 하위 파일(cards·assets)을 delete_prefix로 통삭제."""
+    from backend.core import storage as _storage
+    job_id = await _new_job()
+    await _db.save_card_image(job_id, 1, b"\x89PNG")
+    await _db.save_deck_asset(job_id, "a1", b"asset", "image/png")
+    s = _storage.get_storage()
+    assert await s.get(f"jobs/{job_id}/cards/1.png") is not None
+    await _db.delete_job(job_id)
+    assert await s.get(f"jobs/{job_id}/cards/1.png") is None
+    assert await s.get(f"jobs/{job_id}/assets/a1") is None
+
+
+@pytest.mark.asyncio
+async def test_cleanup_expired_deletes_card_and_asset_files():
+    """L1: cleanup_expired_blobs는 만료 card·export·deck_asset 행과 파일을 함께 제거."""
+    from backend.core import storage as _storage
+    job_id = await _new_job()
+    await _db.save_card_image(job_id, 1, b"\x89PNG", ttl_hours=-1)
+    await _db.save_deck_asset(job_id, "a1", b"asset", "image/png", ttl_hours=-1)
+    s = _storage.get_storage()
+    await _db.cleanup_expired_blobs()
+    assert await s.get(f"jobs/{job_id}/cards/1.png") is None
+    assert await s.get(f"jobs/{job_id}/assets/a1") is None
 
 
 @pytest.mark.asyncio
@@ -410,6 +461,16 @@ async def test_upload_deck_asset_and_serve(client):
     # DB 소스타입 보존
     asset = await _db.get_deck_asset("jasset", body["assetId"])
     assert asset["source_type"] == "upload-owned"
+
+
+@pytest.mark.asyncio
+async def test_deck_asset_stored_on_disk_and_keys_preserved():
+    """L1: save_deck_asset는 파일로, get_deck_asset는 dict['bytes']/['mime'] 보존."""
+    job_id = await _new_job()
+    await _db.save_deck_asset(job_id, "a1", b"\x89PNG-asset", "image/png")
+    row = await _db.get_deck_asset(job_id, "a1")
+    assert row["bytes"] == b"\x89PNG-asset"   # deck.py·deck_renderer가 쓰는 키
+    assert row["mime"] == "image/png"
 
 
 @pytest.mark.asyncio

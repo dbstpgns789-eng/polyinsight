@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import aiosqlite
 
 from .config import settings
+from .storage import get_storage
 
 
 def _hash_token(token: str) -> str:
@@ -68,14 +69,14 @@ async def migrate() -> None:
                 id INTEGER PRIMARY KEY,
                 job_id TEXT,
                 card_num INT,
-                png_bytes BLOB,
+                storage_key TEXT,
                 expires_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS exports (
                 export_job_id TEXT PRIMARY KEY,
                 job_id TEXT,
-                zip_bytes BLOB,
+                storage_key TEXT,
                 filename TEXT,
                 expires_at TEXT,
                 created_at TEXT
@@ -161,7 +162,7 @@ async def migrate() -> None:
             CREATE TABLE IF NOT EXISTS deck_assets (
                 asset_id TEXT,
                 job_id TEXT REFERENCES jobs(job_id),
-                bytes BLOB,
+                storage_key TEXT,
                 mime TEXT,
                 source_type TEXT,
                 source_url TEXT,
@@ -189,6 +190,12 @@ async def migrate() -> None:
             ucols = [row[1] for row in await cur.fetchall()]
         if "email_verified" not in ucols:
             await conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+        # L1(2026-07-09): BLOB→파일시스템. 기존 DB에 storage_key 없으면 추가(멱등).
+        for _tbl in ("card_images", "exports", "deck_assets"):
+            async with conn.execute(f"PRAGMA table_info({_tbl})") as cur:
+                _cols = [row[1] for row in await cur.fetchall()]
+            if "storage_key" not in _cols:
+                await conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN storage_key TEXT")
         await conn.commit()
 
 
@@ -390,22 +397,24 @@ async def save_deck_asset(
     credit_url: str | None = None,
     ttl_hours: int = 24 * 30,  # 덱 수명 정합(스펙 §4.4). 재편집까지 생존.
 ) -> None:
+    key = f"jobs/{job_id}/assets/{asset_id}"
+    await get_storage().put(key, data)
     now = _utc_now_iso()
     expires_at = (_utc_now() + timedelta(hours=ttl_hours)).isoformat()
     async with _connect() as conn:
         await conn.execute(
             """
             INSERT INTO deck_assets (
-                asset_id, job_id, bytes, mime, source_type, source_url,
+                asset_id, job_id, storage_key, mime, source_type, source_url,
                 provider, credit, credit_url, created_at, expires_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(job_id, asset_id) DO UPDATE SET
-                bytes = excluded.bytes, mime = excluded.mime,
+                storage_key = excluded.storage_key, mime = excluded.mime,
                 source_type = excluded.source_type, source_url = excluded.source_url,
                 provider = excluded.provider, credit = excluded.credit,
                 credit_url = excluded.credit_url, expires_at = excluded.expires_at
             """,
-            (asset_id, job_id, data, mime, source_type, source_url,
+            (asset_id, job_id, key, mime, source_type, source_url,
              provider, credit, credit_url, now, expires_at),
         )
         await conn.commit()
@@ -416,13 +425,17 @@ async def get_deck_asset(job_id: str, asset_id: str) -> dict | None:
     async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            "SELECT asset_id, bytes, mime, source_type, source_url, provider, "
+            "SELECT asset_id, storage_key, mime, source_type, source_url, provider, "
             "credit, credit_url FROM deck_assets "
             "WHERE job_id = ? AND asset_id = ? AND expires_at > ?",
             (job_id, asset_id, now),
         ) as cursor:
             row = await cursor.fetchone()
-            return dict(row) if row else None
+    if row is None:
+        return None
+    d = dict(row)
+    d["bytes"] = await get_storage().get(row["storage_key"]) if row["storage_key"] else None
+    return d
 
 
 async def list_deck_assets(job_id: str) -> list[dict]:
@@ -464,7 +477,7 @@ async def update_job_title(job_id: str, title: str) -> bool:
 
 
 async def delete_job(job_id: str) -> bool:
-    """job과 연관 데이터(card_data·card_images·exports·authored_deck) 일괄 삭제. job 존재 시 True."""
+    """job과 연관 데이터(card_data·card_images·exports·authored_deck·deck_assets) 일괄 삭제 + 파일."""
     async with _connect() as conn:
         await conn.execute("DELETE FROM card_images WHERE job_id = ?", (job_id,))
         await conn.execute("DELETE FROM deck_assets WHERE job_id = ?", (job_id,))
@@ -473,7 +486,9 @@ async def delete_job(job_id: str) -> bool:
         await conn.execute("DELETE FROM authored_deck WHERE job_id = ?", (job_id,))
         cursor = await conn.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))
         await conn.commit()
-        return (cursor.rowcount or 0) > 0
+        existed = (cursor.rowcount or 0) > 0
+    await get_storage().delete_prefix(f"jobs/{job_id}")  # cards·exports·assets 파일 통삭제
+    return existed
 
 
 async def save_card_image(
@@ -482,6 +497,8 @@ async def save_card_image(
     png_bytes: bytes,
     ttl_hours: int = 24,
 ) -> None:
+    key = f"jobs/{job_id}/cards/{card_num}.png"
+    await get_storage().put(key, png_bytes)   # 원자적 — 동시 재렌더 same-key 안전
     expires_at = (_utc_now() + timedelta(hours=ttl_hours)).isoformat()
     async with _connect() as conn:
         await conn.execute(
@@ -489,42 +506,52 @@ async def save_card_image(
             (job_id, card_num),
         )
         await conn.execute(
-            """
-            INSERT INTO card_images (job_id, card_num, png_bytes, expires_at)
-            VALUES (?, ?, ?, ?)
-            """,
-            (job_id, card_num, png_bytes, expires_at),
+            "INSERT INTO card_images (job_id, card_num, storage_key, expires_at) "
+            "VALUES (?, ?, ?, ?)",
+            (job_id, card_num, key, expires_at),
         )
         await conn.commit()
 
 
 async def delete_card_images_above(job_id: str, max_card_num: int) -> None:
-    """card_num > max_card_num 인 카드 이미지 삭제 (편집으로 카드 수가 줄었을 때 잔재 정리)."""
+    """card_num > max_card_num 카드 삭제(편집으로 카드 수 감소 시 잔재 정리) — 파일도 제거."""
     async with _connect() as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT storage_key FROM card_images WHERE job_id = ? AND card_num > ?",
+            (job_id, max_card_num),
+        ) as cur:
+            keys = [r["storage_key"] for r in await cur.fetchall() if r["storage_key"]]
         await conn.execute(
             "DELETE FROM card_images WHERE job_id = ? AND card_num > ?",
             (job_id, max_card_num),
         )
         await conn.commit()
+    storage = get_storage()
+    for k in keys:
+        await storage.delete(k)
 
 
 async def get_card_images(job_id: str) -> dict[int, bytes]:
     now = _utc_now_iso()
-    images: dict[int, bytes] = {}
     async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             """
-            SELECT card_num, png_bytes
+            SELECT card_num, storage_key
             FROM card_images
             WHERE job_id = ? AND expires_at > ?
             """,
             (job_id, now),
         ) as cursor:
             rows = await cursor.fetchall()
-            for row in rows:
-                if row["png_bytes"] is not None:
-                    images[row["card_num"]] = row["png_bytes"]
+    storage = get_storage()
+    images: dict[int, bytes] = {}
+    for row in rows:
+        if row["storage_key"]:
+            data = await storage.get(row["storage_key"])
+            if data is not None:
+                images[row["card_num"]] = data
     return images
 
 
@@ -535,22 +562,24 @@ async def save_export(
     filename: str,
     ttl_hours: int = 24,
 ) -> None:
+    key = f"jobs/{job_id}/exports/{export_job_id}.zip"
+    await get_storage().put(key, zip_bytes)
     now = _utc_now_iso()
     expires_at = (_utc_now() + timedelta(hours=ttl_hours)).isoformat()
     async with _connect() as conn:
         await conn.execute(
             """
             INSERT INTO exports (
-                export_job_id, job_id, zip_bytes, filename, expires_at, created_at
+                export_job_id, job_id, storage_key, filename, expires_at, created_at
             ) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(export_job_id) DO UPDATE SET
                 job_id = excluded.job_id,
-                zip_bytes = excluded.zip_bytes,
+                storage_key = excluded.storage_key,
                 filename = excluded.filename,
                 expires_at = excluded.expires_at,
                 created_at = excluded.created_at
             """,
-            (export_job_id, job_id, zip_bytes, filename, expires_at, now),
+            (export_job_id, job_id, key, filename, expires_at, now),
         )
         await conn.commit()
 
@@ -560,43 +589,49 @@ async def get_export(export_job_id: str) -> dict | None:
     async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            """
-            SELECT * FROM exports
-            WHERE export_job_id = ? AND expires_at > ?
-            """,
+            "SELECT export_job_id, job_id, storage_key, filename, expires_at, created_at "
+            "FROM exports WHERE export_job_id = ? AND expires_at > ?",
             (export_job_id, now),
         ) as cursor:
             row = await cursor.fetchone()
-            return dict(row) if row else None
+    if row is None:
+        return None
+    d = dict(row)
+    d["zip_bytes"] = await get_storage().get(row["storage_key"]) if row["storage_key"] else None
+    return d
 
 
 async def cleanup_expired_blobs() -> int:
     now = _utc_now_iso()
+    storage = get_storage()
     deleted = 0
     async with _connect() as conn:
-        cursor = await conn.execute(
-            "DELETE FROM card_images WHERE expires_at <= ?",
-            (now,),
-        )
-        deleted += cursor.rowcount or 0
-        cursor = await conn.execute(
-            "DELETE FROM exports WHERE expires_at <= ?",
-            (now,),
-        )
-        deleted += cursor.rowcount or 0
+        conn.row_factory = aiosqlite.Row
+        # 만료 파일 키를 먼저 수집(행 삭제 전) — card_images·exports·deck_assets.
+        keys: list[str] = []
+        for _tbl in ("card_images", "exports", "deck_assets"):
+            async with conn.execute(
+                f"SELECT storage_key FROM {_tbl} WHERE expires_at <= ?", (now,)
+            ) as cur:
+                keys += [r["storage_key"] for r in await cur.fetchall() if r["storage_key"]]
+        for _tbl in ("card_images", "exports", "deck_assets"):
+            cursor = await conn.execute(
+                f"DELETE FROM {_tbl} WHERE expires_at <= ?", (now,)
+            )
+            deleted += cursor.rowcount or 0
         # 만료 세션 정리(무한증식 방지, 2026-07-02) — _ttl_cleaner가 30분마다 호출.
         cursor = await conn.execute(
-            "DELETE FROM sessions WHERE expires_at <= ?",
-            (now,),
+            "DELETE FROM sessions WHERE expires_at <= ?", (now,)
         )
         deleted += cursor.rowcount or 0
         # 만료·사용 완료된 인증 토큰 정리.
         cursor = await conn.execute(
-            "DELETE FROM auth_tokens WHERE expires_at <= ? OR used_at IS NOT NULL",
-            (now,),
+            "DELETE FROM auth_tokens WHERE expires_at <= ? OR used_at IS NOT NULL", (now,)
         )
         deleted += cursor.rowcount or 0
         await conn.commit()
+    for k in keys:
+        await storage.delete(k)
     return deleted
 
 

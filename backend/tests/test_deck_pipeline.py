@@ -7,6 +7,7 @@ import pathlib
 import re
 
 import pytest
+import pytest_asyncio
 
 from backend.core import db
 from backend.core.config import settings
@@ -19,6 +20,17 @@ _ATTN_PDF = pathlib.Path(
     r"C:\Users\User\Desktop\한국생산기술연구원_근로장학"
     r"\poly_claude_code\논문\golden_22\NIPS-2017-attention-is-all-you-need-Paper.pdf"
 )
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _isolated_db(tmp_path, monkeypatch):
+    """각 테스트를 격리된 tmp DB로 실행.
+    (기존엔 픽스처가 없어 주변 ./polyinsight.db에 의존 → 깨끗한 체크아웃서 'no such table' 실패.)
+    L1: 바이너리가 파일시스템으로 빠지므로 STORAGE_DIR(tmp) 격리도 필수."""
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{tmp_path / 'deck.db'}")
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "blobstore"))
+    await db.migrate()
+    yield
 
 
 @pytest.fixture
