@@ -2,6 +2,8 @@
 
 // 팩트 체크 패널 (스펙 §4.5) — 무채색 워크스페이스(compC). 검증=의미색 초록만.
 // 출처 위치·정합 주장 금지(헌법). 수치→추적가능성 원장(claim ledger)으로 해자 표면화.
+import { useState } from 'react'
+
 interface VerifyClaim { value: string; context: string; verified: boolean }
 interface VerifyData { verified: number; unverified: number; claims: VerifyClaim[] }
 
@@ -11,6 +13,7 @@ interface Props {
 }
 
 export default function DeckFactPanel({ verify, canReverify }: Props) {
+  const [open, setOpen] = useState(true)       // claim ledger 접기/펼치기
   const claims = verify?.claims ?? []
   const flagged = claims.filter((c) => !c.verified)
   const verified = claims.filter((c) => c.verified)
@@ -54,13 +57,23 @@ export default function DeckFactPanel({ verify, canReverify }: Props) {
         </div>
       </div>
 
-      {/* claim ledger */}
+      {/* claim ledger — 헤더 클릭으로 접기/펼치기 */}
       {shown.length > 0 && (
         <div className="flex flex-col">
-          <div className="flex items-baseline justify-between pb-0.5">
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3">Claim Ledger</span>
+          <button
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="flex items-center justify-between pb-0.5 w-full text-left group"
+          >
+            <span className="flex items-center gap-1.5">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+                strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+                className={`text-ink-3 transition-transform ${open ? 'rotate-90' : ''}`}><path d="m9 18 6-6-6-6" /></svg>
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3 group-hover:text-ink-2 transition-colors">Claim Ledger</span>
+            </span>
             <span className="font-mono text-[10.5px] text-ink-3 tabular-nums">{shown.length} / {claims.length}</span>
-          </div>
+          </button>
+          {open && (
           <ul>
             {shown.map((c, i) => (
               <li key={i} className="flex items-center gap-2.5 py-2.5 border-t border-deck-line-soft first:border-t-0">
@@ -76,6 +89,7 @@ export default function DeckFactPanel({ verify, canReverify }: Props) {
               </li>
             ))}
           </ul>
+          )}
         </div>
       )}
 
