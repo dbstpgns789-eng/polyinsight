@@ -367,20 +367,20 @@ function DeckPageInner() {
       )}
 
       <div className="relative flex flex-1 min-h-0">
-        {/* ◀ 좌측 네비 (뷰 모드) — 덱 개요 스토리보드. 접기 가능 (3패널: 좌 네비) */}
-        {!editing && !railCollapsed && (
+        {/* ◀ 좌측 네비 (뷰·편집 공통) — 덱 개요 스토리보드. 접기 가능 (3패널: 좌 네비) */}
+        {!railCollapsed && (
           <DeckOverviewRail
             jobId={jobId}
             cardCount={deck.cardCount || 7}
             ver={ver}
-            index={viewIdx}
-            onSelect={setViewIdx}
+            index={editing ? page.index : viewIdx}
+            onSelect={editing ? (i) => editorRef.current?.setPage(i) : setViewIdx}
             title={deck.filename ?? '덱'}
             labels={cardLabels}
             onCollapse={toggleRail}
           />
         )}
-        {!editing && railCollapsed && (
+        {railCollapsed && (
           <button onClick={toggleRail} title="덱 개요 펼치기" aria-label="덱 개요 펼치기"
             className="absolute top-1/2 -translate-y-1/2 left-0 z-20 h-16 w-6 rounded-r-lg bg-surface border border-l-0 border-deck-line shadow-card grid place-items-center text-ink-3 hover:text-ink transition-colors">›</button>
         )}
