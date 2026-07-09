@@ -80,12 +80,15 @@ export default function DeckTopBar({
           className={`opacity-60 transition-transform ${factOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6" /></svg>
       </button>
 
-      {/* 편집 토글 */}
-      <button onClick={onToggleMode}
-        className={`text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border shrink-0 ${
-          editing ? 'border-forest-green text-forest-green' : 'border-deck-line text-ink-2'}`}>
-        {editing ? '편집 종료' : '✎ 편집'}
-      </button>
+      {/* 보기│편집 세그먼트 모드 토글 — 양방향 상태를 명시(블랙박스 벤치 반영) */}
+      <div role="group" aria-label="모드" className="flex items-center gap-0.5 p-0.5 rounded-lg bg-bg-subtle border border-deck-line shrink-0">
+        <button onClick={() => { if (editing) onToggleMode() }} aria-pressed={!editing}
+          className={`text-[12.5px] font-semibold px-3 py-1 rounded-md transition-colors ${
+            !editing ? 'bg-surface text-ink shadow-card' : 'text-ink-3 hover:text-ink-2'}`}>보기</button>
+        <button onClick={() => { if (!editing) onToggleMode() }} aria-pressed={editing}
+          className={`text-[12.5px] font-semibold px-3 py-1 rounded-md transition-colors ${
+            editing ? 'bg-surface text-forest-green-deep shadow-card' : 'text-ink-3 hover:text-ink-2'}`}>✎ 편집</button>
+      </div>
 
       {/* 내보내기 */}
       <button onClick={onExport}
