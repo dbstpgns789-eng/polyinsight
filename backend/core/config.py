@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     PLAYWRIGHT_TIMEOUT_MS: int = 15000
     WEB_BASE_URL: str = "http://localhost:3000"  # S7 render 라우트 호스트 (Next.js)
     EXPORT_TTL_HOURS: int = 24
+    # L1(2026-07-09): 바이너리 파일 저장 루트. 프로덕션은 레포 밖 마운트 볼륨으로 .env override
+    # (예: /var/lib/polyinsight/blobstore — 24_system_architecture §4 "호스트 디스크 볼륨").
+    STORAGE_DIR: str = "backend/var/blobstore"
     MAX_CONCURRENT_JOBS: int = 5
     DEBUG: bool = False
     DEV_MOCK_LLM: bool = False  # True 시 S6 LLM 호출 없이 mock 데이터 반환
