@@ -2,6 +2,7 @@
 
 // /deck 상단바 (스펙 §4.1) — 뷰·편집 공통. 라이트 크롬(다크 금지, 제약 2). 토큰만.
 import Link from 'next/link'
+import type { MouseEvent } from 'react'
 import type { BadgeState } from '@/lib/factBadge'
 
 interface Props {
@@ -32,22 +33,25 @@ export default function DeckTopBar({
   filename, editing, badge, onBadgeClick, onToggleMode, onExport, dirty,
   canUndo, canRedo, onUndo, onRedo, saveLabel, onSave, saveDisabled,
 }: Props) {
+  // 편집 미저장 상태로 이탈 시 확인(브랜드·브레드크럼 링크 공유)
+  const guardLeave = (e: MouseEvent) => {
+    if (editing && dirty && !window.confirm('저장하지 않은 편집이 있어요. 나가면 사라집니다. 나가시겠어요?')) e.preventDefault()
+  }
   return (
-    <header className="flex items-center gap-3 px-4 h-14 bg-surface border-b border-deck-line shrink-0">
-      {/* 로고 락업 = 대시보드 탈출구. 편집 미저장 시 확인. */}
-      <Link
-        href="/dashboard"
-        title="대시보드로 나가기"
-        onClick={(e) => { if (editing && dirty && !window.confirm('저장하지 않은 편집이 있어요. 나가면 사라집니다. 나가시겠어요?')) e.preventDefault() }}
-        className="group flex items-center gap-2 shrink-0 rounded-lg px-1.5 py-1 -ml-1 hover:bg-bg-subtle transition-colors"
-      >
-        <span className="text-[15px] leading-none text-ink-3 group-hover:text-ink-2 transition-colors" aria-hidden="true">←</span>
+    <header className="flex items-center gap-2.5 px-4 h-14 bg-surface border-b border-deck-line shrink-0">
+      {/* 브랜드 = 홈(대시보드) */}
+      <Link href="/dashboard" onClick={guardLeave} title="PolyInsight 홈" className="shrink-0 rounded-lg">
         <div className="w-7 h-7 rounded-lg grid place-items-center text-canvas text-[13px] font-bold"
              style={{ background: 'linear-gradient(150deg, var(--accent-bright), var(--accent))' }}>P</div>
-        <span className="text-[14px] font-bold text-ink hidden sm:inline">PolyInsight</span>
       </Link>
-      <span className="w-px h-5 bg-deck-line shrink-0" aria-hidden="true" />
-      <span className="text-[12px] font-mono text-ink-3 truncate flex-1 min-w-0">{filename}</span>
+
+      {/* 브레드크럼 = 위치 + 탈출구. '대시보드'가 라벨된 명확한 나가기, › 현재 덱이 정체성 */}
+      <nav aria-label="위치" className="flex items-center gap-2 min-w-0 flex-1">
+        <Link href="/dashboard" onClick={guardLeave}
+          className="text-[13px] font-semibold text-ink-3 hover:text-ink-2 shrink-0 transition-colors">대시보드</Link>
+        <span className="text-ink-3 shrink-0 text-[13px]" aria-hidden="true">›</span>
+        <span className="text-[13.5px] font-semibold text-ink truncate min-w-0" title={filename}>{filename}</span>
+      </nav>
 
       {/* 편집: undo/redo + 저장상태 */}
       {editing && (
