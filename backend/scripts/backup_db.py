@@ -10,6 +10,9 @@
   4. 잔존 polyinsight.db-wal / polyinsight.db-shm 삭제
   5. uvicorn 기동
   6. 로그인 확인
+  7. (L1) backups/assets_*.tar.gz 를 STORAGE_DIR에 풀기:
+     tar xzf assets_YYYYMMDD_HHMMSS.tar.gz -C <STORAGE_DIR>
+     ⚠️ DB 스냅샷과 같은 시점 쌍으로 복원 — storage_key(DB)와 파일이 어긋나면 dangling.
 
 Windows 스케줄 등록(일 1회 03:00):
   schtasks /Create /TN PolyInsightBackup /SC DAILY /ST 03:00 /TR "cmd /c cd /d <레포루트> && .venv\\Scripts\\python.exe -m backend.scripts.backup_db"
@@ -76,6 +79,27 @@ def backup(db_path: str, dest: str, keep: int = 7, min_bytes: int = 1_000_000) -
     return final
 
 
+def backup_assets(storage_dir: str, dest: str) -> str | None:
+    """영속 자산(jobs/*/assets/)만 tar.gz 스냅샷 (L1 — 바이너리가 DB 밖으로 나가 생긴 백업 공백 차단).
+    TTL 재생성 가능한 cards/·exports/는 제외. 반환=스냅샷 경로 또는 대상 없음 시 None."""
+    import tarfile
+    src_root = os.path.join(storage_dir, "jobs")
+    if not os.path.isdir(src_root):
+        print(f"자산 백업 대상 없음: {src_root}")
+        return None
+    os.makedirs(dest, exist_ok=True)
+    out = os.path.join(dest, f"assets_{datetime.now():%Y%m%d_%H%M%S}.tar.gz")
+    count = 0
+    with tarfile.open(out, "w:gz") as tar:
+        for job in os.listdir(src_root):
+            adir = os.path.join(src_root, job, "assets")
+            if os.path.isdir(adir):
+                tar.add(adir, arcname=os.path.join("jobs", job, "assets"))
+                count += 1
+    print(f"자산 백업: {out} (job {count}개 assets)")
+    return out
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SQLite VACUUM INTO 백업")
     parser.add_argument("--keep", type=int, default=7, help="보존 개수 (기본 7)")
@@ -88,6 +112,8 @@ if __name__ == "__main__":
 
     try:
         backup(_db_path(), args.dest, keep=args.keep, min_bytes=args.min_bytes)
+        from backend.core.config import settings as _settings
+        backup_assets(_settings.STORAGE_DIR, args.dest)   # L1 영속 자산 스냅샷
     except RuntimeError as e:
         print(f"실패: {e}")
         sys.exit(1)

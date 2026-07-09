@@ -48,3 +48,22 @@ async def test_migrate_moves_blob_to_disk_and_is_idempotent():
     # 재실행 멱등 — 이미 이주됨, 예외 없이 0건
     again = await migrate_blobs()
     assert again == 0
+
+
+def test_backup_assets_snapshots_only_assets(tmp_path):
+    """L1 백업 확장: 영속 assets/만 tar에 담고 TTL 재생성 가능한 cards/는 제외. 대상 없으면 None."""
+    import tarfile
+    from backend.scripts.backup_db import backup_assets
+    storage = tmp_path / "blob"
+    (storage / "jobs" / "j1" / "assets").mkdir(parents=True)
+    (storage / "jobs" / "j1" / "assets" / "a.png").write_bytes(b"x")
+    (storage / "jobs" / "j1" / "cards").mkdir(parents=True)
+    (storage / "jobs" / "j1" / "cards" / "1.png").write_bytes(b"y")
+    dest = tmp_path / "bk"
+    out = backup_assets(str(storage), str(dest))
+    assert out is not None
+    with tarfile.open(out) as tar:
+        names = tar.getnames()
+    assert any(n.endswith("assets/a.png") for n in names)   # 자산 포함
+    assert not any("cards" in n for n in names)              # cards 제외
+    assert backup_assets(str(tmp_path / "empty"), str(dest)) is None  # 대상 없으면 None
