@@ -4,8 +4,6 @@
 // 스토리보드(카드 네비게이터)로 서사 아크를 표면화 + 공백을 목적으로 채운다. 클릭=카드 점프.
 import { CardImg } from './DeckViewer'
 
-interface VerifyData { verified: number; unverified: number }
-
 interface Props {
   jobId: string
   cardCount: number
@@ -13,46 +11,27 @@ interface Props {
   index: number                       // 현재 카드(0-based)
   onSelect: (i: number) => void
   title: string                       // 덱/논문 제목
-  verify: VerifyData | null | undefined
-  onOpenFact: () => void
   labels: (string | null)[]           // 카드별 역할 라벨(없으면 null)
   onCollapse: () => void              // 레일 접기(→ 카드 풀폭 몰입)
 }
 
+// 좌측 네비 레일(3패널: 좌 네비 + 중앙 카드 + 우 팩트). 스토리보드로 서사 아크 표면화.
 export default function DeckOverviewRail({
-  jobId, cardCount, ver, index, onSelect, title, verify, onOpenFact, labels, onCollapse,
+  jobId, cardCount, ver, index, onSelect, title, labels, onCollapse,
 }: Props) {
   const n = Math.max(cardCount, 1)
-  const clear = !!verify && verify.unverified === 0
 
   return (
-    <aside className="w-[360px] shrink-0 border-l border-deck-line bg-surface min-h-0 flex flex-col">
+    <aside className="w-[300px] shrink-0 border-r border-deck-line bg-surface min-h-0 flex flex-col">
       {/* 헤더 */}
       <div className="px-5 pt-5 pb-4 border-b border-deck-line-soft shrink-0">
         <div className="flex items-center justify-between">
           <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">덱 개요 · Deck</div>
           <button onClick={onCollapse} title="개요 접기" aria-label="개요 접기"
-            className="w-6 h-6 -mr-1 rounded-md grid place-items-center text-ink-3 hover:text-ink hover:bg-bg-subtle transition-colors">›</button>
+            className="w-6 h-6 -mr-1 rounded-md grid place-items-center text-ink-3 hover:text-ink hover:bg-bg-subtle transition-colors">‹</button>
         </div>
         <h2 className="mt-2 text-[15px] font-bold text-ink leading-snug line-clamp-2">{title}</h2>
         <div className="mt-1.5 text-[11.5px] text-ink-3">AI 저작 · {n}장 · 1080×1350</div>
-
-        {verify && (
-          <button onClick={onOpenFact}
-            className={`mt-3.5 w-full flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-              clear
-                ? 'bg-forest-green-wash border-forest-green/25 hover:border-forest-green/50'
-                : 'bg-risk-medium-faint border-risk-medium-border hover:brightness-[0.99]'}`}>
-            <span className={`w-[18px] h-[18px] rounded-full grid place-items-center text-[10px] text-canvas shrink-0 ${clear ? 'bg-forest-green' : 'bg-risk-medium'}`} aria-hidden="true">{clear ? '✓' : '!'}</span>
-            <span className="flex-1 min-w-0">
-              <span className={`block text-[12px] font-bold ${clear ? 'text-forest-green-deep' : 'text-risk-medium'}`}>
-                {clear ? `${verify.verified}개 수치 · 원문 추적됨` : `${verify.unverified}개 수치 · 확인 필요`}
-              </span>
-              <span className="block text-[10.5px] text-ink-3">팩트 체크 열기</span>
-            </span>
-            <span className="text-ink-3 shrink-0" aria-hidden="true">›</span>
-          </button>
-        )}
       </div>
 
       {/* 스토리보드 — 카드 네비게이터 */}

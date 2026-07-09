@@ -12,6 +12,7 @@ interface Props {
   unverified?: number     // 검토 필요 수치
   onBadgeClick: () => void
   factOpen?: boolean      // 팩트체크 드로어 열림 — disclosure 상태
+  factInline?: boolean    // 팩트가 화면에 상시 노출(뷰 3패널) → 배지는 상태만(디스클로저 아님)
   onToggleMode: () => void
   onExport: () => void
   dirty?: boolean         // 편집 미저장 — 나가기 전 확인용
@@ -40,7 +41,7 @@ function MoatRing({ verified, total }: { verified: number; total: number }) {
 }
 
 export default function DeckTopBar({
-  filename, editing, verified, unverified, onBadgeClick, factOpen, onToggleMode, onExport, dirty,
+  filename, editing, verified, unverified, onBadgeClick, factOpen, factInline, onToggleMode, onExport, dirty,
   canUndo, canRedo, onUndo, onRedo, saveLabel, savedAt, onSave, saveDisabled,
 }: Props) {
   const guardLeave = (e: MouseEvent) => {
@@ -65,19 +66,22 @@ export default function DeckTopBar({
         <span className="text-[13.5px] font-semibold text-ink truncate min-w-0" title={filename}>{filename}</span>
       </nav>
 
-      {/* ③ 상태·해자 — 진행 링 + N/M 검증 · K 검토. 클릭=팩트체크 열기 */}
+      {/* ③ 상태·해자 — 진행 링 + N/M 검증 · K 검토. 편집=클릭 시 드로어 / 뷰=상태만(팩트 우측 상시) */}
       {showMoat && (
-        <button onClick={onBadgeClick} aria-expanded={!!factOpen} aria-haspopup="dialog" aria-controls="fact-drawer"
-          title="팩트 체크 — 수치 원문 대조 상세"
-          className="group flex items-center gap-2 rounded-full border border-deck-line bg-surface pl-1.5 pr-2.5 py-1 shrink-0 hover:bg-bg-subtle transition-colors">
+        <button onClick={onBadgeClick}
+          {...(factInline ? {} : { 'aria-expanded': !!factOpen, 'aria-haspopup': 'dialog' as const, 'aria-controls': 'fact-drawer' })}
+          title={factInline ? '수치 원문 대조 상태' : '팩트 체크 — 수치 원문 대조 상세'}
+          className={`group flex items-center gap-2 rounded-full border border-deck-line bg-surface pl-1.5 pr-2.5 py-1 shrink-0 transition-colors ${factInline ? 'cursor-default' : 'hover:bg-bg-subtle'}`}>
           <MoatRing verified={verified!} total={total} />
           <span className="text-[12px] font-semibold text-ink"><b className="tabular-nums">{verified}/{total}</b> 검증</span>
           {(unverified ?? 0) > 0 && (
             <span className="text-[12px] font-semibold text-risk-medium tabular-nums border-l border-deck-line pl-2">{unverified} 검토</span>
           )}
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
-            strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-            className={`text-ink-3 opacity-60 transition-transform ${factOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6" /></svg>
+          {!factInline && (
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
+              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
+              className={`text-ink-3 opacity-60 transition-transform ${factOpen ? 'rotate-180' : ''}`}><path d="m6 9 6 6 6-6" /></svg>
+          )}
         </button>
       )}
 

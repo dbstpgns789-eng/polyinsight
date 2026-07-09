@@ -146,7 +146,6 @@ function DeckPageInner() {
   const [showFact, setShowFact] = useState(false)   // 팩트체크 온디맨드 드로어(뷰·편집 공통)
   const closeFactRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<Element | null>(null)
-  const autoRevealedRef = useRef(false)             // warn 시 뷰 진입 1회 자동노출 가드
   const editorRef = useRef<DeckEditorHandle>(null)
 
   // 편집 모드 ←/→ 로 페이지 이동 (입력창·텍스트 편집 중엔 캐럿 우선, 팩트 드로어 열림 중엔 무시)
@@ -281,7 +280,8 @@ function DeckPageInner() {
     setTimeout(() => editorRef.current?.setPage(index), 0)
   }, [])
 
-  const onBadgeClick = useCallback(() => setShowFact((v) => !v), [])   // 두 모드 공통 온디맨드
+  // 뷰 모드는 팩트가 우측 상시 노출 → 배지=상태만. 편집 모드만 드로어 토글.
+  const onBadgeClick = useCallback(() => { if (mode === 'edit') setShowFact((v) => !v) }, [mode])
 
   // 팩트체크 드로어: Esc 닫기 + 포커스 이동(열 때 닫기버튼)/복귀(닫을 때 트리거)
   useEffect(() => {
@@ -296,16 +296,6 @@ function DeckPageInner() {
       ;(restoreFocusRef.current as HTMLElement | null)?.focus?.()
     }
   }, [showFact])
-
-  // 미확인 수치(warn)가 있는 덱을 뷰로 처음 열면 팩트체크를 1회 자동 노출 — 해자 증거를 필요한 순간 표면화.
-  // all-clear(미확인 0)면 녹색 배지만으로 충분해 자동노출 안 함(카드 감상 방해 금지).
-  useEffect(() => {
-    if (autoRevealedRef.current || mode !== 'view') return
-    if (deck?.html && (deck.verify?.unverified ?? 0) > 0) {
-      autoRevealedRef.current = true
-      setShowFact(true)
-    }
-  }, [deck?.html, deck?.verify?.unverified, mode])
 
   // 개요 레일 스토리보드용 카드 역할 라벨(저작 HTML서 best-effort 추출)
   const cardLabels = useMemo(() => extractCardLabels(deck?.html), [deck?.html])
@@ -357,6 +347,7 @@ function DeckPageInner() {
         dirty={dirty}
         onBadgeClick={onBadgeClick}
         factOpen={showFact}
+        factInline={!editing}
         onToggleMode={toggleMode}
         onExport={() => setShowExport(true)}
         canUndo={history.canUndo}
@@ -376,6 +367,24 @@ function DeckPageInner() {
       )}
 
       <div className="relative flex flex-1 min-h-0">
+        {/* ◀ 좌측 네비 (뷰 모드) — 덱 개요 스토리보드. 접기 가능 (3패널: 좌 네비) */}
+        {!editing && !railCollapsed && (
+          <DeckOverviewRail
+            jobId={jobId}
+            cardCount={deck.cardCount || 7}
+            ver={ver}
+            index={viewIdx}
+            onSelect={setViewIdx}
+            title={deck.filename ?? '덱'}
+            labels={cardLabels}
+            onCollapse={toggleRail}
+          />
+        )}
+        {!editing && railCollapsed && (
+          <button onClick={toggleRail} title="덱 개요 펼치기" aria-label="덱 개요 펼치기"
+            className="absolute top-1/2 -translate-y-1/2 left-0 z-20 h-16 w-6 rounded-r-lg bg-surface border border-l-0 border-deck-line shadow-card grid place-items-center text-ink-3 hover:text-ink transition-colors">›</button>
+        )}
+
         {/* 중앙 */}
         <main className="flex-1 min-w-0 overflow-hidden">
           {editing ? (
@@ -412,25 +421,11 @@ function DeckPageInner() {
           )}
         </main>
 
-        {/* 뷰 모드 우측 '덱 개요' 레일 — 편집 모드 도구 레일과 구조 대칭(휑함 해소). 접기 가능. */}
-        {!editing && !railCollapsed && (
-          <DeckOverviewRail
-            jobId={jobId}
-            cardCount={deck.cardCount || 7}
-            ver={ver}
-            index={viewIdx}
-            onSelect={setViewIdx}
-            title={deck.filename ?? '덱'}
-            verify={v}
-            onOpenFact={() => setShowFact(true)}
-            labels={cardLabels}
-            onCollapse={toggleRail}
-          />
-        )}
-        {/* 접힘 상태 — 우측 가장자리 펼치기 탭 */}
-        {!editing && railCollapsed && (
-          <button onClick={toggleRail} title="덱 개요 펼치기" aria-label="덱 개요 펼치기"
-            className="absolute top-1/2 -translate-y-1/2 right-0 z-20 h-16 w-6 rounded-l-lg bg-surface border border-r-0 border-deck-line shadow-card grid place-items-center text-ink-3 hover:text-ink transition-colors">‹</button>
+        {/* ▶ 우측 팩트 패널 (뷰 모드) — 해자를 상시 노출 (3패널: 우 팩트). 블랙박스 벤치 반영 */}
+        {!editing && (
+          <aside className="w-[380px] shrink-0 border-l border-deck-line bg-surface min-h-0 overflow-y-auto p-5">
+            <DeckFactPanel verify={v} canReverify={deck.canReverify !== false} />
+          </aside>
         )}
 
         {/* 우측 도구 패널 — 편집 모드에만 */}
@@ -475,8 +470,8 @@ function DeckPageInner() {
           </aside>
         )}
 
-        {/* 팩트체크 = 뷰·편집 공통 온디맨드 드로어(상단 배지 토글). 일관된 위치 */}
-        {showFact && (
+        {/* 팩트체크 드로어 — 편집 모드 온디맨드(뷰는 우측 상시 노출) */}
+        {editing && showFact && (
           <>
             <div className="absolute inset-0 z-30 bg-black/10" aria-hidden="true" onClick={() => setShowFact(false)} />
             <aside id="fact-drawer" role="dialog" aria-modal="true" aria-label="팩트 체크"
