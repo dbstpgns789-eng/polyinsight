@@ -135,6 +135,7 @@ function DeckPageInner() {
   const [page, setPage] = useState<PageState>({ index: 0, count: 0 })
   const [rightTab, setRightTab] = useState<DeckTab>('ai')
   const [showExport, setShowExport] = useState(false)
+  const [showFact, setShowFact] = useState(false)   // 편집 모드 팩트체크 온디맨드 오버레이
   const editorRef = useRef<DeckEditorHandle>(null)
 
   // 편집 모드 ←/→ 로 페이지 이동 (입력창·텍스트 편집 중엔 캐럿 우선 → 무시)
@@ -257,6 +258,7 @@ function DeckPageInner() {
     setSelected(null)
     setEditWarnings([])
     setPending(null)
+    setShowFact(false)
     setMode((m) => (m === 'edit' ? 'view' : 'edit'))
   }, [])
 
@@ -266,7 +268,7 @@ function DeckPageInner() {
     setTimeout(() => editorRef.current?.setPage(index), 0)
   }, [])
 
-  const onBadgeClick = useCallback(() => { if (mode === 'edit') setRightTab('fact') }, [mode])
+  const onBadgeClick = useCallback(() => { if (mode === 'edit') setShowFact((v) => !v) }, [mode])
 
   // 진행 중이라도 콘텐츠(html)가 준비되면(RENDER 조기입장) 뷰로. 아니면 진행화면.
   if ((status !== 'DONE' && status !== 'ERROR') && !deck?.html) {
@@ -358,7 +360,7 @@ function DeckPageInner() {
         </main>
 
         {/* 우측 */}
-        <aside className="w-[372px] shrink-0 border-l border-deck-line bg-surface min-h-0">
+        <aside className="relative w-[372px] shrink-0 border-l border-deck-line bg-surface min-h-0">
           {editing ? (
             <DeckRightTabs
               active={rightTab}
@@ -395,11 +397,24 @@ function DeckPageInner() {
                   />
                 </div>
               }
-              fact={<DeckFactPanel verify={v} canReverify={deck.canReverify !== false} />}
             />
           ) : (
             <div className="p-5 overflow-y-auto h-full">
               <DeckFactPanel verify={v} canReverify={deck.canReverify !== false} />
+            </div>
+          )}
+
+          {/* 편집 모드 팩트체크 = 온디맨드 오버레이(상단 배지 토글). 상시 탭 중복 제거 */}
+          {editing && showFact && (
+            <div className="absolute inset-0 z-20 bg-surface flex flex-col">
+              <div className="flex items-center justify-between px-5 h-12 border-b border-deck-line shrink-0">
+                <span className="text-[13px] font-bold text-ink">팩트 체크</span>
+                <button onClick={() => setShowFact(false)} aria-label="닫기"
+                  className="w-7 h-7 rounded-lg grid place-items-center text-ink-3 hover:text-ink hover:bg-bg-subtle transition-colors">✕</button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5">
+                <DeckFactPanel verify={v} canReverify={deck.canReverify !== false} />
+              </div>
             </div>
           )}
         </aside>
