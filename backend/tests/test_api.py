@@ -225,6 +225,19 @@ async def test_card_image_returns_png(client):
     assert resp.headers["content-type"] == "image/png"
 
 
+@pytest.mark.asyncio
+async def test_card_image_stored_on_disk_not_blob():
+    """L1: save_card_image는 파일로 쓰고 DB엔 storage_key만 — png_bytes 컬럼 미사용."""
+    from backend.core import storage as _storage
+    job_id = await _new_job()
+    await _db.save_card_image(job_id, card_num=1, png_bytes=b"\x89PNG-disk")
+    # 파일이 결정적 키에 존재
+    assert await _storage.get_storage().get(f"jobs/{job_id}/cards/1.png") == b"\x89PNG-disk"
+    # get_card_images는 여전히 {card_num: bytes} 반환
+    imgs = await _db.get_card_images(job_id)
+    assert imgs == {1: b"\x89PNG-disk"}
+
+
 # ── CardEditorData bg_color 필드 ──────────────────────────────────────────
 
 def test_card_editor_data_bg_color_default():

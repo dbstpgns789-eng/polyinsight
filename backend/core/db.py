@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import aiosqlite
 
 from .config import settings
+from .storage import get_storage
 
 
 def _hash_token(token: str) -> str:
@@ -68,7 +69,7 @@ async def migrate() -> None:
                 id INTEGER PRIMARY KEY,
                 job_id TEXT,
                 card_num INT,
-                png_bytes BLOB,
+                storage_key TEXT,
                 expires_at TEXT
             );
 
@@ -189,6 +190,12 @@ async def migrate() -> None:
             ucols = [row[1] for row in await cur.fetchall()]
         if "email_verified" not in ucols:
             await conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+        # L1(2026-07-09): BLOB→파일시스템. 기존 DB에 storage_key 없으면 추가(멱등).
+        for _tbl in ("card_images", "exports", "deck_assets"):
+            async with conn.execute(f"PRAGMA table_info({_tbl})") as cur:
+                _cols = [row[1] for row in await cur.fetchall()]
+            if "storage_key" not in _cols:
+                await conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN storage_key TEXT")
         await conn.commit()
 
 
@@ -482,6 +489,8 @@ async def save_card_image(
     png_bytes: bytes,
     ttl_hours: int = 24,
 ) -> None:
+    key = f"jobs/{job_id}/cards/{card_num}.png"
+    await get_storage().put(key, png_bytes)   # 원자적 — 동시 재렌더 same-key 안전
     expires_at = (_utc_now() + timedelta(hours=ttl_hours)).isoformat()
     async with _connect() as conn:
         await conn.execute(
@@ -489,42 +498,52 @@ async def save_card_image(
             (job_id, card_num),
         )
         await conn.execute(
-            """
-            INSERT INTO card_images (job_id, card_num, png_bytes, expires_at)
-            VALUES (?, ?, ?, ?)
-            """,
-            (job_id, card_num, png_bytes, expires_at),
+            "INSERT INTO card_images (job_id, card_num, storage_key, expires_at) "
+            "VALUES (?, ?, ?, ?)",
+            (job_id, card_num, key, expires_at),
         )
         await conn.commit()
 
 
 async def delete_card_images_above(job_id: str, max_card_num: int) -> None:
-    """card_num > max_card_num 인 카드 이미지 삭제 (편집으로 카드 수가 줄었을 때 잔재 정리)."""
+    """card_num > max_card_num 카드 삭제(편집으로 카드 수 감소 시 잔재 정리) — 파일도 제거."""
     async with _connect() as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT storage_key FROM card_images WHERE job_id = ? AND card_num > ?",
+            (job_id, max_card_num),
+        ) as cur:
+            keys = [r["storage_key"] for r in await cur.fetchall() if r["storage_key"]]
         await conn.execute(
             "DELETE FROM card_images WHERE job_id = ? AND card_num > ?",
             (job_id, max_card_num),
         )
         await conn.commit()
+    storage = get_storage()
+    for k in keys:
+        await storage.delete(k)
 
 
 async def get_card_images(job_id: str) -> dict[int, bytes]:
     now = _utc_now_iso()
-    images: dict[int, bytes] = {}
     async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             """
-            SELECT card_num, png_bytes
+            SELECT card_num, storage_key
             FROM card_images
             WHERE job_id = ? AND expires_at > ?
             """,
             (job_id, now),
         ) as cursor:
             rows = await cursor.fetchall()
-            for row in rows:
-                if row["png_bytes"] is not None:
-                    images[row["card_num"]] = row["png_bytes"]
+    storage = get_storage()
+    images: dict[int, bytes] = {}
+    for row in rows:
+        if row["storage_key"]:
+            data = await storage.get(row["storage_key"])
+            if data is not None:
+                images[row["card_num"]] = data
     return images
 
 
