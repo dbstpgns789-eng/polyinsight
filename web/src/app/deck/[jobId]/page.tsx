@@ -19,6 +19,7 @@ import { extractEidText } from '@/lib/deckDiff'
 import DeckTopBar from '@/components/deck/DeckTopBar'
 import DeckViewer from '@/components/deck/DeckViewer'
 import DeckOverviewRail from '@/components/deck/DeckOverviewRail'
+import DeckFloatingToolbar from '@/components/deck/DeckFloatingToolbar'
 import DeckRightTabs, { type DeckTab } from '@/components/deck/DeckRightTabs'
 import DeckFactPanel from '@/components/deck/DeckFactPanel'
 import DeckExportModal from '@/components/deck/DeckExportModal'
@@ -388,14 +389,15 @@ function DeckPageInner() {
         {/* 중앙 */}
         <main className="flex-1 min-w-0 overflow-hidden">
           {editing ? (
-            <div className="h-full overflow-y-auto flex flex-col items-center py-6 gap-3">
-              {page.count > 1 && (
-                <div className="flex items-center justify-center gap-3 select-none">
-                  <button onClick={() => editorRef.current?.setPage(page.index - 1)} disabled={page.index <= 0}
-                    aria-label="이전 카드" className="w-9 h-9 rounded-full border border-border text-ink-2 disabled:opacity-30">‹</button>
-                  <span className="text-[13px] tabular-nums text-ink-2 min-w-[52px] text-center">{page.index + 1} / {page.count}</span>
-                  <button onClick={() => editorRef.current?.setPage(page.index + 1)} disabled={page.index >= page.count - 1}
-                    aria-label="다음 카드" className="w-9 h-9 rounded-full border border-border text-ink-2 disabled:opacity-30">›</button>
+            <div className="relative h-full overflow-y-auto flex flex-col items-center justify-center py-6">
+              {/* Canva식 컨텍스추얼 플로팅 툴바 — 요소 선택 시 카드 위에 등장(도구가 손으로 온다) */}
+              {selected && !pending && !proposing && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
+                  <DeckFloatingToolbar
+                    selected={selected}
+                    onStyle={(prop, value) => editorRef.current?.applyStyle(prop, value)}
+                    onOpenInspector={() => setRightTab('inspector')}
+                  />
                 </div>
               )}
               <div className="relative w-full max-w-[460px]">
