@@ -76,7 +76,7 @@ async def migrate() -> None:
             CREATE TABLE IF NOT EXISTS exports (
                 export_job_id TEXT PRIMARY KEY,
                 job_id TEXT,
-                zip_bytes BLOB,
+                storage_key TEXT,
                 filename TEXT,
                 expires_at TEXT,
                 created_at TEXT
@@ -554,22 +554,24 @@ async def save_export(
     filename: str,
     ttl_hours: int = 24,
 ) -> None:
+    key = f"jobs/{job_id}/exports/{export_job_id}.zip"
+    await get_storage().put(key, zip_bytes)
     now = _utc_now_iso()
     expires_at = (_utc_now() + timedelta(hours=ttl_hours)).isoformat()
     async with _connect() as conn:
         await conn.execute(
             """
             INSERT INTO exports (
-                export_job_id, job_id, zip_bytes, filename, expires_at, created_at
+                export_job_id, job_id, storage_key, filename, expires_at, created_at
             ) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(export_job_id) DO UPDATE SET
                 job_id = excluded.job_id,
-                zip_bytes = excluded.zip_bytes,
+                storage_key = excluded.storage_key,
                 filename = excluded.filename,
                 expires_at = excluded.expires_at,
                 created_at = excluded.created_at
             """,
-            (export_job_id, job_id, zip_bytes, filename, expires_at, now),
+            (export_job_id, job_id, key, filename, expires_at, now),
         )
         await conn.commit()
 
@@ -579,14 +581,16 @@ async def get_export(export_job_id: str) -> dict | None:
     async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            """
-            SELECT * FROM exports
-            WHERE export_job_id = ? AND expires_at > ?
-            """,
+            "SELECT export_job_id, job_id, storage_key, filename, expires_at, created_at "
+            "FROM exports WHERE export_job_id = ? AND expires_at > ?",
             (export_job_id, now),
         ) as cursor:
             row = await cursor.fetchone()
-            return dict(row) if row else None
+    if row is None:
+        return None
+    d = dict(row)
+    d["zip_bytes"] = await get_storage().get(row["storage_key"]) if row["storage_key"] else None
+    return d
 
 
 async def cleanup_expired_blobs() -> int:

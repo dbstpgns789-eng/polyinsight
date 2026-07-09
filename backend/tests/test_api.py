@@ -205,6 +205,16 @@ async def test_export_download_returns_zip(client):
     assert zipfile.is_zipfile(io.BytesIO(resp.content))
 
 
+@pytest.mark.asyncio
+async def test_export_stored_on_disk_and_key_preserved():
+    """L1: save_export는 파일로, get_export는 여전히 dict['zip_bytes']로 바이트 반환."""
+    job_id = await _new_job()
+    await _db.save_export("exp1", job_id, b"PK-zipdata", "out.zip")
+    row = await _db.get_export("exp1")
+    assert row["zip_bytes"] == b"PK-zipdata"   # export.py download_zip이 쓰는 키
+    assert row["filename"] == "out.zip"
+
+
 # ── 카드 이미지 ────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
