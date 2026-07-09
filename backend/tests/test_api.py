@@ -437,6 +437,16 @@ async def test_upload_deck_asset_and_serve(client):
 
 
 @pytest.mark.asyncio
+async def test_deck_asset_stored_on_disk_and_keys_preserved():
+    """L1: save_deck_asset는 파일로, get_deck_asset는 dict['bytes']/['mime'] 보존."""
+    job_id = await _new_job()
+    await _db.save_deck_asset(job_id, "a1", b"\x89PNG-asset", "image/png")
+    row = await _db.get_deck_asset(job_id, "a1")
+    assert row["bytes"] == b"\x89PNG-asset"   # deck.py·deck_renderer가 쓰는 키
+    assert row["mime"] == "image/png"
+
+
+@pytest.mark.asyncio
 async def test_upload_deck_asset_rejects_svg(client):
     await _db.create_job("jsvg", "p.pdf", user_id=1)
     resp = await client.post(

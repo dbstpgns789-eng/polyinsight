@@ -162,7 +162,7 @@ async def migrate() -> None:
             CREATE TABLE IF NOT EXISTS deck_assets (
                 asset_id TEXT,
                 job_id TEXT REFERENCES jobs(job_id),
-                bytes BLOB,
+                storage_key TEXT,
                 mime TEXT,
                 source_type TEXT,
                 source_url TEXT,
@@ -397,22 +397,24 @@ async def save_deck_asset(
     credit_url: str | None = None,
     ttl_hours: int = 24 * 30,  # 덱 수명 정합(스펙 §4.4). 재편집까지 생존.
 ) -> None:
+    key = f"jobs/{job_id}/assets/{asset_id}"
+    await get_storage().put(key, data)
     now = _utc_now_iso()
     expires_at = (_utc_now() + timedelta(hours=ttl_hours)).isoformat()
     async with _connect() as conn:
         await conn.execute(
             """
             INSERT INTO deck_assets (
-                asset_id, job_id, bytes, mime, source_type, source_url,
+                asset_id, job_id, storage_key, mime, source_type, source_url,
                 provider, credit, credit_url, created_at, expires_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(job_id, asset_id) DO UPDATE SET
-                bytes = excluded.bytes, mime = excluded.mime,
+                storage_key = excluded.storage_key, mime = excluded.mime,
                 source_type = excluded.source_type, source_url = excluded.source_url,
                 provider = excluded.provider, credit = excluded.credit,
                 credit_url = excluded.credit_url, expires_at = excluded.expires_at
             """,
-            (asset_id, job_id, data, mime, source_type, source_url,
+            (asset_id, job_id, key, mime, source_type, source_url,
              provider, credit, credit_url, now, expires_at),
         )
         await conn.commit()
@@ -423,13 +425,17 @@ async def get_deck_asset(job_id: str, asset_id: str) -> dict | None:
     async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            "SELECT asset_id, bytes, mime, source_type, source_url, provider, "
+            "SELECT asset_id, storage_key, mime, source_type, source_url, provider, "
             "credit, credit_url FROM deck_assets "
             "WHERE job_id = ? AND asset_id = ? AND expires_at > ?",
             (job_id, asset_id, now),
         ) as cursor:
             row = await cursor.fetchone()
-            return dict(row) if row else None
+    if row is None:
+        return None
+    d = dict(row)
+    d["bytes"] = await get_storage().get(row["storage_key"]) if row["storage_key"] else None
+    return d
 
 
 async def list_deck_assets(job_id: str) -> list[dict]:
