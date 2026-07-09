@@ -324,6 +324,33 @@ async def test_delete_job_cascade(client):
 
 
 @pytest.mark.asyncio
+async def test_delete_job_removes_files():
+    """L1: delete_job은 job 하위 파일(cards·assets)을 delete_prefix로 통삭제."""
+    from backend.core import storage as _storage
+    job_id = await _new_job()
+    await _db.save_card_image(job_id, 1, b"\x89PNG")
+    await _db.save_deck_asset(job_id, "a1", b"asset", "image/png")
+    s = _storage.get_storage()
+    assert await s.get(f"jobs/{job_id}/cards/1.png") is not None
+    await _db.delete_job(job_id)
+    assert await s.get(f"jobs/{job_id}/cards/1.png") is None
+    assert await s.get(f"jobs/{job_id}/assets/a1") is None
+
+
+@pytest.mark.asyncio
+async def test_cleanup_expired_deletes_card_and_asset_files():
+    """L1: cleanup_expired_blobs는 만료 card·export·deck_asset 행과 파일을 함께 제거."""
+    from backend.core import storage as _storage
+    job_id = await _new_job()
+    await _db.save_card_image(job_id, 1, b"\x89PNG", ttl_hours=-1)
+    await _db.save_deck_asset(job_id, "a1", b"asset", "image/png", ttl_hours=-1)
+    s = _storage.get_storage()
+    await _db.cleanup_expired_blobs()
+    assert await s.get(f"jobs/{job_id}/cards/1.png") is None
+    assert await s.get(f"jobs/{job_id}/assets/a1") is None
+
+
+@pytest.mark.asyncio
 async def test_download_card_fresh_render(client):
     await _db.create_job("j1", "paper.pdf", user_id=1)
     await _db.save_card_data("j1", json.dumps({"cards": []}))

@@ -477,7 +477,7 @@ async def update_job_title(job_id: str, title: str) -> bool:
 
 
 async def delete_job(job_id: str) -> bool:
-    """job과 연관 데이터(card_data·card_images·exports·authored_deck) 일괄 삭제. job 존재 시 True."""
+    """job과 연관 데이터(card_data·card_images·exports·authored_deck·deck_assets) 일괄 삭제 + 파일."""
     async with _connect() as conn:
         await conn.execute("DELETE FROM card_images WHERE job_id = ?", (job_id,))
         await conn.execute("DELETE FROM deck_assets WHERE job_id = ?", (job_id,))
@@ -486,7 +486,9 @@ async def delete_job(job_id: str) -> bool:
         await conn.execute("DELETE FROM authored_deck WHERE job_id = ?", (job_id,))
         cursor = await conn.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))
         await conn.commit()
-        return (cursor.rowcount or 0) > 0
+        existed = (cursor.rowcount or 0) > 0
+    await get_storage().delete_prefix(f"jobs/{job_id}")  # cards·exports·assets 파일 통삭제
+    return existed
 
 
 async def save_card_image(
@@ -601,31 +603,35 @@ async def get_export(export_job_id: str) -> dict | None:
 
 async def cleanup_expired_blobs() -> int:
     now = _utc_now_iso()
+    storage = get_storage()
     deleted = 0
     async with _connect() as conn:
-        cursor = await conn.execute(
-            "DELETE FROM card_images WHERE expires_at <= ?",
-            (now,),
-        )
-        deleted += cursor.rowcount or 0
-        cursor = await conn.execute(
-            "DELETE FROM exports WHERE expires_at <= ?",
-            (now,),
-        )
-        deleted += cursor.rowcount or 0
+        conn.row_factory = aiosqlite.Row
+        # 만료 파일 키를 먼저 수집(행 삭제 전) — card_images·exports·deck_assets.
+        keys: list[str] = []
+        for _tbl in ("card_images", "exports", "deck_assets"):
+            async with conn.execute(
+                f"SELECT storage_key FROM {_tbl} WHERE expires_at <= ?", (now,)
+            ) as cur:
+                keys += [r["storage_key"] for r in await cur.fetchall() if r["storage_key"]]
+        for _tbl in ("card_images", "exports", "deck_assets"):
+            cursor = await conn.execute(
+                f"DELETE FROM {_tbl} WHERE expires_at <= ?", (now,)
+            )
+            deleted += cursor.rowcount or 0
         # 만료 세션 정리(무한증식 방지, 2026-07-02) — _ttl_cleaner가 30분마다 호출.
         cursor = await conn.execute(
-            "DELETE FROM sessions WHERE expires_at <= ?",
-            (now,),
+            "DELETE FROM sessions WHERE expires_at <= ?", (now,)
         )
         deleted += cursor.rowcount or 0
         # 만료·사용 완료된 인증 토큰 정리.
         cursor = await conn.execute(
-            "DELETE FROM auth_tokens WHERE expires_at <= ? OR used_at IS NOT NULL",
-            (now,),
+            "DELETE FROM auth_tokens WHERE expires_at <= ? OR used_at IS NOT NULL", (now,)
         )
         deleted += cursor.rowcount or 0
         await conn.commit()
+    for k in keys:
+        await storage.delete(k)
     return deleted
 
 
