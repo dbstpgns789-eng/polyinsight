@@ -42,46 +42,63 @@ export default function DeckViewer({ jobId, cardCount, ver, rendering, onEditCar
   }
 
   return (
-    <div className="flex flex-col items-center gap-4 py-6 h-full overflow-y-auto">
-      <div className="relative flex items-center gap-3">
+    <div className="relative flex flex-col items-center justify-center gap-5 h-full overflow-y-auto px-6 py-8">
+      {/* 은은한 중립 도트 그리드 — 빈 캔버스를 '의도된 여백'으로 (museum wall) */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage: 'radial-gradient(oklch(20% 0 0 / 0.05) 1px, transparent 1px)',
+          backgroundSize: '26px 26px',
+          maskImage: 'radial-gradient(ellipse 68% 66% at 50% 46%, #000 42%, transparent 100%)',
+          WebkitMaskImage: 'radial-gradient(ellipse 68% 66% at 50% 46%, #000 42%, transparent 100%)',
+        }} />
+      <div className="absolute top-4 left-6 font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-3 select-none">Viewer · Deck</div>
+
+      <div className="relative z-[1] flex items-center gap-5">
         {n > 1 && (
           <button onClick={() => setIdx((i) => clamp(i - 1))} disabled={idx <= 0} aria-label="이전 카드"
-            className="w-9 h-9 rounded-full bg-surface border border-border text-ink-2 shadow-card disabled:opacity-30 shrink-0">‹</button>
+            className="w-9 h-9 rounded-full bg-surface border border-deck-line text-ink-2 shadow-card hover:text-ink disabled:opacity-30 shrink-0 transition-colors">‹</button>
         )}
-        <div className="relative w-[min(46vh,320px)]" style={{ aspectRatio: '1080 / 1350' }}>
-          <CardImg jobId={jobId} num={idx + 1} ver={ver} rendering={rendering} tick={tick} onReady={markReady} />
+        {/* 흰 베젤 + elevation 그림자 + 헤어라인 = 카드가 다크·밝은·컬러든 항상 분리된 작품으로 */}
+        <div className="relative rounded-2xl bg-surface shadow-modal p-1.5 w-[min(46vh,328px)]">
+          <div className="relative rounded-[11px] overflow-hidden" style={{ aspectRatio: '1080 / 1350' }}>
+            <CardImg jobId={jobId} num={idx + 1} ver={ver} rendering={rendering} tick={tick} onReady={markReady} />
+            <div className="pointer-events-none absolute inset-0 rounded-[11px] shadow-[inset_0_0_0_1px_oklch(20%_0_0_/_0.08)]" aria-hidden="true" />
+          </div>
           {!(rendering && !ready.has(idx + 1)) && (
             <button onClick={() => onEditCard(idx)}
-              className="absolute left-1/2 -translate-x-1/2 bottom-3 bg-surface/95 text-forest-green-deep text-[12px] font-bold rounded-lg px-3.5 py-1.5 shadow-modal">
+              className="absolute left-1/2 -translate-x-1/2 bottom-3.5 bg-surface/96 border border-deck-line text-ink text-[12px] font-bold rounded-lg px-3.5 py-1.5 shadow-card hover:text-forest-green-deep transition-colors">
               ✎ 이 카드 편집
             </button>
           )}
         </div>
         {n > 1 && (
           <button onClick={() => setIdx((i) => clamp(i + 1))} disabled={idx >= n - 1} aria-label="다음 카드"
-            className="w-9 h-9 rounded-full bg-surface border border-border text-ink-2 shadow-card disabled:opacity-30 shrink-0">›</button>
+            className="w-9 h-9 rounded-full bg-surface border border-deck-line text-ink-2 shadow-card hover:text-ink disabled:opacity-30 shrink-0 transition-colors">›</button>
         )}
       </div>
 
-      {rendering && ready.size < n && (
-        <div className="flex items-center gap-2 text-[12px] text-ink-3">
-          <span className="w-3.5 h-3.5 rounded-full border-2 border-forest-green border-t-transparent animate-spin" aria-hidden="true" />
-          카드 그리는 중 {ready.size} / {n}
-        </div>
-      )}
+      <div className="relative z-[1] flex flex-col items-center gap-3.5">
+        <span className="font-mono text-[12px] tabular-nums text-ink-3"><b className="text-ink font-bold">{String(idx + 1).padStart(2, '0')}</b> / {String(n).padStart(2, '0')}</span>
 
-      {n > 1 && (
-        <div className="flex gap-1.5 flex-wrap justify-center max-w-[80%]">
-          {Array.from({ length: n }, (_, i) => (
-            <button key={i} onClick={() => setIdx(i)} aria-label={`카드 ${i + 1}`}
-              className={`w-8 rounded-md overflow-hidden border ${i === idx ? 'border-forest-green ring-1 ring-forest-green' : 'border-border'}`}
-              style={{ aspectRatio: '1080 / 1350' }}>
-              <CardImg jobId={jobId} num={i + 1} ver={ver} thumb rendering={rendering} tick={tick} onReady={markReady} />
-            </button>
-          ))}
-        </div>
-      )}
-      <span className="text-[12px] tabular-nums text-ink-3">{idx + 1} / {n}</span>
+        {rendering && ready.size < n && (
+          <div className="flex items-center gap-2 text-[12px] text-ink-3">
+            <span className="w-3.5 h-3.5 rounded-full border-2 border-forest-green border-t-transparent animate-spin" aria-hidden="true" />
+            카드 그리는 중 {ready.size} / {n}
+          </div>
+        )}
+
+        {n > 1 && (
+          <div className="flex gap-2 justify-center">
+            {Array.from({ length: n }, (_, i) => (
+              <button key={i} onClick={() => setIdx(i)} aria-label={`카드 ${i + 1}`}
+                className={`w-11 rounded-lg overflow-hidden bg-surface shadow-card transition-[outline] ${i === idx ? 'outline outline-2 outline-ink outline-offset-1' : 'outline outline-1 outline-deck-line'}`}
+                style={{ aspectRatio: '1080 / 1350' }}>
+                <CardImg jobId={jobId} num={i + 1} ver={ver} thumb rendering={rendering} tick={tick} onReady={markReady} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

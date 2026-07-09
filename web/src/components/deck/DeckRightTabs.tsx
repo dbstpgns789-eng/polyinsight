@@ -22,7 +22,7 @@ const TABS: { key: DeckTab; label: string }[] = [
 export default function DeckRightTabs({ active, onTab, ai, inspector, fact }: Props) {
   return (
     <div className="flex flex-col h-full">
-      <div className="flex gap-1 p-1.5 border-b border-border shrink-0">
+      <div className="flex gap-1 p-1.5 border-b border-deck-line shrink-0">
         {TABS.map((t) => (
           <button key={t.key} onClick={() => onTab(t.key)}
             className={`flex-1 text-[12px] font-semibold py-1.5 rounded-md ${

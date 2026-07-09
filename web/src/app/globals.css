@@ -71,6 +71,10 @@
   --color-forest-green-deep:  var(--accent-hover);
   --color-forest-green-wash:  var(--accent-subtle);
   --color-forest-green-ghost: var(--accent-faint);
+  /* /deck 뷰어 무채색 워크스페이스 — 카드색(저작모델이 랜덤 발명)과 경쟁 안 하도록 중립 */
+  --color-deck-canvas:        var(--deck-canvas);
+  --color-deck-line:          var(--deck-line);
+  --color-deck-line-soft:     var(--deck-line-soft);
   --color-dark-slate:         var(--dark-bg);
   --color-border-subtle:      var(--border-subtle);
 
@@ -100,6 +104,11 @@
   --surface:        oklch(99.8% 0.002 163);
   --border:         oklch(89% 0.012 163);
   --border-subtle:  oklch(93.5% 0.007 163);
+
+  /* deck 뷰어 전용 무채색(chroma≈0 쿨그레이) — 미술관 벽. 카드가 다크·밝은·컬러든 흰 베젤+그림자로 분리 */
+  --deck-canvas:     oklch(94.5% 0.004 250);
+  --deck-line:       oklch(90.5% 0.004 250);
+  --deck-line-soft:  oklch(93.5% 0.003 250);
 
   --text-1:  oklch(16% 0.008 163);
   --text-2:  oklch(44% 0.012 163);

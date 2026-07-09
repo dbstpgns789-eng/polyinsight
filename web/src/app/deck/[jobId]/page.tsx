@@ -297,7 +297,7 @@ function DeckPageInner() {
   const saveLabel = saving ? '저장 중…' : dirty ? '저장' : '저장됨'
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-canvas-subtle" style={{ wordBreak: 'keep-all' }}>
+    <div className="flex flex-col h-screen overflow-hidden bg-deck-canvas" style={{ wordBreak: 'keep-all' }}>
       <DeckTopBar
         filename={deck.filename ?? '덱'}
         editing={editing}
@@ -357,7 +357,7 @@ function DeckPageInner() {
         </main>
 
         {/* 우측 */}
-        <aside className="w-[360px] shrink-0 border-l border-border bg-surface min-h-0">
+        <aside className="w-[372px] shrink-0 border-l border-deck-line bg-surface min-h-0">
           {editing ? (
             <DeckRightTabs
               active={rightTab}
