@@ -6,7 +6,7 @@
 //   저장 = 직렬화 HTML을 PATCH → 재검증 + PNG 재렌더 → 검증 패널·PNG 갱신.
 // 자연어(NL) 편집은 3c(유료) — 별도.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
@@ -18,10 +18,12 @@ import DeckAIAssistant from '@/components/deck/DeckAIAssistant'
 import { extractEidText } from '@/lib/deckDiff'
 import DeckTopBar from '@/components/deck/DeckTopBar'
 import DeckViewer from '@/components/deck/DeckViewer'
+import DeckOverviewRail from '@/components/deck/DeckOverviewRail'
 import DeckRightTabs, { type DeckTab } from '@/components/deck/DeckRightTabs'
 import DeckFactPanel from '@/components/deck/DeckFactPanel'
 import DeckExportModal from '@/components/deck/DeckExportModal'
 import { factBadgeState } from '@/lib/factBadge'
+import { extractCardLabels } from '@/lib/deckLabels'
 
 interface VerifyClaim { value: string; context: string; verified: boolean }
 interface VerifyData { verified: number; unverified: number; claims: VerifyClaim[] }
@@ -135,6 +137,7 @@ function DeckPageInner() {
   const [page, setPage] = useState<PageState>({ index: 0, count: 0 })
   const [rightTab, setRightTab] = useState<DeckTab>('ai')
   const [showExport, setShowExport] = useState(false)
+  const [viewIdx, setViewIdx] = useState(0)         // 뷰 모드 현재 카드(뷰어·개요 레일 동기)
   const [showFact, setShowFact] = useState(false)   // 팩트체크 온디맨드 드로어(뷰·편집 공통)
   const closeFactRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<Element | null>(null)
@@ -297,6 +300,9 @@ function DeckPageInner() {
     }
   }, [deck?.html, deck?.verify?.unverified, mode])
 
+  // 개요 레일 스토리보드용 카드 역할 라벨(저작 HTML서 best-effort 추출)
+  const cardLabels = useMemo(() => extractCardLabels(deck?.html), [deck?.html])
+
   // 진행 중이라도 콘텐츠(html)가 준비되면(RENDER 조기입장) 뷰로. 아니면 진행화면.
   if ((status !== 'DONE' && status !== 'ERROR') && !deck?.html) {
     return <GenerationTheater stage={stage || 'S1'} progress={progress} />
@@ -383,11 +389,27 @@ function DeckPageInner() {
               </div>
             </div>
           ) : (
-            <DeckViewer jobId={jobId} cardCount={deck.cardCount || 7} ver={ver} rendering={rendering} onEditCard={enterEditAt} />
+            <DeckViewer jobId={jobId} cardCount={deck.cardCount || 7} ver={ver} rendering={rendering}
+              onEditCard={enterEditAt} index={viewIdx} onIndex={setViewIdx} />
           )}
         </main>
 
-        {/* 우측 도구 패널 — 편집 모드에만(뷰 모드는 뷰어 풀폭) */}
+        {/* 뷰 모드 우측 '덱 개요' 레일 — 편집 모드 도구 레일과 구조 대칭(휑함 해소) */}
+        {!editing && (
+          <DeckOverviewRail
+            jobId={jobId}
+            cardCount={deck.cardCount || 7}
+            ver={ver}
+            index={viewIdx}
+            onSelect={setViewIdx}
+            title={deck.filename ?? '덱'}
+            verify={v}
+            onOpenFact={() => setShowFact(true)}
+            labels={cardLabels}
+          />
+        )}
+
+        {/* 우측 도구 패널 — 편집 모드에만 */}
         {editing && (
           <aside className="w-[372px] shrink-0 border-l border-deck-line bg-surface min-h-0">
             <DeckRightTabs
