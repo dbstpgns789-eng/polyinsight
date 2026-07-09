@@ -205,14 +205,6 @@ export default function DeckElementPanel({
                   {multi && <p className="text-[10.5px] text-ink-3">W·H는 여러 요소라 읽기 전용입니다.</p>}
                 </>
               )}
-              {!multi && (
-                <div className="flex gap-1.5">
-                  <button onClick={() => onMove('up')} title="레이아웃 순서에서 위로"
-                    className="flex-1 h-8 rounded-lg border border-deck-line text-[12px] text-ink-2 hover:border-forest-green/50 transition-colors">↑ 위로</button>
-                  <button onClick={() => onMove('down')} title="레이아웃 순서에서 아래로"
-                    className="flex-1 h-8 rounded-lg border border-deck-line text-[12px] text-ink-2 hover:border-forest-green/50 transition-colors">↓ 아래로</button>
-                </div>
-              )}
               {!multi && selected.absolute && (
                 <button onClick={onRevertFlow} title="드래그로 옮긴 위치를 자동 배치로 되돌립니다"
                   className="h-8 rounded-lg border border-deck-line text-[12px] text-ink-2 hover:border-forest-green/50 transition-colors">↺ 자동 위치로 되돌리기</button>
