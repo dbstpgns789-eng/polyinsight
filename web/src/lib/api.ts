@@ -15,15 +15,8 @@ api.interceptors.response.use(
   }
 )
 
-export const uploadPdf = (file: File, cardCount: number) => {
-  const form = new FormData()
-  form.append('file', file)
-  form.append('card_count', String(cardCount))
-  return api.post('/upload', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    timeout: 60000,
-  })
-}
+// uploadPdf(구 POST /api/upload → run_pipeline)는 L0(2026-07-09)에서 삭제.
+// 저작 진입은 uploadDeck(/api/deck/upload) 하나뿐.
 
 export const getStatus = (jobId: string) => api.get(`/status/${jobId}`)
 

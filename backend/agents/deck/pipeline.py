@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""단일 저작 파이프라인 (헌법 v3.0) — 레거시 run_pipeline과 공존하는 별도 함수.
+"""단일 저작 파이프라인 (헌법 v3.0) — 유일한 저작 오케스트레이터.
 
 S1 추출(재사용) → S6 저작 → V 검증(fidelity, 재사용) → 저장 → 렌더 → 카드 PNG 저장.
-가드레일·단계 update_job·usage 집계 패턴은 orchestrator.py를 복제(원본 무수정).
+구 저작 파이프라인(orchestrator.run_pipeline·s6_card_json)은 L0(2026-07-09)에서 삭제됨.
 """
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 _job_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_JOBS)
 
-# 입력 가드레일 — orchestrator._ABORT_WORD_FLOOR와 동일(비논문·스캔본 조기 차단).
+# 입력 가드레일 — 비논문·스캔본 조기 차단(S6 호출 전, 비용 0 방어).
 _ABORT_WORD_FLOOR = 80
 
 

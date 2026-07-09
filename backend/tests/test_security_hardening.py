@@ -45,9 +45,9 @@ async def test_upload_quota_unverified_blocked(client, monkeypatch):
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", True)
     monkeypatch.setattr(settings, "UPLOAD_UNVERIFIED_LIMIT", 1)
     await client.post("/api/auth/signup", json={"email": "q1@x.com", "password": "Str0ngPass!22"})
-    r1 = await client.post("/api/upload", files=_TXT)   # 쿼터 통과 → non-pdf 400 (파이프라인 X)
+    r1 = await client.post("/api/deck/upload", files=_TXT)   # 쿼터 통과 → non-pdf 400 (파이프라인 X)
     assert r1.status_code == 400
-    r2 = await client.post("/api/upload", files=_TXT)   # 한도 초과 → 429
+    r2 = await client.post("/api/deck/upload", files=_TXT)   # 한도 초과 → 429
     assert r2.status_code == 429
     assert r2.json()["detail"]["code"] == "ERR-AUTH-429"
 
@@ -61,9 +61,9 @@ async def test_upload_quota_verified_higher_limit(client, monkeypatch):
     await client.post("/api/auth/signup", json={"email": "q2@x.com", "password": "Str0ngPass!22"})
     u = await _db.get_user_by_email("q2@x.com")
     await _db.set_email_verified(u["id"])  # 인증 승격
-    codes = [(await client.post("/api/upload", files=_TXT)).status_code for _ in range(3)]
+    codes = [(await client.post("/api/deck/upload", files=_TXT)).status_code for _ in range(3)]
     assert codes == [400, 400, 400]        # 미인증이면 2번째부터 막혔을 것 → 인증이라 3회 통과
-    r4 = await client.post("/api/upload", files=_TXT)
+    r4 = await client.post("/api/deck/upload", files=_TXT)
     assert r4.status_code == 429
 
 
@@ -72,7 +72,7 @@ async def test_upload_quota_disabled_no_block(client):
     """RATE_LIMIT_ENABLED=False(기본 dev/테스트)면 쿼터 미적용."""
     await client.post("/api/auth/signup", json={"email": "q3@x.com", "password": "Str0ngPass!22"})
     for _ in range(5):
-        r = await client.post("/api/upload", files=_TXT)
+        r = await client.post("/api/deck/upload", files=_TXT)
         assert r.status_code == 400   # 전부 non-pdf 400, 429 없음
 
 

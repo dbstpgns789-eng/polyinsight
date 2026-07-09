@@ -98,8 +98,8 @@ class S7RendererAgent(BaseAgent[S7Input, S7Output]):
         """CardEditorData → N장 PNG. React render 라우트(Next.js)를 goto해서 스크린샷.
 
         card_data는 호출 전에 DB에 저장되어 있어야 한다 (render 라우트가 DB에서 읽음).
-        - orchestrator: S7 직전에 저장
-        - export 엔드포인트: 이미 DB에서 읽어서 호출
+        - export 엔드포인트(레거시 카드): 이미 DB에서 읽어서 호출
+        (구 orchestrator 저작 경로는 L0에서 삭제 — 현행 저작 렌더는 agents/deck/deck_renderer.py)
         """
         job_id = input_data.job_id
         card_data = input_data.card_data

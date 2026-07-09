@@ -2,54 +2,19 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..agents.orchestrator import run_pipeline
 from ..agents.s7_renderer import S7Renderer
-from ..core import db, ratelimit
+from ..core import db
 from ..core.auth import get_current_user, require_owned_job
-from ..core.models import CardEditorData, CardTheme
+from ..core.models import CardEditorData
 
+# 이 라우터는 레거시 카드 에디터(CardEditorData) 서브시스템만 담당한다.
+# 저작 진입(구 POST /api/upload → run_pipeline)은 L0(2026-07-09)에서 삭제됨 —
+# 현행 저작 진입은 routers/deck.py 의 POST /api/deck/upload.
 router = APIRouter(prefix="/api", tags=["jobs"])
-
-_MAX_PDF_BYTES = 50 * 1024 * 1024  # 50 MB
-
-
-# ── 업로드 ──────────────────────────────────────────────────────────────────
-
-@router.post("/upload", status_code=202)
-async def upload_pdf(
-    background_tasks: BackgroundTasks,
-    file: UploadFile,
-    # le=7: Haiku 4.5 출력 한계(8192 토큰) 안전권. 8장 이상은 큰 논문에서 JSON 잘림 위험.
-    # 미래 등급제에서 상위 모델(Sonnet 등) 사용 시 등급별로 상한 확장.
-    card_count: Annotated[int, Form(ge=3, le=7)] = 7,
-    user: dict = Depends(get_current_user),
-):
-    """PDF 업로드 → 파이프라인 백그라운드 시작."""
-    ratelimit.enforce_upload_quota(user)  # 유저별 일일 쿼터(미인증 낮은 상한) — 재정 DoS 차단
-    if file.content_type not in ("application/pdf", "application/octet-stream"):
-        if not (file.filename or "").lower().endswith(".pdf"):
-            raise HTTPException(400, detail={"code": "ERR-INP-001", "message": "PDF 파일만 업로드 가능합니다."})
-
-    pdf_bytes = await file.read()
-    if len(pdf_bytes) > _MAX_PDF_BYTES:
-        raise HTTPException(400, detail={"code": "ERR-INP-002", "message": "파일 크기가 50MB를 초과합니다."})
-
-    job_id = str(uuid.uuid4())
-    await db.create_job(job_id, title=file.filename, user_id=user["id"])
-    await db.log_event(
-        "upload",
-        user_id=user["id"],
-        job_id=job_id,
-        payload={"filename": file.filename, "card_count": card_count},
-    )
-    background_tasks.add_task(run_pipeline, job_id, pdf_bytes, CardTheme(), card_count, user["id"])
-
-    return {"jobId": job_id, "status": "PENDING"}
 
 
 # ── 상태 폴링 ─────────────────────────────────────────────────────────────

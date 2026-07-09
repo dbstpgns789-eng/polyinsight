@@ -1,6 +1,6 @@
 """API 라우터 단위 테스트.
 
-- run_pipeline은 mock (LLM/Playwright 없이 실행)
+- 레거시 카드 엔드포인트는 DB에 잡 직접 생성(_new_job)해 준비 (구 /api/upload 삭제)
 - SQLite는 :memory: 사용
 - httpx AsyncClient로 엔드포인트 직접 호출
 """
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import json
+import uuid
 import zipfile
 from unittest.mock import AsyncMock, patch
 
@@ -43,63 +44,15 @@ async def client():
         yield c
 
 
-@pytest.fixture
-def dummy_pdf() -> bytes:
-    """최소 PDF 바이너리 (S1이 처리하지 않도록 pipeline을 mock함)."""
-    return b"%PDF-1.4 dummy"
+# ── 잡 생성 헬퍼 ─────────────────────────────────────────────────────────
+# 구 POST /api/upload(→run_pipeline)는 L0(2026-07-09)에서 삭제. 저작 진입은
+# /api/deck/upload(routers/deck.py)뿐. 아래 레거시 카드 엔드포인트 테스트는
+# DB에 잡을 직접 생성해 준비한다.
 
-
-# ── 업로드 ────────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_upload_returns_job_id(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        resp = await client.post(
-            "/api/upload",
-            files={"file": ("paper.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    assert resp.status_code == 202
-    body = resp.json()
-    assert "jobId" in body
-    assert body["status"] == "PENDING"
-
-
-@pytest.mark.asyncio
-async def test_upload_rejects_non_pdf(client):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        resp = await client.post(
-            "/api/upload",
-            files={"file": ("report.txt", b"hello", "text/plain")},
-            data={"card_count": "5"},
-        )
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "ERR-INP-001"
-
-
-@pytest.mark.asyncio
-async def test_upload_rejects_oversized(client):
-    big = b"x" * (51 * 1024 * 1024)
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        resp = await client.post(
-            "/api/upload",
-            files={"file": ("big.pdf", big, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "ERR-INP-002"
-
-
-@pytest.mark.asyncio
-async def test_upload_card_count_validation(client, dummy_pdf):
-    """card_count 범위 벗어나면 422."""
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        resp = await client.post(
-            "/api/upload",
-            files={"file": ("paper.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "20"},  # max 15
-        )
-    assert resp.status_code == 422
+async def _new_job(title: str = "p.pdf") -> str:
+    jid = str(uuid.uuid4())
+    await _db.create_job(jid, title, user_id=1)
+    return jid
 
 
 # ── 상태 폴링 ─────────────────────────────────────────────────────────────
@@ -112,14 +65,8 @@ async def test_status_unknown_job(client):
 
 
 @pytest.mark.asyncio
-async def test_status_returns_pending(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_status_returns_pending(client):
+    job_id = await _new_job()
 
     resp = await client.get(f"/api/status/{job_id}")
     assert resp.status_code == 200
@@ -138,14 +85,8 @@ async def test_get_cards_not_found(client):
 
 
 @pytest.mark.asyncio
-async def test_get_cards_returns_data(client, dummy_pdf, mock_card_data):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_get_cards_returns_data(client, mock_card_data):
+    job_id = await _new_job()
 
     # DB에 card_data 수동 주입
     await _db.save_card_data(job_id, mock_card_data.model_dump_json())
@@ -161,14 +102,8 @@ async def test_get_cards_returns_data(client, dummy_pdf, mock_card_data):
 # ── 자동저장 ──────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_patch_cards_saves(client, dummy_pdf, mock_card_data):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_patch_cards_saves(client, mock_card_data):
+    job_id = await _new_job()
 
     resp = await client.patch(
         f"/api/cards/{job_id}/data",
@@ -179,14 +114,8 @@ async def test_patch_cards_saves(client, dummy_pdf, mock_card_data):
 
 
 @pytest.mark.asyncio
-async def test_patch_cards_invalid_schema(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_patch_cards_invalid_schema(client):
+    job_id = await _new_job()
 
     resp = await client.patch(
         f"/api/cards/{job_id}/data",
@@ -214,13 +143,8 @@ async def test_projects_stats_empty(client):
 
 
 @pytest.mark.asyncio
-async def test_projects_lists_uploaded(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
+async def test_projects_lists_uploaded(client):
+    await _new_job()
 
     resp = await client.get("/api/projects")
     assert resp.status_code == 200
@@ -228,14 +152,9 @@ async def test_projects_lists_uploaded(client, dummy_pdf):
 
 
 @pytest.mark.asyncio
-async def test_projects_kind_distinguishes_legacy_and_deck(client, dummy_pdf):
+async def test_projects_kind_distinguishes_legacy_and_deck(client):
     """card_data 보유 잡=legacy(/editor행), 미보유=deck(/deck행) — 앞문 재배선 분기 근거."""
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
+    await _new_job()
 
     resp = await client.get("/api/projects")
     project = resp.json()["projects"][0]
@@ -247,14 +166,9 @@ async def test_projects_kind_distinguishes_legacy_and_deck(client, dummy_pdf):
 
 
 @pytest.mark.asyncio
-async def test_projects_stats_counts(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        for _ in range(3):
-            await client.post(
-                "/api/upload",
-                files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-                data={"card_count": "5"},
-            )
+async def test_projects_stats_counts(client):
+    for _ in range(3):
+        await _new_job()
 
     resp = await client.get("/api/projects/stats")
     body = resp.json()
@@ -272,14 +186,8 @@ async def test_export_download_expired(client):
 
 
 @pytest.mark.asyncio
-async def test_export_download_returns_zip(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_export_download_returns_zip(client):
+    job_id = await _new_job()
 
     # ZIP 수동 저장
     buf = io.BytesIO()
@@ -287,7 +195,6 @@ async def test_export_download_returns_zip(client, dummy_pdf):
         zf.writestr("card_01.png", b"fakepng")
     zip_bytes = buf.getvalue()
 
-    import uuid
     export_id = str(uuid.uuid4())
     await _db.save_export(export_id, job_id, zip_bytes, "test.zip")
 
@@ -306,14 +213,8 @@ async def test_card_image_not_found(client):
 
 
 @pytest.mark.asyncio
-async def test_card_image_returns_png(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_card_image_returns_png(client):
+    job_id = await _new_job()
 
     fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
     await _db.save_card_image(job_id, card_num=1, png_bytes=fake_png)

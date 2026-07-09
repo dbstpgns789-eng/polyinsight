@@ -48,20 +48,21 @@ async def test_login_records_event(client):
 
 
 @pytest.mark.asyncio
-async def test_upload_records_event(client):
+async def test_deck_upload_records_event(client):
+    # 저작 진입은 /api/deck/upload 하나뿐(구 /api/upload는 L0에서 삭제) → "deck_upload" 이벤트.
     from backend.core.auth import hash_password
     uid = await _db.create_user("up@b.com", hash_password("password1"))
     await client.post("/api/auth/login", json={"email": "up@b.com", "password": "password1"})
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
+    with patch("backend.routers.deck.run_authoring_pipeline", new_callable=AsyncMock):
         resp = await client.post(
-            "/api/upload",
+            "/api/deck/upload",
             files={"file": ("paper.pdf", b"%PDF-1.4 dummy", "application/pdf")},
             data={"card_count": "5"},
         )
     assert resp.status_code == 202
     job_id = resp.json()["jobId"]
     events = await _db.list_events()
-    upload_evts = [e for e in events if e["event_type"] == "upload"]
+    upload_evts = [e for e in events if e["event_type"] == "deck_upload"]
     assert len(upload_evts) == 1
     assert upload_evts[0]["user_id"] == uid
     assert upload_evts[0]["job_id"] == job_id
