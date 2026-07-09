@@ -110,19 +110,20 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 
 ## 3. 컴포넌트 구조
 
+> ⚠️ **L0 은퇴 배너 (2026-07-09).** 이 문서가 서술하는 **저작 파이프라인**(`orchestrator.run_pipeline` → `s6_card_json`/`s6/` → `s8_packaging`, 진입 `POST /api/upload`)은 헌법 v3.0(2026-06-28) 저작 역전으로 폐기되었고 **L0에서 코드 삭제**되었다. 현행 저작은 `agents/deck/`(단일 저작 파이프라인) — 진입 `POST /api/deck/upload`. 카드 JSON 에디터(`CardEditorData`·`GET/PATCH /api/cards/:id`·`/editor` 라우트)는 **레거시 잡 뷰**로만 유지한다(저작 아님). 아래 §3-3·§5의 s6 서술은 **역사 참조**이며, 현행 파이프라인 정본은 루트 `CLAUDE.md §2` + `24_system_architecture.md`다. (후속: 이 문서 deck 저작 전면 반영 예정.)
+
 ### 3-1. Backend
 
 ```
 backend/
 ├── main.py                  FastAPI 앱 진입점, 라우터 등록, CORS
 ├── agents/
-│   ├── orchestrator.py      파이프라인 실행 제어 (유일한 컨트롤러)
-│   │                          run_pipeline(job_id, pdf_bytes, theme, card_count)
 │   ├── base.py              BaseAgent[InputT, OutputT] 추상 클래스
-│   ├── s1_extractor.py      pdfplumber / PyMuPDF 텍스트 추출
-│   ├── s6_card_json.py      카드뉴스 JSON 생성 (Gemini, 가변 카드)
-│   ├── s7_renderer.py       Playwright PNG 렌더링 (React render 라우트 goto)
-│   └── s8_packaging.py      SQLite 저장 + ZIP 생성
+│   ├── s1_extractor.py      pdfplumber / PyMuPDF 텍스트 추출 (deck 저작도 재사용)
+│   ├── deck/                ★현행 저작 — authoring.py(S6 단일 저작)·deck_renderer.py·
+│   │                          pipeline.py(run_authoring_pipeline)·nl_patch.py(자연어 편집)
+│   └── s7_renderer.py       Playwright PNG 렌더링 — 레거시 카드 즉석 다운로드/export가 재사용
+#   [L0 삭제됨] orchestrator.py · s6_card_json.py · s6/ · s8_packaging.py — 구 저작 경로(은퇴)
 ├── routers/
 │   ├── jobs.py              POST /api/upload
 │   │                        GET  /api/status/:jobId
@@ -176,7 +177,11 @@ web/src/                        Next.js 15 App Router + TypeScript (포트 3000)
 - 업로드 모달 / 내보내기 모달 → `createPortal(…, document.body)` 로 렌더링
 - 별도 라우트 없음. 어느 페이지에서도 오버레이로 동작.
 
-### 3-3. Orchestrator 설계
+### 3-3. Orchestrator 설계 (🗑️ L0 은퇴 — 역사 참조)
+
+> 아래 `run_pipeline`(구 저작 파이프라인)은 L0(2026-07-09)에서 삭제됨. 현행 저작 오케스트레이션은
+> `agents/deck/pipeline.py::run_authoring_pipeline`(S1 재사용 → `author_deck` 단일 저작 → `verify_deck` →
+> `render_deck`). 이 절은 구조 이해용 역사 기록으로만 남긴다.
 
 Orchestrator는 파이프라인의 **유일한 진입점**이다.
 에이전트는 Orchestrator를 통해서만 호출된다.

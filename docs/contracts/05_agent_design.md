@@ -191,9 +191,16 @@ async def run_pipeline(
 
 ---
 
-## 5. S6 — Card News JSON
+## 5. S6 — Card News JSON  (🗑️ L0 은퇴 — 역사 참조)
 
-**파일**: `backend/agents/s6_card_json.py`(코디네이터) + `backend/agents/s6/`(설계팀·콘텐츠팀·mock·프롬프트)
+> ⚠️ **L0 은퇴 배너 (2026-07-09).** 이 절 전체가 서술하는 S6 저작(코디네이터 `s6_card_json` +
+> `s6/` 설계팀 Architect·콘텐츠팀 Writer 멀티에이전트)은 헌법 v3.0(2026-06-28) 저작 역전으로
+> 폐기되었고 **L0에서 코드 삭제**되었다. 현행 S6 저작 = `backend/agents/deck/authoring.py::author_deck`
+> — 강한 모델이 **덱 전체(스토리+형태+표현)를 한 번에** HTML로 저작한다(architect/writer 분리 없음).
+> 그라운딩 검증은 저작 후 코드(`core/fidelity.py::verify_deck`)가 전담. 아래 5-1~5-7은 **역사 기록**이며
+> 현행 저작 규칙 정본은 루트 `CLAUDE.md §1·§2` + `backend/agents/deck/authoring_prompts.py`다.
+
+**파일 (삭제됨)**: ~~`backend/agents/s6_card_json.py`(코디네이터) + `backend/agents/s6/`(설계팀·콘텐츠팀·mock·프롬프트)~~
 
 S6는 파이프라인에서 **할루시네이션 위험이 가장 높은 단계**다.
 이 섹션의 모든 규칙은 CLAUDE.md §3과 동일하며, 코드 구현 수준의 세부 명세를 추가한다.
