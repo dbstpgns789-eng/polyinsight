@@ -22,7 +22,6 @@ import DeckOverviewRail from '@/components/deck/DeckOverviewRail'
 import DeckRightTabs, { type DeckTab } from '@/components/deck/DeckRightTabs'
 import DeckFactPanel from '@/components/deck/DeckFactPanel'
 import DeckExportModal from '@/components/deck/DeckExportModal'
-import { factBadgeState } from '@/lib/factBadge'
 import { extractCardLabels } from '@/lib/deckLabels'
 
 interface VerifyClaim { value: string; context: string; verified: boolean }
@@ -137,6 +136,11 @@ function DeckPageInner() {
   const [page, setPage] = useState<PageState>({ index: 0, count: 0 })
   const [rightTab, setRightTab] = useState<DeckTab>('ai')
   const [showExport, setShowExport] = useState(false)
+  const [savedAt, setSavedAt] = useState<string>()  // 마지막 저장 시각 hh:mm
+  const stampSaved = useCallback(() => {
+    const d = new Date()
+    setSavedAt(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`)
+  }, [])
   const [viewIdx, setViewIdx] = useState(0)         // 뷰 모드 현재 카드(뷰어·개요 레일 동기)
   const [railCollapsed, setRailCollapsed] = useState(false)   // 개요 레일 접기(선호 기억)
   const [showFact, setShowFact] = useState(false)   // 팩트체크 온디맨드 드로어(뷰·편집 공통)
@@ -202,9 +206,10 @@ function DeckPageInner() {
       setEditWarnings(r.data.warnings ?? [])
       setVer((x) => x + 1)        // 재렌더된 PNG 다시 받기
       setDirty(false)
+      stampSaved()
       setSelected(null)
     } finally { setSaving(false) }
-  }, [jobId])
+  }, [jobId, stampSaved])
 
   const handlePropose = useCallback(async (instruction: string) => {
     if (!editorRef.current) return
@@ -238,9 +243,10 @@ function DeckPageInner() {
       setVer((x) => x + 1)
       setPending(null)
       setDirty(false)
+      stampSaved()
       setSelected(null)
     } finally { setCommitting(false) }
-  }, [jobId, pending, deck])
+  }, [jobId, pending, deck, stampSaved])
 
   const handleDiscard = useCallback(() => setPending(null), [])
 
@@ -339,7 +345,6 @@ function DeckPageInner() {
 
   const v = deck.verify
   const editing = mode === 'edit'
-  const badge = factBadgeState(v, deck.canReverify !== false)
   const saveLabel = saving ? '저장 중…' : dirty ? '저장' : '저장됨'
 
   return (
@@ -347,7 +352,8 @@ function DeckPageInner() {
       <DeckTopBar
         filename={deck.filename ?? '덱'}
         editing={editing}
-        badge={badge}
+        verified={v?.verified}
+        unverified={v?.unverified}
         dirty={dirty}
         onBadgeClick={onBadgeClick}
         factOpen={showFact}
@@ -358,6 +364,7 @@ function DeckPageInner() {
         onUndo={() => editorRef.current?.undo()}
         onRedo={() => editorRef.current?.redo()}
         saveLabel={saveLabel}
+        savedAt={savedAt}
         onSave={handleSave}
         saveDisabled={!dirty || saving}
       />
