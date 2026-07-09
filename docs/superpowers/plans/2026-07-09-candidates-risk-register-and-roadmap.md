@@ -72,7 +72,7 @@
 - 고아 S6 모델타입(Architect·Writer·Storyboard·PaperDigest·Digest*·Understand·Mismatch·S6Input/Output·S8Input/Output) 삭제 **+ 커플링 테스트 3곳 동시**(test_s6_contracts·test_s6_digest_contracts·test_degrade_telemetry).
 - `export_store.py` 고아 모듈 삭제. `LLM_MODEL_ARCHITECT` 죽은 설정 삭제.
 - `researchers.photo_bytes` 유령 컬럼: 문서 표기(이미 됨) 유지, 삭제는 선택.
-- **결정 필요**: 레거시 카드에디터(48 실잡·s7_renderer 렌더경로) — 은퇴 vs 유지. L2 면적 2배의 핵심. (§3 열린 결정)
+- **레거시 카드에디터 = 얼려서 보존(확정 §3)**: 데이터·보기·다운로드(get_cards·card image serve·export.py) **유지**, 편집·재렌더(patch_cards·trigger_export·s7_renderer write) **은퇴**. 은퇴 전 read/serve 경로가 write 경로에 안 얽혔는지 확인(외과 절제). L2 면적 반감.
 
 ### Phase 2 — 배포 안전 (배포 전 필수 · L2와 독립 가능)
 닫는 위험: **C3·H1·H5·H4(부분)** + 백업.
@@ -98,10 +98,15 @@
 
 ---
 
-## 3. 열린 결정 (착수 전 사용자 판단)
-1. **레거시 카드 에디터 운명** — 48 실잡 서빙 + `s7_renderer` 두번째 렌더경로. **은퇴**(마이그레이션 유도?)하면 L2 면적 반감, **유지**하면 L2가 2경로 다 감싸야. → Phase 1 결정.
-2. **L2 범위** — 진짜 web/worker 완전 분리 vs "파이프라인 잡만 큐로"(편집·자가치유 렌더는 웹 잔존 허용). H2가 강제하는 트레이드오프.
-3. **배포 시점** — Phase 2를 L2 전에 독립 실행할지(먼저 안전 배포), L2까지 묶어 배포할지.
+## 3. 결정 (사용자 확정 2026-07-09)
+1. **레거시 카드 에디터 = 얼려서 보존(freeze)** — 옛 잡의 데이터·보기·다운로드(read/serve)는 유지, **편집·재렌더(s7_renderer write 경로)는 은퇴**. "자료로써 보존"의 해석. → L2 면적 반감(두번째 in-process 렌더 경로 제거). Phase 1에서 처리.
+2. **L2 범위 = 파이프라인 첫 생성만 큐로** — `run_authoring_pipeline`(논문→덱)만 워커/큐. 편집·자가치유 재렌더는 웹 잔존 허용(H2 트레이드오프 수용, L2 목표 '렌더 격리'는 첫 생성분만). 24 배포 절에 명시.
+3. **배포 = 나중에** — Phase 2(배포 안전)는 **배포 직전**에 실행(지금 아님). STORAGE_DIR 볼륨·백업 등은 배포 시점에 묶어서. 단 그 전에 배포하면 자산 소실이므로 배포 트리거 시 Phase 2 필수 선행.
+
+### 결정에 따른 순서 재정렬
+- **지금 (UI 무관·저위험)**: Phase 0(문서 정합) + Phase 1(L0b 청소 **+ 레거시 카드에디터 freeze**: read/serve 유지, edit/s7-render 은퇴).
+- **UI 완료 후**: Phase 3(L2 사전조건) → Phase 4(L2 본체, 범위=첫 생성만).
+- **배포 트리거 시**: Phase 2(배포 안전) 선행 필수.
 
 ---
 
