@@ -13,6 +13,24 @@ const TEXT_PRESETS = [
   { label: '더 크게', instruction: '이 텍스트 요소의 글자 크기를 눈에 띄게 키워줘(비율 유지).' },
 ]
 
+// 원탭 빠른 수정 — 디자인 편집(색·톤·크기)만. 수치·문구는 건드리지 않아 fidelity 안전.
+const QUICK_FIX = [
+  { label: '더 밝게', instruction: '전체 톤을 더 밝고 화사하게 조정해줘. 수치와 문구는 그대로 둬.' },
+  { label: '더 어둡게', instruction: '전체 톤을 더 어둡고 묵직하게 조정해줘. 수치와 문구는 그대로 둬.' },
+  { label: '따뜻한 톤', instruction: '색감을 더 따뜻한 톤(웜)으로 조정해줘. 수치와 문구는 그대로 둬.' },
+  { label: '차가운 톤', instruction: '색감을 더 차가운 톤(쿨)으로 조정해줘. 수치와 문구는 그대로 둬.' },
+  { label: '폰트 크게', instruction: '가독성을 위해 글자 크기를 키워줘(레이아웃 비율 유지).' },
+  { label: '폰트 작게', instruction: '답답하지 않게 글자 크기를 살짝 줄여줘(레이아웃 비율 유지).' },
+]
+
+// 빈 상태 예시 프롬프트 — 클릭하면 그대로 지시로 실행.
+const SUGGESTIONS = [
+  '표지 배경색을 더 차분한 톤으로 바꿔줘',
+  '제목을 더 크고 굵게 강조해줘',
+  '텍스트에 은은한 그림자를 넣어 가독성을 높여줘',
+  '이미지를 왼쪽, 텍스트를 오른쪽으로 배치해줘',
+]
+
 interface Props {
   selected: SelectedInfo | null
   proposing: boolean          // propose 진행 중(유료)
@@ -60,12 +78,12 @@ export default function DeckAIAssistant({
         )}
       </div>
 
-      {/* 맥락 */}
-      <p className="text-[11.5px] text-ink-3 leading-snug">
-        {hasTarget
-          ? <>선택한 <b className="text-ink-2">{selected?.tag}</b> 요소를 고쳐요: “{(selected?.quotedText || '').slice(0, 40)}{(selected?.quotedText || '').length > 40 ? '…' : ''}”</>
-          : '요소를 클릭해 고르면 그 부분만 정확히 고쳐요. 안 고르면 덱 전체에 적용됩니다.'}
-      </p>
+      {/* 맥락 — 요소 선택 시에만(미선택 안내는 아래 빈 상태 히어로가 담당) */}
+      {hasTarget && !pending && (
+        <p className="text-[11.5px] text-ink-3 leading-snug">
+          선택한 <b className="text-ink-2">{selected?.tag}</b> 요소를 고쳐요: “{(selected?.quotedText || '').slice(0, 40)}{(selected?.quotedText || '').length > 40 ? '…' : ''}”
+        </p>
+      )}
 
       {/* 미커밋 제안 미리보기 */}
       {pending ? (
@@ -104,7 +122,7 @@ export default function DeckAIAssistant({
         </div>
       ) : (
         <>
-          {/* 원클릭 프리셋(텍스트 선택 시) */}
+          {/* 텍스트 선택 시 원클릭 프리셋 */}
           {selected?.editable && (
             <div className="flex flex-wrap gap-1.5">
               {TEXT_PRESETS.map((p) => (
@@ -118,22 +136,68 @@ export default function DeckAIAssistant({
             </div>
           )}
 
-          {/* 자유 지시 */}
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={hasTarget ? '예: "이 문장을 질문형으로 바꿔줘"' : '예: "표지 색을 더 차분하게"'}
-            rows={2}
-            disabled={busy}
-            className="w-full rounded-lg border border-border bg-canvas-subtle p-2 text-[12px] text-ink-1 resize-none disabled:opacity-50"
-          />
-          <button
-            onClick={() => { propose(text); setText('') }}
-            disabled={busy || !text.trim()}
-            className="h-8 rounded-lg bg-forest-green text-canvas text-[12px] font-semibold disabled:opacity-40"
-          >
-            {proposing ? 'AI가 제안 중…' : 'AI에게 맡기기'}
-          </button>
+          {/* 빈 상태 히어로 — 선택·입력 없을 때 무엇을 할 수 있는지 초대 */}
+          {!hasTarget && !text.trim() && (
+            <div className="flex flex-col items-center text-center gap-2 pt-2 pb-1">
+              <span className="w-11 h-11 rounded-full bg-forest-green-wash text-forest-green-deep grid place-items-center text-[19px]" aria-hidden="true">✦</span>
+              <p className="text-[14px] font-bold text-ink">무엇을 수정할까요?</p>
+              <p className="text-[11.5px] text-ink-3 leading-snug max-w-[250px]">원하는 수정을 자연어로 말해주세요. AI가 제안을 먼저 보여줘요.</p>
+            </div>
+          )}
+
+          {/* 예시 프롬프트 */}
+          {!hasTarget && !text.trim() && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10.5px] font-semibold text-ink-3 uppercase tracking-wide">이렇게 말해보세요</span>
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => propose(s)}
+                  disabled={busy}
+                  className="text-left text-[11.5px] text-ink-2 border border-deck-line rounded-lg px-2.5 py-2 hover:border-forest-green/50 hover:text-ink disabled:opacity-40 transition-colors"
+                >“{s}”</button>
+              ))}
+            </div>
+          )}
+
+          {/* 빠른 수정 — 원탭 디자인 편집(색·톤·크기) */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[10.5px] font-semibold text-ink-3 uppercase tracking-wide">빠른 수정</span>
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_FIX.map((q) => (
+                <button
+                  key={q.label}
+                  onClick={() => propose(q.instruction)}
+                  disabled={busy}
+                  className="text-[11.5px] font-semibold text-ink-2 bg-surface border border-deck-line rounded-full px-2.5 py-1 hover:border-forest-green/50 hover:text-forest-green-deep disabled:opacity-40 transition-colors"
+                >{q.label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* 자유 지시 (Enter 전송 · Shift+Enter 줄바꿈) */}
+          <div className="flex flex-col gap-1.5">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const t = text; setText(''); propose(t) } }}
+              placeholder={hasTarget ? '예: "이 문장을 질문형으로 바꿔줘"' : '원하는 수정사항을 입력하세요…'}
+              rows={2}
+              disabled={busy}
+              className="w-full rounded-lg border border-deck-line bg-surface p-2.5 text-[12px] text-ink resize-none disabled:opacity-50 focus:border-forest-green/50 focus:outline-none"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { const t = text; setText(''); propose(t) }}
+                disabled={busy || !text.trim()}
+                className="flex-1 h-8 rounded-lg bg-forest-green text-canvas text-[12px] font-semibold disabled:opacity-40"
+              >
+                {proposing ? 'AI가 제안 중…' : '✦ AI에게 맡기기'}
+              </button>
+              <span className="text-[10px] text-ink-3 shrink-0">Enter 전송</span>
+            </div>
+          </div>
+
           <p className="text-[10px] text-ink-3 leading-snug">
             AI가 먼저 제안을 보여줘요. 확인하고 <b>적용</b>을 눌러야 반영됩니다. 수치는 원문 근거 안에서만 바뀝니다.
           </p>
