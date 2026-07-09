@@ -23,6 +23,7 @@ _CF = {"cf-connecting-ip": "9.9.9.9"}  # 로그인 rate limit은 CF 엣지 IP �
 @pytest_asyncio.fixture(autouse=True)
 async def mem_db(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{tmp_path / 'sec.db'}")
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "blobstore"))
     monkeypatch.setattr(settings, "COOKIE_SECURE", False)
     monkeypatch.setattr(settings, "RENDER_TOKEN", "")
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)

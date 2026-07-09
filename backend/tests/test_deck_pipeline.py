@@ -26,8 +26,9 @@ _ATTN_PDF = pathlib.Path(
 async def _isolated_db(tmp_path, monkeypatch):
     """각 테스트를 격리된 tmp DB로 실행.
     (기존엔 픽스처가 없어 주변 ./polyinsight.db에 의존 → 깨끗한 체크아웃서 'no such table' 실패.)
-    L1 Task 3에서 STORAGE_DIR(tmp) 주입을 여기 추가한다."""
+    L1: 바이너리가 파일시스템으로 빠지므로 STORAGE_DIR(tmp) 격리도 필수."""
     monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{tmp_path / 'deck.db'}")
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "blobstore"))
     await db.migrate()
     yield
 

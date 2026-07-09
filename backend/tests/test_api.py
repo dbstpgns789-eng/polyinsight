@@ -29,6 +29,7 @@ async def use_memory_db(tmp_path, monkeypatch):
     from backend.core.auth import get_current_user
     db_file = str(tmp_path / "test.db")
     monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_file}")
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "blobstore"))
     monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
     from backend.core import ratelimit
     ratelimit.reset_all()
