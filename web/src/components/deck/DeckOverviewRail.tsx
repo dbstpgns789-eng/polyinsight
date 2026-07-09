@@ -12,12 +12,12 @@ interface Props {
   onSelect: (i: number) => void
   title: string                       // 덱/논문 제목
   labels: (string | null)[]           // 카드별 역할 라벨(없으면 null)
-  onCollapse: () => void              // 레일 접기(→ 카드 풀폭 몰입)
 }
 
 // 좌측 네비 레일(3패널: 좌 네비 + 중앙 카드 + 우 팩트). 스토리보드로 서사 아크 표면화.
+// 접기/펼치기는 경계의 라운드 범프 핸들(page.tsx)이 담당.
 export default function DeckOverviewRail({
-  jobId, cardCount, ver, index, onSelect, title, labels, onCollapse,
+  jobId, cardCount, ver, index, onSelect, title, labels,
 }: Props) {
   const n = Math.max(cardCount, 1)
 
@@ -25,11 +25,7 @@ export default function DeckOverviewRail({
     <aside className="w-[300px] shrink-0 border-r border-deck-line bg-surface min-h-0 flex flex-col">
       {/* 헤더 */}
       <div className="px-5 pt-5 pb-4 border-b border-deck-line-soft shrink-0">
-        <div className="flex items-center justify-between">
-          <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">덱 개요 · Deck</div>
-          <button onClick={onCollapse} title="개요 접기" aria-label="개요 접기"
-            className="w-6 h-6 -mr-1 rounded-md grid place-items-center text-ink-3 hover:text-ink hover:bg-bg-subtle transition-colors">‹</button>
-        </div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">덱 개요 · Deck</div>
         <h2 className="mt-2 text-[15px] font-bold text-ink leading-snug line-clamp-2">{title}</h2>
         <div className="mt-1.5 text-[11.5px] text-ink-3">AI 저작 · {n}장 · 1080×1350</div>
       </div>

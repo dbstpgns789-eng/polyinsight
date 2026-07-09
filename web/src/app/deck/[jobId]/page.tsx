@@ -19,7 +19,6 @@ import { extractEidText } from '@/lib/deckDiff'
 import DeckTopBar from '@/components/deck/DeckTopBar'
 import DeckViewer from '@/components/deck/DeckViewer'
 import DeckOverviewRail from '@/components/deck/DeckOverviewRail'
-import DeckFloatingToolbar from '@/components/deck/DeckFloatingToolbar'
 import DeckRightTabs, { type DeckTab } from '@/components/deck/DeckRightTabs'
 import DeckFactPanel from '@/components/deck/DeckFactPanel'
 import DeckExportModal from '@/components/deck/DeckExportModal'
@@ -378,28 +377,20 @@ function DeckPageInner() {
             onSelect={editing ? (i) => editorRef.current?.setPage(i) : setViewIdx}
             title={deck.filename ?? '덱'}
             labels={cardLabels}
-            onCollapse={toggleRail}
           />
         )}
-        {railCollapsed && (
-          <button onClick={toggleRail} title="덱 개요 펼치기" aria-label="덱 개요 펼치기"
-            className="absolute top-1/2 -translate-y-1/2 left-0 z-20 h-16 w-6 rounded-r-lg bg-surface border border-l-0 border-deck-line shadow-card grid place-items-center text-ink-3 hover:text-ink transition-colors">›</button>
-        )}
+        {/* 패널 여닫기 — Canva식 경계 라운드 범프 핸들(접힘=›펼치기, 펼침=‹접기) */}
+        <button onClick={toggleRail}
+          title={railCollapsed ? '덱 개요 펼치기' : '덱 개요 접기'} aria-label={railCollapsed ? '덱 개요 펼치기' : '덱 개요 접기'}
+          style={{ left: railCollapsed ? 0 : 300 }}
+          className="group absolute top-1/2 -translate-y-1/2 z-30 w-5 hover:w-6 h-16 rounded-r-xl bg-surface border border-l-0 border-deck-line shadow-card grid place-items-center text-ink-3 hover:text-ink transition-all">
+          <span className="text-[13px] leading-none" aria-hidden="true">{railCollapsed ? '›' : '‹'}</span>
+        </button>
 
         {/* 중앙 */}
         <main className="flex-1 min-w-0 overflow-hidden">
           {editing ? (
             <div className="relative h-full overflow-y-auto flex flex-col items-center justify-center py-6">
-              {/* Canva식 컨텍스추얼 플로팅 툴바 — 요소 선택 시 카드 위에 등장(도구가 손으로 온다) */}
-              {selected && !pending && !proposing && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20">
-                  <DeckFloatingToolbar
-                    selected={selected}
-                    onStyle={(prop, value) => editorRef.current?.applyStyle(prop, value)}
-                    onOpenInspector={() => setRightTab('inspector')}
-                  />
-                </div>
-              )}
               <div className="relative w-full max-w-[460px]">
                 <DeckEditor
                   ref={editorRef}
