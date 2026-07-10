@@ -250,7 +250,7 @@ const AGENT_BODY = `
   function undo() { commitTextEdit(); var c = undoStack.pop(); if (!c) return; c.undo(); redoStack.push(c); afterHistoryStep(); }
   function redo() { commitTextEdit(); var c = redoStack.pop(); if (!c) return; c.run(); undoStack.push(c); afterHistoryStep(); }
 
-  var LAYOUT_PROPS = ['position', 'left', 'top', 'width', 'height', 'transform', 'margin'];
+  var LAYOUT_PROPS = ['position', 'left', 'top', 'width', 'height', 'transform', 'margin', 'boxSizing'];
   function snapInline(el) { var o = {}; for (var i = 0; i < LAYOUT_PROPS.length; i++) o[LAYOUT_PROPS[i]] = el.style[LAYOUT_PROPS[i]] || ''; return o; }
   function applyInline(el, snap) { for (var i = 0; i < LAYOUT_PROPS.length; i++) el.style[LAYOUT_PROPS[i]] = snap[LAYOUT_PROPS[i]]; }
   function layoutCmd(el, before, after) { return { run: function () { applyInline(el, after); }, undo: function () { applyInline(el, before); } }; }
@@ -325,6 +325,8 @@ const AGENT_BODY = `
     for (var i = 0; i < els.length; i++) {
       var el = els[i], r = rects[i];
       if (getComputedStyle(el).position !== 'absolute') {
+        // measured 값은 border-box(getBoundingClientRect) → box-sizing 고정해야 w/h가 정확(content-box면 padding만큼 팽창 방지)
+        el.style.boxSizing = 'border-box';
         el.style.width = r.width + 'px'; el.style.height = r.height + 'px';
         // ★ 절대배치에선 margin이 border-box를 밀어 left/top과 어긋남 → 0으로. left/top이 곧 border-box 위치.
         // (margin은 LAYOUT_PROPS라 undo/revertFlow가 원복. margin 있는 요소 grab 점프·가장자리 못 닿음 수정)
@@ -337,6 +339,27 @@ const AGENT_BODY = `
       }
     }
     return snaps; // promote 이전 인라인 스냅(undo용 before)
+  }
+
+  // ── 프리즈: 편집모드에서 카드 처음 보일 때 1회, 전 flow 요소를 현재 위치로 절대배치 고정 ──────
+  // 목적: 하나를 옮겨도 나머지가 reflow로 안 흔들리게(Figma 모델 — 처음부터 전부 절대배치).
+  // measure-all→promote-all을 '문서순(부모 먼저)'으로 → 각 자식의 offsetParent가 이미 제자리라 좌표 정확.
+  // inline은 제외(부모 블록이 고정되면 그 안에서 정상 wrap). BR·이미 배치(absolute/fixed)·아티팩트 제외.
+  // 픽셀 무이동: promoteAll이 margin:0 + box-sizing:border-box + measured w/h/left/top으로 제자리 착지.
+  function freezeCard(card) {
+    if (!card || card.getAttribute('data-pi-frozen') === '1') return;
+    if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
+    var nodes = card.querySelectorAll('*'), els = [];
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      if (isPiArtifact(el) || el.tagName === 'BR') continue;
+      var cs = getComputedStyle(el);
+      if (cs.position === 'absolute' || cs.position === 'fixed') continue;
+      if (cs.display === 'inline') continue;
+      els.push(el);
+    }
+    promoteAll(els, card);  // 문서순 → 부모 먼저 → 자식 offsetParent 정확
+    card.setAttribute('data-pi-frozen', '1');
   }
 
   // ── 마퀴(rubber-band) 선택 ────────────────────────────────────────────────
@@ -658,6 +681,7 @@ const AGENT_BODY = `
       if (i === activeCard) cs[i].classList.remove('pi-hidden');
       else cs[i].classList.add('pi-hidden');
     }
+    freezeCard(cs[activeCard]);   // 보이는 카드 1회 프리즈(측정은 display:none 아닌 상태여야 정확)
     positionOverlay(); postHeight();
   }
   function clearPaging() {
