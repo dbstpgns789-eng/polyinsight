@@ -326,8 +326,9 @@ const AGENT_BODY = `
       var el = els[i], r = rects[i];
       if (getComputedStyle(el).position !== 'absolute') {
         // measured 값은 border-box(getBoundingClientRect) → box-sizing 고정해야 w/h가 정확(content-box면 padding만큼 팽창 방지)
+        // ★ Math.ceil: 서브픽셀(89.6px 등)을 올림 → 고정폭이 텍스트보다 미세하게 좁아 wrap/clip되는 것 방지.
         el.style.boxSizing = 'border-box';
-        el.style.width = r.width + 'px'; el.style.height = r.height + 'px';
+        el.style.width = Math.ceil(r.width) + 'px'; el.style.height = Math.ceil(r.height) + 'px';
         // ★ 절대배치에선 margin이 border-box를 밀어 left/top과 어긋남 → 0으로. left/top이 곧 border-box 위치.
         // (margin은 LAYOUT_PROPS라 undo/revertFlow가 원복. margin 있는 요소 grab 점프·가장자리 못 닿음 수정)
         el.style.margin = '0';
@@ -693,7 +694,14 @@ const AGENT_BODY = `
       if (i === activeCard) cs[i].classList.remove('pi-hidden');
       else cs[i].classList.add('pi-hidden');
     }
-    freezeCard(cs[activeCard]);   // 보이는 카드 1회 프리즈(측정은 display:none 아닌 상태여야 정확)
+    // ★ 프리즈는 폰트 로드 完了 후 측정해야 함 — 웹폰트(JetBrains Mono 등) 로드 前 fallback 메트릭으로
+    // 고정폭/높이를 박으면 진짜 폰트 로드 시 텍스트가 넓/커져 wrap·overflow(뷰어PNG는 폰트후 렌더라 정상).
+    var card = cs[activeCard];
+    if (card && document.fonts && document.fonts.status !== 'loaded') {
+      document.fonts.ready.then(function () { freezeCard(card); positionOverlay(); postHeight(); });
+    } else {
+      freezeCard(card);
+    }
     positionOverlay(); postHeight();
   }
   function clearPaging() {
