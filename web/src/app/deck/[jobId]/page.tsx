@@ -134,9 +134,7 @@ function DeckPageInner() {
   const [snapshots, setSnapshots] = useState<string[]>([])
   const [history, setHistory] = useState<HistoryState>({ canUndo: false, canRedo: false })
   const [page, setPage] = useState<PageState>({ index: 0, count: 0 })
-  const [zoom, setZoom] = useState<number | null>(null)          // null = 폭 맞춤(fit)
-  const [zoomInfo, setZoomInfo] = useState({ eff: 1, fit: 1 })   // 현재 배율(줌 % 표시)
-  const zoomBy = (f: number) => setZoom((z) => Math.min(3, Math.max(0.2, +(((z ?? zoomInfo.fit) * f)).toFixed(3))))
+  const [zoomInfo, setZoomInfo] = useState({ eff: 1, fit: 1 })   // 현재 배율(줌 % 표시). 줌 상태는 DeckEditor 소유
   const [rightTab, setRightTab] = useState<DeckTab>('ai')
   const [showExport, setShowExport] = useState(false)
   const [savedAt, setSavedAt] = useState<string>()  // 마지막 저장 시각 hh:mm
@@ -405,7 +403,6 @@ function DeckPageInner() {
                 html={deck.html as string}
                 mode={mode}
                 initialPage={viewIdx}
-                zoom={zoom}
                 onScaleChange={(eff, fit) => setZoomInfo((z) => (z.eff === eff && z.fit === fit ? z : { eff, fit }))}
                 onSelected={setSelected}
                 onDeselected={() => setSelected(null)}
@@ -432,13 +429,13 @@ function DeckPageInner() {
 
               {/* 줌 컨트롤 — 인라인 글자 편집이 작을 때 확대. %는 눌러서 폭 맞춤 */}
               <div className="absolute bottom-4 right-4 z-20 flex items-center gap-0.5 rounded-xl border border-deck-line bg-surface/95 shadow-card px-1 py-1 backdrop-blur">
-                <button onClick={() => zoomBy(0.8)} title="축소" aria-label="축소"
+                <button onClick={() => editorRef.current?.zoomBy(0.8)} title="축소" aria-label="축소"
                   className="w-7 h-7 rounded-lg grid place-items-center text-[15px] text-ink-2 hover:bg-bg-subtle transition-colors">−</button>
-                <button onClick={() => setZoom(null)} title="폭 맞춤"
+                <button onClick={() => editorRef.current?.zoomFit()} title="폭 맞춤"
                   className="min-w-[54px] h-7 px-2 rounded-lg text-[12px] font-semibold tabular-nums text-ink-2 hover:bg-bg-subtle transition-colors">
                   {Math.round(zoomInfo.eff * 100)}%
                 </button>
-                <button onClick={() => zoomBy(1.25)} title="확대" aria-label="확대"
+                <button onClick={() => editorRef.current?.zoomBy(1.25)} title="확대" aria-label="확대"
                   className="w-7 h-7 rounded-lg grid place-items-center text-[15px] text-ink-2 hover:bg-bg-subtle transition-colors">+</button>
               </div>
             </div>

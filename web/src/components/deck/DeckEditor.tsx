@@ -51,6 +51,8 @@ export interface DeckEditorHandle {
   distribute: (axis: 'h' | 'v') => void
   setRect: (r: { left?: number; top?: number; width?: number; height?: number }) => void
   setPage: (index: number) => void
+  zoomBy: (factor: number) => void       // 중앙 기준 확대/축소
+  zoomFit: () => void                    // 폭 맞춤
   insertImage: (p: {
     url: string; assetId?: string; sourceType?: string
     provider?: string; credit?: string; creditUrl?: string
@@ -65,7 +67,6 @@ interface Props {
   onDirty?: () => void
   onHistory?: (state: HistoryState) => void
   onPage?: (state: PageState) => void
-  zoom?: number | null                                  // null/undefined = 폭 맞춤(fit), 숫자 = 절대 배율
   onScaleChange?: (effective: number, fit: number) => void
   className?: string                                    // 스크롤 뷰포트 배치(예: absolute inset-0)
   initialPage?: number                                  // 편집 진입 시 열 카드(뷰어서 보던 카드). EDITOR_READY 후 반영
@@ -79,14 +80,36 @@ function buildSrcDoc(html: string): string {
 }
 
 const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
-  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage, zoom, onScaleChange, className, initialPage }, ref,
+  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage, onScaleChange, className, initialPage }, ref,
 ) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
   const [fitScale, setFitScale] = useState(1)
+  const [zoom, setZoom] = useState<number | null>(null)  // null = 폭 맞춤(fit), 숫자 = 절대 배율
   const [contentH, setContentH] = useState(1350)
   const htmlResolvers = useRef<((html: string) => void)[]>([])
   const effScale = zoom ?? fitScale       // zoom 지정 시 절대 배율, 아니면 폭 맞춤
+
+  // 확대/축소 앵커 — 지정 뷰포트 점을 고정한 채 배율 변경(중앙 or 커서). 배율 변경 뒤 스크롤 보정.
+  const anchorRef = useRef<{ vx: number; vy: number; rx: number; ry: number } | null>(null)
+  const zoomAt = useCallback((next: number | null, vx: number, vy: number) => {
+    const box = boxRef.current
+    if (box) {
+      const br = box.getBoundingClientRect()
+      anchorRef.current = {
+        vx, vy,
+        rx: br.width ? (vx - br.left) / br.width : 0.5,
+        ry: br.height ? (vy - br.top) / br.height : 0.5,
+      }
+    }
+    setZoom(next == null ? null : Math.min(3, Math.max(0.2, +next.toFixed(3))))
+  }, [])
+  const zoomByCenter = useCallback((factor: number) => {
+    const wrap = wrapRef.current; if (!wrap) return
+    const wr = wrap.getBoundingClientRect()
+    zoomAt((zoom ?? fitScale) * factor, wr.left + wr.width / 2, wr.top + wr.height / 2)
+  }, [zoom, fitScale, zoomAt])
 
   const send = useCallback((type: string, payload?: Record<string, unknown>) => {
     frameRef.current?.contentWindow?.postMessage({ source: 'pi-host', type, ...payload }, '*')
@@ -111,8 +134,10 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     distribute: (axis) => send('DISTRIBUTE', { axis }),
     setRect: (r) => send('SET_RECT', r),
     setPage: (index) => send('SET_PAGE', { index }),
+    zoomBy: (factor) => zoomByCenter(factor),
+    zoomFit: () => setZoom(null),
     insertImage: (p) => send('INSERT_IMAGE', p),
-  }), [send])
+  }), [send, zoomByCenter])
 
   // iframe → 부모 메시지
   useEffect(() => {
@@ -155,6 +180,16 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     return () => ro.disconnect()
   }, [])
 
+  // 배율 변경 뒤: 앵커 점이 뷰포트에서 같은 자리에 오도록 스크롤 보정(중앙/커서 고정 확대)
+  useLayoutEffect(() => {
+    const a = anchorRef.current; anchorRef.current = null
+    const wrap = wrapRef.current, box = boxRef.current
+    if (!a || !wrap || !box) return
+    const br = box.getBoundingClientRect()
+    wrap.scrollLeft += (br.left + a.rx * br.width) - a.vx
+    wrap.scrollTop += (br.top + a.ry * br.height) - a.vy
+  }, [effScale])
+
   // 현재 배율을 부모(줌 컨트롤 % 표시)에 보고. onScaleChange를 ref로 담아 effect 의존성에서 제외 —
   // 인라인 콜백이 매 렌더 새 참조여도 effect가 [effScale, fitScale]에서만 돌게(무한 렌더 루프 방지).
   const onScaleChangeRef = useRef(onScaleChange)
@@ -165,7 +200,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     // wrapRef = 스크롤 뷰포트. 카드가 뷰포트보다 작으면 grid로 중앙정렬, 크면(확대) 스크롤.
     <div ref={wrapRef} className={`overflow-auto ${className ?? 'w-full'}`}>
       <div className="min-w-full min-h-full grid place-items-center p-6">
-        <div className="flex-none" style={{ width: CARD_W * effScale, height: contentH * effScale }}>
+        <div ref={boxRef} className="flex-none" style={{ width: CARD_W * effScale, height: contentH * effScale }}>
           <iframe
             ref={frameRef}
             title="deck-editor"
