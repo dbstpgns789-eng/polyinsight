@@ -250,7 +250,7 @@ const AGENT_BODY = `
   function undo() { commitTextEdit(); var c = undoStack.pop(); if (!c) return; c.undo(); redoStack.push(c); afterHistoryStep(); }
   function redo() { commitTextEdit(); var c = redoStack.pop(); if (!c) return; c.run(); undoStack.push(c); afterHistoryStep(); }
 
-  var LAYOUT_PROPS = ['position', 'left', 'top', 'width', 'height', 'transform'];
+  var LAYOUT_PROPS = ['position', 'left', 'top', 'width', 'height', 'transform', 'margin'];
   function snapInline(el) { var o = {}; for (var i = 0; i < LAYOUT_PROPS.length; i++) o[LAYOUT_PROPS[i]] = el.style[LAYOUT_PROPS[i]] || ''; return o; }
   function applyInline(el, snap) { for (var i = 0; i < LAYOUT_PROPS.length; i++) el.style[LAYOUT_PROPS[i]] = snap[LAYOUT_PROPS[i]]; }
   function layoutCmd(el, before, after) { return { run: function () { applyInline(el, after); }, undo: function () { applyInline(el, before); } }; }
@@ -326,6 +326,9 @@ const AGENT_BODY = `
       var el = els[i], r = rects[i];
       if (getComputedStyle(el).position !== 'absolute') {
         el.style.width = r.width + 'px'; el.style.height = r.height + 'px';
+        // ★ 절대배치에선 margin이 border-box를 밀어 left/top과 어긋남 → 0으로. left/top이 곧 border-box 위치.
+        // (margin은 LAYOUT_PROPS라 undo/revertFlow가 원복. margin 있는 요소 grab 점프·가장자리 못 닿음 수정)
+        el.style.margin = '0';
         el.style.position = 'absolute';
         // ★ left/top은 카드가 아니라 '실제 offsetParent' 기준이어야 제자리 유지(중첩 요소 좌표 붕괴 수정).
         // (positioned 조상이 있으면 offsetParent=그 조상 → 카드 상대값을 그대로 쓰면 어긋남/반전)
@@ -421,7 +424,11 @@ const AGENT_BODY = `
         var minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
         for (var i = 0; i < group.length; i++) { var r = group[i].getBoundingClientRect(); minx = Math.min(minx, r.left - cr.left); miny = Math.min(miny, r.top - cr.top); maxx = Math.max(maxx, r.right - cr.left); maxy = Math.max(maxy, r.bottom - cr.top); }
         befores = promoteAll(group, card);
-        for (var i = 0; i < group.length; i++) bases.push({ l: parseFloat(group[i].style.left) || 0, t: parseFloat(group[i].style.top) || 0 });
+        // 요소별 offsetParent 오프셋(카드좌표) 캡처 — 중첩 요소의 클램프를 카드공간에서 하기 위함
+        for (var i = 0; i < group.length; i++) {
+          var op0 = group[i].offsetParent || card, opr0 = op0.getBoundingClientRect();
+          bases.push({ l: parseFloat(group[i].style.left) || 0, t: parseFloat(group[i].style.top) || 0, offX: opr0.left - cr.left, offY: opr0.top - cr.top });
+        }
         gx0 = minx; gy0 = miny; gw = maxx - minx; gh = maxy - miny;
       }
       var dx = ev.clientX - downX, dy = ev.clientY - downY;
@@ -430,8 +437,12 @@ const AGENT_BODY = `
       var sn = snapMove(card, group, nbx, nby, gw, gh);
       var ddx = sn.left - gx0, ddy = sn.top - gy0;
       for (var i = 0; i < group.length; i++) {
-        group[i].style.left = clamp(bases[i].l + ddx, 0, CARD_W - group[i].offsetWidth) + 'px';
-        group[i].style.top = clamp(bases[i].t + ddy, 0, CARD_H - group[i].offsetHeight) + 'px';
+        var w = group[i].offsetWidth, h = group[i].offsetHeight;
+        // 카드공간에서 클램프 후 offsetParent 좌표로 환원 — 중첩 요소가 컨테이너 top에 걸려 카드끝까지 못 올라가던 버그 수정(direct child는 off=0 → 무변화)
+        var cardL = clamp(bases[i].l + bases[i].offX + ddx, 0, CARD_W - w);
+        var cardT = clamp(bases[i].t + bases[i].offY + ddy, 0, CARD_H - h);
+        group[i].style.left = (cardL - bases[i].offX) + 'px';
+        group[i].style.top = (cardT - bases[i].offY) + 'px';
       }
       positionOverlay();
     }
