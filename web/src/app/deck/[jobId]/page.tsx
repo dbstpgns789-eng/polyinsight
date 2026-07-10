@@ -134,6 +134,9 @@ function DeckPageInner() {
   const [snapshots, setSnapshots] = useState<string[]>([])
   const [history, setHistory] = useState<HistoryState>({ canUndo: false, canRedo: false })
   const [page, setPage] = useState<PageState>({ index: 0, count: 0 })
+  const [zoom, setZoom] = useState<number | null>(null)          // null = 폭 맞춤(fit)
+  const [zoomInfo, setZoomInfo] = useState({ eff: 1, fit: 1 })   // 현재 배율(줌 % 표시)
+  const zoomBy = (f: number) => setZoom((z) => Math.min(3, Math.max(0.2, +(((z ?? zoomInfo.fit) * f)).toFixed(3))))
   const [rightTab, setRightTab] = useState<DeckTab>('ai')
   const [showExport, setShowExport] = useState(false)
   const [savedAt, setSavedAt] = useState<string>()  // 마지막 저장 시각 hh:mm
@@ -390,22 +393,34 @@ function DeckPageInner() {
         {/* 중앙 */}
         <main className="flex-1 min-w-0 overflow-hidden">
           {editing ? (
-            <div className="relative h-full overflow-y-auto flex flex-col items-center justify-center py-6">
-              <div className="relative w-full max-w-[460px]">
-                <DeckEditor
-                  ref={editorRef}
-                  html={deck.html as string}
-                  mode={mode}
-                  onSelected={setSelected}
-                  onDeselected={() => setSelected(null)}
-                  onDirty={() => { setDirty(true); setPending(null) }}
-                  onHistory={setHistory}
-                  onPage={setPage}
-                />
-                {(proposing || !!pending) && (
-                  <div className="absolute inset-0 z-10 cursor-not-allowed" aria-hidden="true"
-                    title={proposing ? 'AI가 고치는 중…' : 'AI 제안 확인 중 — 적용/취소 후 편집하세요'} />
-                )}
+            <div className="relative h-full">
+              <DeckEditor
+                ref={editorRef}
+                className="absolute inset-0"
+                html={deck.html as string}
+                mode={mode}
+                zoom={zoom}
+                onScaleChange={(eff, fit) => setZoomInfo({ eff, fit })}
+                onSelected={setSelected}
+                onDeselected={() => setSelected(null)}
+                onDirty={() => { setDirty(true); setPending(null) }}
+                onHistory={setHistory}
+                onPage={setPage}
+              />
+              {(proposing || !!pending) && (
+                <div className="absolute inset-0 z-10 cursor-not-allowed" aria-hidden="true"
+                  title={proposing ? 'AI가 고치는 중…' : 'AI 제안 확인 중 — 적용/취소 후 편집하세요'} />
+              )}
+              {/* 줌 컨트롤 — 인라인 글자 편집이 작을 때 확대. %는 눌러서 폭 맞춤 */}
+              <div className="absolute bottom-4 right-4 z-20 flex items-center gap-0.5 rounded-xl border border-deck-line bg-surface/95 shadow-card px-1 py-1 backdrop-blur">
+                <button onClick={() => zoomBy(0.8)} title="축소" aria-label="축소"
+                  className="w-7 h-7 rounded-lg grid place-items-center text-[15px] text-ink-2 hover:bg-bg-subtle transition-colors">−</button>
+                <button onClick={() => setZoom(null)} title="폭 맞춤"
+                  className="min-w-[54px] h-7 px-2 rounded-lg text-[12px] font-semibold tabular-nums text-ink-2 hover:bg-bg-subtle transition-colors">
+                  {Math.round(zoomInfo.eff * 100)}%
+                </button>
+                <button onClick={() => zoomBy(1.25)} title="확대" aria-label="확대"
+                  className="w-7 h-7 rounded-lg grid place-items-center text-[15px] text-ink-2 hover:bg-bg-subtle transition-colors">+</button>
               </div>
             </div>
           ) : (

@@ -65,6 +65,9 @@ interface Props {
   onDirty?: () => void
   onHistory?: (state: HistoryState) => void
   onPage?: (state: PageState) => void
+  zoom?: number | null                                  // null/undefined = 폭 맞춤(fit), 숫자 = 절대 배율
+  onScaleChange?: (effective: number, fit: number) => void
+  className?: string                                    // 스크롤 뷰포트 배치(예: absolute inset-0)
 }
 
 const CARD_W = 1080
@@ -75,13 +78,14 @@ function buildSrcDoc(html: string): string {
 }
 
 const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
-  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage }, ref,
+  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage, zoom, onScaleChange, className }, ref,
 ) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [scale, setScale] = useState(1)
+  const [fitScale, setFitScale] = useState(1)
   const [contentH, setContentH] = useState(1350)
   const htmlResolvers = useRef<((html: string) => void)[]>([])
+  const effScale = zoom ?? fitScale       // zoom 지정 시 절대 배율, 아니면 폭 맞춤
 
   const send = useCallback((type: string, payload?: Record<string, unknown>) => {
     frameRef.current?.contentWindow?.postMessage({ source: 'pi-host', type, ...payload }, '*')
@@ -136,32 +140,40 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
   // 모드 변경을 iframe에 반영
   useEffect(() => { send('SET_MODE', { mode }) }, [mode, send])
 
-  // 컨테이너 폭에 맞춰 스케일(1080 → 폭)
+  // 뷰포트 폭에 맞춘 fit 배율(패딩 48 제외). 1080 초과 확대는 zoom prop이 담당.
   useLayoutEffect(() => {
     const el = wrapRef.current
     if (!el) return
-    const measure = () => setScale(Math.min(1, el.clientWidth / CARD_W))
+    const measure = () => setFitScale(Math.min(1, Math.max(0.1, (el.clientWidth - 48) / CARD_W)))
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
 
+  // 현재 배율을 부모(줌 컨트롤 % 표시)에 보고
+  useEffect(() => { onScaleChange?.(effScale, fitScale) }, [effScale, fitScale, onScaleChange])
+
   return (
-    <div ref={wrapRef} className="w-full" style={{ height: contentH * scale, overflow: 'hidden' }}>
-      <iframe
-        ref={frameRef}
-        title="deck-editor"
-        srcDoc={buildSrcDoc(html)}
-        sandbox="allow-scripts"
-        style={{
-          width: CARD_W,
-          height: contentH,
-          border: 'none',
-          transformOrigin: 'top left',
-          transform: `scale(${scale})`,
-        }}
-      />
+    // wrapRef = 스크롤 뷰포트. 카드가 뷰포트보다 작으면 grid로 중앙정렬, 크면(확대) 스크롤.
+    <div ref={wrapRef} className={`overflow-auto ${className ?? 'w-full'}`}>
+      <div className="min-w-full min-h-full grid place-items-center p-6">
+        <div className="flex-none" style={{ width: CARD_W * effScale, height: contentH * effScale }}>
+          <iframe
+            ref={frameRef}
+            title="deck-editor"
+            srcDoc={buildSrcDoc(html)}
+            sandbox="allow-scripts"
+            style={{
+              width: CARD_W,
+              height: contentH,
+              border: 'none',
+              transformOrigin: 'top left',
+              transform: `scale(${effScale})`,
+            }}
+          />
+        </div>
+      </div>
     </div>
   )
 })
