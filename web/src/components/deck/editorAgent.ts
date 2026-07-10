@@ -426,6 +426,7 @@ const AGENT_BODY = `
   // 임계를 넘기면 드래그 이동(텍스트면 편집 모드 해제). 다중선택 상태면 전원 함께 이동.
   function onMouseDown(e) {
     if (mode !== 'edit') return;
+    if (spaceHeld) { e.preventDefault(); startPan(e); return; }   // 스페이스+드래그 = 팬(편집 대신)
     if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-pi-handle')) return; // 핸들은 자체 처리
     commitTextEdit();  // 선택/드래그 전환 전에 진행 중 텍스트 편집 확정
     var picked = pick(e.target);
@@ -828,6 +829,36 @@ const AGENT_BODY = `
     if (mode !== 'edit') return;
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
     else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redo(); }
+  }, true);
+
+  // ── 캔버스 팬/줌 제스처 → 부모 포워딩(iframe이 이벤트를 삼켜 카드 위에서 직접 팬/줌 불가) ──
+  // 휠: 일반=팬, Ctrl/⌘(핀치)=커서 기준 줌. 스페이스+드래그=팬. 좌표(cx,cy)는 iframe 자연px(부모가 환산).
+  var spaceHeld = false;
+  function startPan(e) {
+    var lx = e.clientX, ly = e.clientY;
+    function mv(ev) {
+      post('VIEWPORT', { kind: 'pan', dx: -(ev.clientX - lx), dy: -(ev.clientY - ly), drag: true });
+      lx = ev.clientX; ly = ev.clientY;
+    }
+    function up() { document.removeEventListener('mousemove', mv, true); document.removeEventListener('mouseup', up, true); }
+    document.addEventListener('mousemove', mv, true);
+    document.addEventListener('mouseup', up, true);
+  }
+  window.addEventListener('wheel', function (e) {
+    if (mode !== 'edit') return;
+    e.preventDefault();
+    if (e.ctrlKey || e.metaKey) post('VIEWPORT', { kind: 'zoom', delta: e.deltaY, cx: e.clientX, cy: e.clientY });
+    else post('VIEWPORT', { kind: 'pan', dx: e.deltaX, dy: e.deltaY });
+  }, { passive: false });
+  window.addEventListener('keydown', function (e) {
+    if (mode === 'edit' && (e.code === 'Space' || e.key === ' ') &&
+        !(document.activeElement && document.activeElement.isContentEditable)) {
+      if (!spaceHeld) { spaceHeld = true; document.body.style.cursor = 'grab'; }
+      e.preventDefault();
+    }
+  }, true);
+  window.addEventListener('keyup', function (e) {
+    if (e.code === 'Space' || e.key === ' ') { spaceHeld = false; if (mode === 'edit') document.body.style.cursor = 'default'; }
   }, true);
 
   post('EDITOR_READY', {});

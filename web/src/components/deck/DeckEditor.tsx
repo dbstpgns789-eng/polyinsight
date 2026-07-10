@@ -90,6 +90,8 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
   const [contentH, setContentH] = useState(1350)
   const htmlResolvers = useRef<((html: string) => void)[]>([])
   const effScale = zoom ?? fitScale       // zoom 지정 시 절대 배율, 아니면 폭 맞춤
+  const viewRef = useRef({ effScale: 1, fitScale: 1, zoom: null as number | null })
+  viewRef.current = { effScale, fitScale, zoom }   // 최신 배율을 ref로(VIEWPORT 핸들러가 stale 없이 읽음)
 
   // 확대/축소 앵커 — 지정 뷰포트 점을 고정한 채 배율 변경(중앙 or 커서). 배율 변경 뒤 스크롤 보정.
   const anchorRef = useRef<{ vx: number; vy: number; rx: number; ry: number } | null>(null)
@@ -155,6 +157,23 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
         case 'DIRTY': onDirty?.(); break
         case 'HISTORY_STATE': onHistory?.({ canUndo: !!d.canUndo, canRedo: !!d.canRedo }); break
         case 'PAGE': onPage?.({ index: Number(d.index) || 0, count: Number(d.count) || 0 }); break
+        case 'VIEWPORT': {
+          const wrap = wrapRef.current; if (!wrap) break
+          const v = viewRef.current
+          if (d.kind === 'pan') {
+            const mult = d.drag ? v.effScale : 1        // 드래그 델타=iframe자연px(×배율), 휠 델타=화면px
+            wrap.scrollLeft += (Number(d.dx) || 0) * mult
+            wrap.scrollTop += (Number(d.dy) || 0) * mult
+          } else if (d.kind === 'zoom') {
+            const fr = frameRef.current?.getBoundingClientRect()
+            if (fr) {
+              const vx = fr.left + (Number(d.cx) || 0) * v.effScale   // iframe자연 좌표 → 화면 좌표
+              const vy = fr.top + (Number(d.cy) || 0) * v.effScale
+              zoomAt((v.zoom ?? v.fitScale) * Math.exp(-(Number(d.delta) || 0) * 0.0015), vx, vy)
+            }
+          }
+          break
+        }
         case 'HTML': {
           const r = htmlResolvers.current.shift()
           r?.(d.html as string)
@@ -164,7 +183,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
-  }, [mode, send, onSelected, onDeselected, onDirty, onHistory, onPage, initialPage])
+  }, [mode, send, onSelected, onDeselected, onDirty, onHistory, onPage, initialPage, zoomAt])
 
   // 모드 변경을 iframe에 반영
   useEffect(() => { send('SET_MODE', { mode }) }, [mode, send])
