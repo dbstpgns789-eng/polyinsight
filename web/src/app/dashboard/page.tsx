@@ -2,13 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { getProjects, deleteJob } from '@/lib/api';
+import { getProjects, deleteJob, getDeckCardUrl, getCardImageUrl } from '@/lib/api';
 import {
   IconEdit, IconDownload, IconRefresh, IconWarning,
   IconTrash, IconSearch,
 } from '@/components/ui/Icons';
 import AuthGuard from '@/components/auth/AuthGuard';
-import LogoutButton from '@/components/auth/LogoutButton';
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true';
 
@@ -137,14 +136,11 @@ function DashboardPageInner() {
     <div className="dash">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
         <h1 className="dash__title" style={{ margin: 0 }}>내 카드뉴스</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {USE_MOCK && (
-            <span style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--border)', padding: '2px 8px', borderRadius: 4 }}>
-              DEV (mock)
-            </span>
-          )}
-          <LogoutButton />
-        </div>
+        {USE_MOCK && (
+          <span style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--border)', padding: '2px 8px', borderRadius: 4 }}>
+            DEV (mock)
+          </span>
+        )}
       </div>
 
       {loading && (
@@ -246,6 +242,67 @@ function DashboardPageInner() {
   );
 }
 
+// 기약분수 비율 라벨 (1080×1350 → 4:5, 1080×1080 → 1:1)
+function simplifyRatio(w: number, h: number): string {
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const d = gcd(w, h) || 1;
+  return `${Math.round(w / d)}:${Math.round(h / d)}`;
+}
+
+// 대시보드 썸네일 = 첫 카드 1장. 비율은 실제 이미지 크기에서 유도(하드코딩 1:1 폐기).
+function ProjThumb({ project }: { project: Project }) {
+  const [dim, setDim] = useState<{ w: number; h: number } | null>(null);
+  const [failedImg, setFailedImg] = useState(false);
+  const showImg = project.status === 'done' && !failedImg;
+  const src = project.kind === 'deck'
+    ? getDeckCardUrl(project.id, 1)
+    : getCardImageUrl(project.id, 1);
+  const blurred = project.status === 'processing' || project.status === 'failed';
+
+  return (
+    <div
+      className={`proj-strip${blurred ? ' is-blurred' : ''}`}
+      style={{ aspectRatio: dim ? `${dim.w} / ${dim.h}` : '4 / 5' }}
+      aria-hidden="true"
+    >
+      {showImg
+        ? <img
+            className="proj-strip__cover"
+            src={src}
+            alt=""
+            loading="lazy"
+            onLoad={e => setDim({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+            onError={() => setFailedImg(true)}
+          />
+        : <div className="proj-strip__placeholder" />}
+
+      {project.status === 'processing' && (
+        <div className="proj-strip__overlay">
+          <div className="proj-strip__progress-track">
+            <div className="proj-strip__progress-fill" style={{ transform: 'scaleX(0.5)' }} />
+          </div>
+          <span className="proj-strip__stage">처리 중…</span>
+        </div>
+      )}
+      {project.status === 'failed' && (
+        <div className="proj-strip__overlay">
+          <span className="proj-strip__badge">
+            <IconWarning size={10} />
+            분석 실패
+          </span>
+        </div>
+      )}
+
+      {(dim || project.cardCount) && (
+        <div className="proj-strip__badges">
+          {dim ? <span className="proj-strip__badge-item">{simplifyRatio(dim.w, dim.h)}</span> : <span />}
+          {project.cardCount && <span className="proj-strip__badge-item">{project.cardCount}장</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectCard({ project, onDeleted }: { project: Project; onDeleted: () => void }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // v3 덱 잡은 /deck, 옛 파이프라인 잡(card_data 보유)은 기존 /editor 유지
@@ -268,37 +325,7 @@ function ProjectCard({ project, onDeleted }: { project: Project; onDeleted: () =
       aria-disabled={project.status === 'processing' ? 'true' : undefined}
       aria-busy={project.status === 'processing' ? 'true' : undefined}
     >
-      <div
-        className={`proj-strip${project.status === 'processing' || project.status === 'failed' ? ' is-blurred' : ''}`}
-        aria-hidden="true"
-      >
-        {[1, 2, 3, 4, 5].map(n => (
-          <div key={n} className="proj-strip__thumb" />
-        ))}
-
-        {project.status === 'processing' && (
-          <div className="proj-strip__overlay">
-            <div className="proj-strip__progress-track">
-              <div className="proj-strip__progress-fill" style={{ transform: 'scaleX(0.5)' }} />
-            </div>
-            <span className="proj-strip__stage">처리 중…</span>
-          </div>
-        )}
-
-        {project.status === 'failed' && (
-          <div className="proj-strip__overlay">
-            <span className="proj-strip__badge">
-              <IconWarning size={10} />
-              분석 실패
-            </span>
-          </div>
-        )}
-
-        <div className="proj-strip__badges" aria-hidden="true">
-          <span className="proj-strip__badge-item">1:1</span>
-          {project.cardCount && <span className="proj-strip__badge-item">{project.cardCount}장</span>}
-        </div>
-      </div>
+      <ProjThumb project={project} />
 
       <div className="proj-card__body">
         <h2 className="proj-card__title">{project.title}</h2>
