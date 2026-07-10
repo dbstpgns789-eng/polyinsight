@@ -92,8 +92,6 @@ const TEXT_ALIGNS = [
 export default function DeckElementPanel({
   selected, onStyle, onDelete, onMove, onRevertFlow, onAlign, onDistribute, onSetRect,
 }: Props) {
-  const [advanced, setAdvanced] = useState(false)
-
   if (!selected) {
     return (
       <div className="flex flex-col items-center text-center gap-2 pt-6">
@@ -180,38 +178,23 @@ export default function DeckElementPanel({
         </Section>
       )}
 
-      {/* 고급 — 위치 수치·순서·자동배치 되돌리기 (기술 컨트롤은 접어서 눈에 안 띄게) */}
-      {(rect || !multi) && (
-        <div className="border-t border-deck-line-soft pt-4">
-          <button onClick={() => setAdvanced((v) => !v)} aria-expanded={advanced}
-            className="w-full flex items-center gap-1.5 text-left group">
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
-              strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
-              className={`text-ink-3 transition-transform ${advanced ? 'rotate-90' : ''}`}><path d="m9 18 6-6-6-6" /></svg>
-            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3 group-hover:text-ink-2 transition-colors">고급 · 정밀 조정</span>
-          </button>
-
-          {advanced && (
-            <div className="flex flex-col gap-3 mt-3">
-              {rect && (
-                <>
-                  <div className="text-[11px] text-ink-3">위치·크기 (px)</div>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                    <NumberField label="X" value={rect.x} onCommit={(v) => onSetRect({ left: v })} />
-                    <NumberField label="Y" value={rect.y} onCommit={(v) => onSetRect({ top: v })} />
-                    <NumberField label="W" value={multi ? null : rect.w} disabled={multi} onCommit={(v) => onSetRect({ width: v })} />
-                    <NumberField label="H" value={multi ? null : rect.h} disabled={multi} onCommit={(v) => onSetRect({ height: v })} />
-                  </div>
-                  {multi && <p className="text-[10.5px] text-ink-3">W·H는 여러 요소라 읽기 전용입니다.</p>}
-                </>
-              )}
-              {!multi && selected.absolute && (
-                <button onClick={onRevertFlow} title="드래그로 옮긴 위치를 자동 배치로 되돌립니다"
-                  className="h-8 rounded-lg border border-deck-line text-[12px] text-ink-2 hover:border-forest-green/50 transition-colors">↺ 자동 위치로 되돌리기</button>
-              )}
+      {/* 위치·크기 — first-class(Figma식 transform). pro 툴이라 숨기지 않음 */}
+      {(rect || (!multi && selected.absolute)) && (
+        <Section label="위치·크기 (px)">
+          {rect && (
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              <NumberField label="X" value={rect.x} onCommit={(v) => onSetRect({ left: v })} />
+              <NumberField label="Y" value={rect.y} onCommit={(v) => onSetRect({ top: v })} />
+              <NumberField label="W" value={multi ? null : rect.w} disabled={multi} onCommit={(v) => onSetRect({ width: v })} />
+              <NumberField label="H" value={multi ? null : rect.h} disabled={multi} onCommit={(v) => onSetRect({ height: v })} />
             </div>
           )}
-        </div>
+          {multi && <p className="text-[10.5px] text-ink-3">W·H는 여러 요소라 읽기 전용입니다.</p>}
+          {!multi && selected.absolute && (
+            <button onClick={onRevertFlow} title="드래그로 옮긴 위치를 자동 배치로 되돌립니다"
+              className="h-8 rounded-lg border border-deck-line text-[12px] text-ink-2 hover:border-forest-green/50 hover:text-forest-green-deep transition-colors">↺ 자동 배치로 되돌리기</button>
+          )}
+        </Section>
       )}
 
       {/* 삭제 */}
