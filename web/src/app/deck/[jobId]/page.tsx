@@ -411,6 +411,19 @@ function DeckPageInner() {
                 <div className="absolute inset-0 z-10 cursor-not-allowed" aria-hidden="true"
                   title={proposing ? 'AI가 고치는 중…' : 'AI 제안 확인 중 — 적용/취소 후 편집하세요'} />
               )}
+              {/* 릴 좌우 이동 — 덱은 좌우 슬라이드 카드뉴스. 하단 중앙 페이저(‹ 3/7 ›) */}
+              {page.count > 1 && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-full border border-deck-line bg-surface/95 shadow-card px-1.5 py-1 backdrop-blur">
+                  <button onClick={() => editorRef.current?.setPage(page.index - 1)} disabled={page.index <= 0}
+                    aria-label="이전 카드" title="이전 카드 (←)"
+                    className="w-7 h-7 rounded-full grid place-items-center text-[16px] text-ink-2 hover:bg-bg-subtle disabled:opacity-25 transition-colors">‹</button>
+                  <span className="min-w-[48px] text-center text-[12px] font-semibold tabular-nums text-ink-2">{page.index + 1} / {page.count}</span>
+                  <button onClick={() => editorRef.current?.setPage(page.index + 1)} disabled={page.index >= page.count - 1}
+                    aria-label="다음 카드" title="다음 카드 (→)"
+                    className="w-7 h-7 rounded-full grid place-items-center text-[16px] text-ink-2 hover:bg-bg-subtle disabled:opacity-25 transition-colors">›</button>
+                </div>
+              )}
+
               {/* 줌 컨트롤 — 인라인 글자 편집이 작을 때 확대. %는 눌러서 폭 맞춤 */}
               <div className="absolute bottom-4 right-4 z-20 flex items-center gap-0.5 rounded-xl border border-deck-line bg-surface/95 shadow-card px-1 py-1 backdrop-blur">
                 <button onClick={() => zoomBy(0.8)} title="축소" aria-label="축소"
