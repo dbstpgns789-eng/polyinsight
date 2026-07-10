@@ -4,7 +4,7 @@
 // before/after 확인 → [✓ 적용]/[↻ 다른 안]/[✕]. 적용 후에만 저장·렌더. AI 되돌리기=부모 스냅샷.
 // 제안(propose)·적용(commit)은 각각 유료 LLM/렌더이므로 명시적 클릭만(타이핑 자동호출 금지).
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { SelectedInfo } from './DeckEditor'
 
 const TEXT_PRESETS = [
@@ -52,9 +52,14 @@ export default function DeckAIAssistant({
 }: Props) {
   const [text, setText] = useState('')
   const [last, setLast] = useState('')
+  const taRef = useRef<HTMLTextAreaElement>(null)
 
   const busy = proposing || committing || reverting
   const hasTarget = !!selected?.eid
+  // 선택 대상 안내 — 개발 태그명(rect·svg 등) 노출 금지, 사람 말로
+  const targetKind = selected?.isImage ? '이미지' : selected?.editable ? '텍스트' : '요소'
+  const targetSnippet = (selected?.quotedText || '').trim().slice(0, 40)
+  const targetSnippetMore = (selected?.quotedText || '').trim().length > 40
 
   const propose = (instruction: string) => {
     const t = instruction.trim()
@@ -62,6 +67,13 @@ export default function DeckAIAssistant({
     setLast(t)
     onPropose(t)
   }
+  // 칩(빠른수정·예시)은 '바로 발사'하지 않고 입력창에 채워 넣는다 — 유료 호출은 항상 명시적 전송으로만.
+  const fill = (instruction: string) => {
+    if (busy) return
+    setText(instruction)
+    requestAnimationFrame(() => taRef.current?.focus())
+  }
+  const send = () => { const t = text; setText(''); propose(t) }
 
   return (
     <div className="flex flex-col gap-3">
@@ -81,7 +93,9 @@ export default function DeckAIAssistant({
       {/* 맥락 — 요소 선택 시에만(미선택 안내는 아래 빈 상태 히어로가 담당) */}
       {hasTarget && !pending && (
         <p className="text-[11.5px] text-ink-3 leading-snug">
-          선택한 <b className="text-ink-2">{selected?.tag}</b> 요소를 고쳐요: “{(selected?.quotedText || '').slice(0, 40)}{(selected?.quotedText || '').length > 40 ? '…' : ''}”
+          {targetSnippet
+            ? <>선택한 텍스트 <b className="text-ink-2">“{targetSnippet}{targetSnippetMore ? '…' : ''}”</b> 를 고쳐요.</>
+            : <>선택한 <b className="text-ink-2">{targetKind}</b> 를 고쳐요.</>}
         </p>
       )}
 
@@ -128,7 +142,7 @@ export default function DeckAIAssistant({
               {TEXT_PRESETS.map((p) => (
                 <button
                   key={p.label}
-                  onClick={() => propose(p.instruction)}
+                  onClick={() => fill(p.instruction)}
                   disabled={busy}
                   className="text-[11.5px] font-semibold text-forest-green-deep bg-forest-green-wash border border-forest-green/30 rounded-full px-2.5 py-1 disabled:opacity-40"
                 >{p.label}</button>
@@ -140,8 +154,8 @@ export default function DeckAIAssistant({
           {!hasTarget && !text.trim() && (
             <div className="flex flex-col items-center text-center gap-2 pt-2 pb-1">
               <span className="w-11 h-11 rounded-full bg-forest-green-wash text-forest-green-deep grid place-items-center text-[19px]" aria-hidden="true">✦</span>
-              <p className="text-[14px] font-bold text-ink">무엇을 수정할까요?</p>
-              <p className="text-[11.5px] text-ink-3 leading-snug max-w-[250px]">원하는 수정을 자연어로 말해주세요. AI가 제안을 먼저 보여줘요.</p>
+              <p className="text-[14px] font-bold text-ink">무엇을 고쳐볼까요?</p>
+              <p className="text-[11.5px] text-ink-3 leading-snug max-w-[250px]">고치고 싶은 걸 편하게 적어주세요. AI가 제안을 먼저 보여드려요.</p>
             </div>
           )}
 
@@ -152,7 +166,7 @@ export default function DeckAIAssistant({
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
-                  onClick={() => propose(s)}
+                  onClick={() => fill(s)}
                   disabled={busy}
                   className="text-left text-[11.5px] text-ink-2 border border-deck-line rounded-lg px-2.5 py-2 hover:border-forest-green/50 hover:text-ink disabled:opacity-40 transition-colors"
                 >“{s}”</button>
@@ -167,7 +181,7 @@ export default function DeckAIAssistant({
               {QUICK_FIX.map((q) => (
                 <button
                   key={q.label}
-                  onClick={() => propose(q.instruction)}
+                  onClick={() => fill(q.instruction)}
                   disabled={busy}
                   className="text-[11.5px] font-semibold text-ink-2 bg-surface border border-deck-line rounded-full px-2.5 py-1 hover:border-forest-green/50 hover:text-forest-green-deep disabled:opacity-40 transition-colors"
                 >{q.label}</button>
@@ -175,32 +189,38 @@ export default function DeckAIAssistant({
             </div>
           </div>
 
-          {/* 자유 지시 (Enter 전송 · Shift+Enter 줄바꿈) */}
-          <div className="flex flex-col gap-1.5">
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const t = text; setText(''); propose(t) } }}
-              placeholder={hasTarget ? '예: "이 문장을 질문형으로 바꿔줘"' : '원하는 수정사항을 입력하세요…'}
-              rows={2}
-              disabled={busy}
-              className="w-full rounded-lg border border-deck-line bg-surface p-2.5 text-[12px] text-ink resize-none disabled:opacity-50 focus:border-forest-green/50 focus:outline-none"
-            />
-            <div className="flex items-center gap-2">
+          {/* 자유 지시 — 종이비행기로 전송(입력 있을 때만 활성). Enter=전송, Shift+Enter=줄바꿈 */}
+          <div className="flex flex-col gap-2">
+            <div className="relative">
+              <textarea
+                ref={taRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
+                placeholder={hasTarget ? '예: 이 문장을 질문형으로 바꿔줘' : '고치고 싶은 걸 적어주세요'}
+                rows={3}
+                disabled={busy}
+                className="w-full rounded-xl border border-deck-line bg-surface p-3 pr-12 text-[12.5px] text-ink resize-none disabled:opacity-50 focus:border-forest-green/50 focus:outline-none"
+              />
               <button
-                onClick={() => { const t = text; setText(''); propose(t) }}
+                onClick={send}
                 disabled={busy || !text.trim()}
-                className="flex-1 h-8 rounded-lg bg-forest-green text-canvas text-[12px] font-semibold disabled:opacity-40"
+                aria-label="AI에게 보내기"
+                title="보내기"
+                className="absolute right-2 bottom-2 w-8 h-8 rounded-lg grid place-items-center transition-colors bg-forest-green text-canvas hover:bg-forest-green-deep disabled:bg-bg-subtle disabled:text-ink-3"
               >
-                {proposing ? 'AI가 제안 중…' : '✦ AI에게 맡기기'}
+                {proposing
+                  ? <span className="w-3.5 h-3.5 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden="true" />
+                  : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7Z" /></svg>}
               </button>
-              <span className="text-[10px] text-ink-3 shrink-0">Enter 전송</span>
             </div>
-          </div>
 
-          <p className="text-[10px] text-ink-3 leading-snug">
-            AI가 먼저 제안을 보여줘요. 확인하고 <b>적용</b>을 눌러야 반영됩니다. 수치는 원문 근거 안에서만 바뀝니다.
-          </p>
+            <p className="text-[10.5px] text-ink-3 leading-snug">
+              {proposing
+                ? 'AI가 고치는 중이에요. 길면 1~2분 걸릴 수 있어요 — 잠깐만 기다려 주세요.'
+                : <>제안을 먼저 보여드려요. 확인하고 <b>적용</b>을 눌러야 반영됩니다. 수치는 원문 근거 안에서만 바뀌어요.</>}
+            </p>
+          </div>
         </>
       )}
     </div>

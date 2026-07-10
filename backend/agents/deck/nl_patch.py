@@ -37,7 +37,7 @@ async def apply_nl_patch(
     raw = await llm_client.call(
         system_prompt=P.EDIT_SYSTEM,
         user_prompt=user,
-        model=settings.LLM_MODEL_AUTHOR,
+        model=settings.LLM_MODEL_EDIT,           # 편집 전용(Sonnet) — 저작용 Opus 대비 빠름
         max_tokens=settings.AUTHOR_MAX_TOKENS,
         temperature=0.3,                         # 편집은 보수적으로(최소 변경)
         timeout_s=settings.AUTHOR_TIMEOUT_S,
@@ -45,5 +45,5 @@ async def apply_nl_patch(
     )
     patched = _strip_code_fence(raw)
     logger.info("nl_patch applied: %d → %d chars (model=%s)",
-                len(html), len(patched), settings.LLM_MODEL_AUTHOR)
+                len(html), len(patched), settings.LLM_MODEL_EDIT)
     return patched

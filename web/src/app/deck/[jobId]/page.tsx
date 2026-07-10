@@ -224,7 +224,7 @@ function DeckPageInner() {
       const afterText = target?.eid ? extractEidText(r.data.html, target.eid) : null
       setPending({ html: r.data.html, verify: r.data.verify, afterText, target, beforeText })
     } catch {
-      setEditWarnings(['AI 제안을 받지 못했어요. 잠시 후 다시 시도해 주세요.'])
+      setEditWarnings(['AI가 응답하지 않았어요. 다시 시도해 주세요.'])
     } finally { setProposing(false) }
   }, [jobId, selected, pending])
 
@@ -404,7 +404,7 @@ function DeckPageInner() {
                 />
                 {(proposing || !!pending) && (
                   <div className="absolute inset-0 z-10 cursor-not-allowed" aria-hidden="true"
-                    title={proposing ? 'AI가 제안 중…' : 'AI 제안 확인 중 — 적용/취소 후 편집하세요'} />
+                    title={proposing ? 'AI가 고치는 중…' : 'AI 제안 확인 중 — 적용/취소 후 편집하세요'} />
                 )}
               </div>
             </div>

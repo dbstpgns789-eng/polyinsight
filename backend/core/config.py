@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     LLM_MODEL_AUTHOR: str = "claude-opus-4-8"
     AUTHOR_TIMEOUT_S: int = 600          # 대용량 HTML 1회 저작 — 기본 120s로 부족
     AUTHOR_MAX_TOKENS: int = 32000       # 정교한 아트디렉션 덱도 안 잘리게(streaming으로 호출 → 10분 제한 무관)
+    # 자연어 편집(nl_patch)은 백지 저작이 아니라 기존 덱 국소 수정 — Opus 불필요. Sonnet으로 속도·비용↓
+    # (Opus 편집 실측 ~2.5분/호출 → 편집 UX 붕괴). .env override 가능.
+    LLM_MODEL_EDIT: str = "claude-sonnet-4-6"
     AUTHOR_MAX_CARDS: int = 7            # 카드 max 장수(티어로 확장 예정)
     AUTHOR_FEWSHOT_N: int = 2            # few-shot 레퍼런스 수(입력 토큰/비용 트레이드오프)
     PLAYWRIGHT_TIMEOUT_MS: int = 15000
