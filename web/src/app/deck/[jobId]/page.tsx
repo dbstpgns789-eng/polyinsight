@@ -274,13 +274,18 @@ function DeckPageInner() {
     setEditWarnings([])
     setPending(null)
     setShowFact(false)
-    setMode((m) => (m === 'edit' ? 'view' : 'edit'))
-  }, [])
+    // 보던 카드 그대로 이어가기(양방향 동기). 편집 진입 카드는 viewIdx → DeckEditor initialPage로 반영
+    if (mode === 'view') {
+      setMode('edit')                 // viewIdx=보던 카드 → initialPage로 EDITOR_READY 뒤 이동
+    } else {
+      setViewIdx(page.index)          // 편집→뷰: 편집하던 카드로 뷰어 동기
+      setMode('view')
+    }
+  }, [mode, page.index])
 
   const enterEditAt = useCallback((index: number) => {
+    setViewIdx(index)   // initialPage로 전달돼 EDITOR_READY 뒤 해당 카드로 이동
     setMode('edit')
-    // 마운트 후 해당 카드로 이동(EDITOR_READY 뒤 setPage 반영 위해 다음 틱)
-    setTimeout(() => editorRef.current?.setPage(index), 0)
   }, [])
 
   // 뷰 모드는 팩트가 우측 상시 노출 → 배지=상태만. 편집 모드만 드로어 토글.
@@ -399,6 +404,7 @@ function DeckPageInner() {
                 className="absolute inset-0"
                 html={deck.html as string}
                 mode={mode}
+                initialPage={viewIdx}
                 zoom={zoom}
                 onScaleChange={(eff, fit) => setZoomInfo((z) => (z.eff === eff && z.fit === fit ? z : { eff, fit }))}
                 onSelected={setSelected}

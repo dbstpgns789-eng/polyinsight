@@ -68,6 +68,7 @@ interface Props {
   zoom?: number | null                                  // null/undefined = 폭 맞춤(fit), 숫자 = 절대 배율
   onScaleChange?: (effective: number, fit: number) => void
   className?: string                                    // 스크롤 뷰포트 배치(예: absolute inset-0)
+  initialPage?: number                                  // 편집 진입 시 열 카드(뷰어서 보던 카드). EDITOR_READY 후 반영
 }
 
 const CARD_W = 1080
@@ -78,7 +79,7 @@ function buildSrcDoc(html: string): string {
 }
 
 const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
-  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage, zoom, onScaleChange, className }, ref,
+  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage, zoom, onScaleChange, className, initialPage }, ref,
 ) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -119,7 +120,10 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
       const d = e.data || {}
       if (d.source !== 'pi-deck') return
       switch (d.type) {
-        case 'EDITOR_READY': send('SET_MODE', { mode }); break
+        case 'EDITOR_READY':
+          send('SET_MODE', { mode })
+          if (mode === 'edit' && initialPage) send('SET_PAGE', { index: initialPage })  // 보던 카드로
+          break
         case 'HEIGHT': if (typeof d.height === 'number' && d.height > 0) setContentH(d.height); break
         case 'SELECTED': onSelected?.(d as unknown as SelectedInfo); break
         case 'DESELECTED': onDeselected?.(); break
@@ -135,7 +139,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
-  }, [mode, send, onSelected, onDeselected, onDirty, onHistory, onPage])
+  }, [mode, send, onSelected, onDeselected, onDirty, onHistory, onPage, initialPage])
 
   // 모드 변경을 iframe에 반영
   useEffect(() => { send('SET_MODE', { mode }) }, [mode, send])
