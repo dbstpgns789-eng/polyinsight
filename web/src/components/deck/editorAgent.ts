@@ -346,6 +346,16 @@ const AGENT_BODY = `
   // measure-all→promote-all을 '문서순(부모 먼저)'으로 → 각 자식의 offsetParent가 이미 제자리라 좌표 정확.
   // inline은 제외(부모 블록이 고정되면 그 안에서 정상 wrap). BR·이미 배치(absolute/fixed)·아티팩트 제외.
   // 픽셀 무이동: promoteAll이 margin:0 + box-sizing:border-box + measured w/h/left/top으로 제자리 착지.
+  // 요소가 '맨 텍스트노드'(공백 제외)를 직접 자식으로 가지면 mixed content — 그 안의 요소를 절대배치로
+  // 빼내면 남은 맨 텍스트가 밀려 겹침(예: kicker <div flex><span dot></span> 핵심원리…</div>).
+  function hasBareText(el) {
+    if (!el) return false;
+    var ch = el.childNodes;
+    for (var i = 0; i < ch.length; i++) {
+      if (ch[i].nodeType === 3 && ch[i].nodeValue && ch[i].nodeValue.trim().length) return true;
+    }
+    return false;
+  }
   function freezeCard(card) {
     if (!card || card.getAttribute('data-pi-frozen') === '1') return;
     if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
@@ -356,6 +366,8 @@ const AGENT_BODY = `
       var cs = getComputedStyle(el);
       if (cs.position === 'absolute' || cs.position === 'fixed') continue;
       if (cs.display === 'inline') continue;
+      // ★ 부모가 mixed content(맨 텍스트 포함)면 승격 금지 — 부모를 통째 프리즈해 내부 레이아웃(dot+텍스트) 보존.
+      if (hasBareText(el.parentElement)) continue;
       els.push(el);
     }
     promoteAll(els, card);  // 문서순 → 부모 먼저 → 자식 offsetParent 정확
