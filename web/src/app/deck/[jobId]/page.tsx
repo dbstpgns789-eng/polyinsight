@@ -453,6 +453,7 @@ function DeckPageInner() {
                     onDelete={() => editorRef.current?.deleteElement()}
                     onMove={(dir) => editorRef.current?.moveElement(dir)}
                     onRevertFlow={() => editorRef.current?.revertFlow()}
+                    onSetBackground={() => editorRef.current?.setImageBackground()}
                     onAlign={(axis) => editorRef.current?.align(axis)}
                     onDistribute={(axis) => editorRef.current?.distribute(axis)}
                     onSetRect={(r) => editorRef.current?.setRect(r)}

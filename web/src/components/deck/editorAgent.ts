@@ -69,7 +69,8 @@ const AGENT_BODY = `
     var cs = getComputedStyle(el);
     return {
       color: cs.color, fontSize: cs.fontSize, textAlign: cs.textAlign,
-      fontWeight: cs.fontWeight, background: el.style.background || el.style.backgroundColor || ''
+      fontWeight: cs.fontWeight, background: el.style.background || el.style.backgroundColor || '',
+      borderRadius: cs.borderTopLeftRadius, objectFit: cs.objectFit, opacity: cs.opacity  // 이미지 트리트먼트
     };
   }
   // 선택 요소에 불투명 난수 data-eid 스탬프(1회, 위치·서수 무관). data-pi-*가 아니라 serialize 생존.
@@ -200,6 +201,8 @@ const AGENT_BODY = `
       count: n,
       editable: single && isTextLeaf(p),
       absolute: isAbsolute(p),
+      isImage: single && p.tagName === 'IMG',
+      isBackground: single && p.getAttribute('data-bg') === '1',
       styles: styleSnapshot(p),
       text: single ? (p.textContent || '').slice(0, 80) : '',
       eid: single ? ensureEid(p) : '',
@@ -579,6 +582,32 @@ const AGENT_BODY = `
     }
   }
 
+  // ── 이미지 '배경으로 깔기' 토글 (풀블리드 + 콘텐츠 뒤 z-index:-1 ↔ 박스). data-bg/data-box는 serialize 생존.
+  function setImageBg() {
+    var el = primary();
+    if (!el || el.tagName !== 'IMG') return;
+    var card = cardOf(el);
+    var beforeCss = el.style.cssText, beforeBg = el.getAttribute('data-bg'), beforeBox = el.getAttribute('data-box');
+    function setState(css, bg, box) {
+      el.style.cssText = css;
+      if (bg) el.setAttribute('data-bg', bg); else el.removeAttribute('data-bg');
+      if (box) el.setAttribute('data-box', box); else el.removeAttribute('data-box');
+    }
+    if (beforeBg === '1') {
+      // 박스로 되돌리기 — 저장 박스 복원(없으면 기본)
+      var box = el.getAttribute('data-box');
+      if (box) setState(box, null, null);
+      else setState('position:absolute;left:' + ((CARD_W - 400) / 2) + 'px;top:' + ((CARD_H - 300) / 2) + 'px;width:400px;height:300px;object-fit:cover;', null, null);
+    } else {
+      // 배경으로 — 현재 박스 저장 후 풀블리드(콘텐츠 뒤)
+      if (card) { if (getComputedStyle(card).position === 'static') card.style.position = 'relative'; card.style.zIndex = '0'; }
+      setState('position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;z-index:-1;border-radius:0;', '1', beforeCss);
+    }
+    var afterCss = el.style.cssText, afterBg = el.getAttribute('data-bg'), afterBox = el.getAttribute('data-box');
+    pushCmd({ run: function () { setState(afterCss, afterBg, afterBox); }, undo: function () { setState(beforeCss, beforeBg, beforeBox); } });
+    positionOverlay(); emitSelected(); afterMutate();
+  }
+
   // ── serialize (편집 아티팩트 제거한 클린 HTML) ────────────────────────────────
   function serialize() {
     var clone = document.documentElement.cloneNode(true);
@@ -662,6 +691,7 @@ const AGENT_BODY = `
       case 'ALIGN': alignSelection(d.axis); break;
       case 'DISTRIBUTE': distributeSelection(d.axis); break;
       case 'SET_RECT': setRect(d); break;
+      case 'SET_IMAGE_BG': setImageBg(); break;
       case 'SET_PAGE': setPage(d.index); break;
       case 'APPLY_STYLE': {
         var el = primary();

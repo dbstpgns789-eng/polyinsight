@@ -15,7 +15,10 @@ export interface SelectedInfo {
   tag: string
   editable: boolean
   absolute: boolean
-  styles: { color: string; fontSize: string; textAlign: string; fontWeight: string; background: string }
+  styles: {
+    color: string; fontSize: string; textAlign: string; fontWeight: string; background: string
+    borderRadius: string; objectFit: string; opacity: string   // 이미지 트리트먼트
+  }
   text: string
   eid?: string                // 선택 요소 앵커(단일 선택 시). 다중=''
   cardIndex?: number          // 선택 요소가 속한 카드 index(단일). 다중=-1
@@ -24,6 +27,8 @@ export interface SelectedInfo {
   rect?: ElementRect | null   // 자연 카드좌표(단일=요소, 다중=집합 바운딩박스)
   mixed?: boolean             // 다중선택에서 W/H 혼합 여부
   canDistribute?: boolean     // count>=3
+  isImage?: boolean           // 단일 선택이 <img>
+  isBackground?: boolean      // 이미지가 배경으로 깔린 상태(data-bg=1)
 }
 
 export interface HistoryState { canUndo: boolean; canRedo: boolean }
@@ -41,6 +46,7 @@ export interface DeckEditorHandle {
   undo: () => void
   redo: () => void
   revertFlow: () => void
+  setImageBackground: () => void
   align: (axis: AlignAxis) => void
   distribute: (axis: 'h' | 'v') => void
   setRect: (r: { left?: number; top?: number; width?: number; height?: number }) => void
@@ -95,6 +101,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     undo: () => send('UNDO'),
     redo: () => send('REDO'),
     revertFlow: () => send('REVERT_FLOW'),
+    setImageBackground: () => send('SET_IMAGE_BG'),
     align: (axis) => send('ALIGN', { axis }),
     distribute: (axis) => send('DISTRIBUTE', { axis }),
     setRect: (r) => send('SET_RECT', r),

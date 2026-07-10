@@ -13,6 +13,7 @@ interface Props {
   onDelete: () => void
   onMove: (dir: 'up' | 'down') => void
   onRevertFlow: () => void
+  onSetBackground: () => void
   onAlign: (axis: AlignAxis) => void
   onDistribute: (axis: 'h' | 'v') => void
   onSetRect: (r: { left?: number; top?: number; width?: number; height?: number }) => void
@@ -89,8 +90,23 @@ const TEXT_ALIGNS = [
   { key: 'left', glyph: '⇤' }, { key: 'center', glyph: '↔' }, { key: 'right', glyph: '⇥' },
 ] as const
 
+// 이미지 채움 방식 — cover(꽉 채워 잘림)·contain(전체 보이게 여백)
+const FITS = [
+  { key: 'cover', label: '채우기' }, { key: 'contain', label: '맞추기' },
+] as const
+// 모서리 둥글기 프리셋 — 미니 스와치로 미리보기(preview=스와치 border-radius)
+const RADII = [
+  { key: '0px', preview: '0', title: '각짐' },
+  { key: '16px', preview: '3px', title: '둥글게' },
+  { key: '28px', preview: '5px', title: '더 둥글게' },
+  { key: '9999px', preview: '50%', title: '원형' },
+] as const
+function activeRadiusKey(px: number): string {
+  return px >= 1000 ? '9999px' : px >= 22 ? '28px' : px >= 8 ? '16px' : '0px'
+}
+
 export default function DeckElementPanel({
-  selected, onStyle, onDelete, onMove, onRevertFlow, onAlign, onDistribute, onSetRect,
+  selected, onStyle, onDelete, onMove, onRevertFlow, onSetBackground, onAlign, onDistribute, onSetRect,
 }: Props) {
   if (!selected) {
     return (
@@ -108,7 +124,12 @@ export default function DeckElementPanel({
   const fontPx = parseFloat(selected.styles.fontSize) || 16
   const isBold = (parseInt(selected.styles.fontWeight, 10) || 400) >= 600
   const align = selected.styles.textAlign
-  const typeLabel = multi ? `요소 ${count}개` : selected.editable ? '텍스트' : selected.tag
+  const isImage = !multi && !!selected.isImage
+  const isBg = !!selected.isBackground
+  const objectFit = selected.styles.objectFit || 'cover'
+  const radiusKey = activeRadiusKey(parseFloat(selected.styles.borderRadius) || 0)
+  const opacityPct = Math.round((parseFloat(selected.styles.opacity) || 1) * 100)
+  const typeLabel = multi ? `요소 ${count}개` : isImage ? '이미지' : selected.editable ? '텍스트' : selected.tag
 
   return (
     <div className="flex flex-col gap-6">
@@ -140,8 +161,56 @@ export default function DeckElementPanel({
         </Section>
       )}
 
+      {/* 단일 이미지: 트리트먼트 (배경으로·채움·모서리·투명도) */}
+      {isImage && (
+        <Section label="이미지">
+          <button onClick={onSetBackground}
+            className={`h-9 rounded-lg border text-[12.5px] font-semibold transition-colors ${isBg ? 'border-forest-green text-forest-green-deep bg-forest-green-wash' : 'border-deck-line text-ink-2 hover:border-forest-green/50 hover:text-forest-green-deep'}`}>
+            {isBg ? '✓ 카드 배경으로 깔림' : '카드 배경으로 깔기'}
+          </button>
+          <p className="-mt-1.5 text-[10.5px] text-ink-3 leading-relaxed">사진을 카드 전체에 풀블리드로 깔고 글자를 그 위에 얹습니다. 다시 누르면 박스로 되돌립니다.</p>
+
+          <div className="flex items-center justify-between">
+            <span className="text-[12.5px] text-ink-2">채움</span>
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-bg-subtle border border-deck-line">
+              {FITS.map((f) => (
+                <button key={f.key} onClick={() => onStyle('objectFit', f.key)}
+                  className={`px-3 h-7 rounded-md text-[11.5px] font-medium transition-colors ${objectFit === f.key ? 'bg-surface shadow-card text-forest-green-deep' : 'text-ink-3 hover:text-ink-2'}`}>{f.label}</button>
+              ))}
+            </div>
+          </div>
+
+          {!isBg && (
+            <div className="flex items-center justify-between">
+              <span className="text-[12.5px] text-ink-2">모서리</span>
+              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-bg-subtle border border-deck-line">
+                {RADII.map((r) => {
+                  const on = radiusKey === r.key
+                  return (
+                    <button key={r.key} title={r.title} onClick={() => onStyle('borderRadius', r.key)}
+                      className={`w-8 h-7 grid place-items-center rounded-md transition-colors ${on ? 'bg-surface shadow-card text-forest-green-deep' : 'text-ink-3 hover:text-ink-2'}`}>
+                      <span className="block w-3.5 h-3.5 border-[1.5px] border-current" style={{ borderRadius: r.preview }} aria-hidden="true" />
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[12.5px] text-ink-2">투명도</span>
+              <span className="font-mono text-[11px] tabular-nums text-ink-3">{opacityPct}%</span>
+            </div>
+            <input type="range" min={10} max={100} value={opacityPct}
+              onChange={(e) => onStyle('opacity', String(Number(e.target.value) / 100))}
+              className="w-full accent-forest-green cursor-pointer" aria-label="투명도" />
+          </div>
+        </Section>
+      )}
+
       {/* 단일: 글자 */}
-      {!multi && (
+      {!multi && !isImage && (
         <Section label="글자">
           <div className="flex items-center justify-between">
             <span className="text-[12.5px] text-ink-2">크기</span>
@@ -172,14 +241,14 @@ export default function DeckElementPanel({
       )}
 
       {/* 단일: 배경 */}
-      {!multi && (
+      {!multi && !isImage && (
         <Section label="배경">
           <ColorRow label="배경색" color={selected.styles.background || ''} onChange={(hex) => onStyle('background', hex)} />
         </Section>
       )}
 
-      {/* 위치·크기 — first-class(Figma식 transform). pro 툴이라 숨기지 않음 */}
-      {(rect || (!multi && selected.absolute)) && (
+      {/* 위치·크기 — first-class(Figma식 transform). pro 툴이라 숨기지 않음. 배경 풀블리드면 무의미해 숨김 */}
+      {!isBg && (rect || (!multi && selected.absolute)) && (
         <Section label="위치·크기 (px)">
           {rect && (
             <div className="grid grid-cols-2 gap-x-3 gap-y-2">
