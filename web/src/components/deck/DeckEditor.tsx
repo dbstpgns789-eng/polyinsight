@@ -151,8 +151,11 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     return () => ro.disconnect()
   }, [])
 
-  // 현재 배율을 부모(줌 컨트롤 % 표시)에 보고
-  useEffect(() => { onScaleChange?.(effScale, fitScale) }, [effScale, fitScale, onScaleChange])
+  // 현재 배율을 부모(줌 컨트롤 % 표시)에 보고. onScaleChange를 ref로 담아 effect 의존성에서 제외 —
+  // 인라인 콜백이 매 렌더 새 참조여도 effect가 [effScale, fitScale]에서만 돌게(무한 렌더 루프 방지).
+  const onScaleChangeRef = useRef(onScaleChange)
+  useEffect(() => { onScaleChangeRef.current = onScaleChange })
+  useEffect(() => { onScaleChangeRef.current?.(effScale, fitScale) }, [effScale, fitScale])
 
   return (
     // wrapRef = 스크롤 뷰포트. 카드가 뷰포트보다 작으면 grid로 중앙정렬, 크면(확대) 스크롤.

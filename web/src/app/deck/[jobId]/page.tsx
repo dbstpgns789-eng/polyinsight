@@ -400,7 +400,7 @@ function DeckPageInner() {
                 html={deck.html as string}
                 mode={mode}
                 zoom={zoom}
-                onScaleChange={(eff, fit) => setZoomInfo({ eff, fit })}
+                onScaleChange={(eff, fit) => setZoomInfo((z) => (z.eff === eff && z.fit === fit ? z : { eff, fit }))}
                 onSelected={setSelected}
                 onDeselected={() => setSelected(null)}
                 onDirty={() => { setDirty(true); setPending(null) }}
