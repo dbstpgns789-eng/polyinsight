@@ -1,10 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 type Mode = 'login' | 'signup';
+
+// OAuth 콜백/dormant가 /login?error=<code>로 바운스 — 조용한 실패를 사람 말로 표면화
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  oauth_disabled: '구글 로그인이 아직 준비 중이에요. 이메일로 로그인해 주세요.',
+  oauth_state: '인증이 만료됐어요. 다시 시도해 주세요.',
+  oauth_failed: '구글 인증에 실패했어요. 다시 시도해 주세요.',
+  oauth_no_email: '구글 계정에서 이메일 정보를 가져오지 못했어요.',
+};
 
 interface Errors {
   email?: string;
@@ -16,6 +24,10 @@ interface Errors {
 
 export default function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [oauthError, setOauthError] = useState<string | undefined>(
+    () => OAUTH_ERROR_MESSAGES[searchParams.get('error') ?? ''],
+  );
   const [email, setEmail]     = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
@@ -54,6 +66,7 @@ export default function AuthForm({ mode }: { mode: Mode }) {
       return;
     }
     setErrors({});
+    setOauthError(undefined);
     setLoading(true);
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
@@ -86,8 +99,8 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         <h1 className="auth-form__title">{isLogin ? '로그인' : '회원가입'}</h1>
       </div>
 
-      {errors.form && (
-        <div className="auth-error-banner" role="alert">{errors.form}</div>
+      {(errors.form || oauthError) && (
+        <div className="auth-error-banner" role="alert">{errors.form ?? oauthError}</div>
       )}
 
       <div className="auth-fields">
