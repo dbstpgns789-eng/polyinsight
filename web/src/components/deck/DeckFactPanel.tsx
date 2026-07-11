@@ -3,9 +3,7 @@
 // 팩트 체크 패널 (스펙 §4.5) — 무채색 워크스페이스(compC). 검증=의미색 초록만.
 // 출처 위치·정합 주장 금지(헌법). 수치→추적가능성 원장(claim ledger)으로 해자 표면화.
 import { useState } from 'react'
-
-interface VerifyClaim { value: string; context: string; verified: boolean }
-interface VerifyData { verified: number; unverified: number; claims: VerifyClaim[] }
+import { isAllClear, suspectClaims, type VerifyData } from '@/lib/verifyStatus'
 
 interface Props {
   verify: VerifyData | null | undefined
@@ -18,7 +16,9 @@ export default function DeckFactPanel({ verify, canReverify }: Props) {
   const flagged = claims.filter((c) => !c.verified)
   const verified = claims.filter((c) => c.verified)
   const shown = [...flagged, ...verified]      // 미확인 먼저 노출
-  const allClear = !!verify && verify.unverified === 0
+  const suspects = suspectClaims(verify)       // V2 산수 불일치 — 원장 최상단
+  const allClear = isAllClear(verify)          // suspect가 있으면 초록 완료 문구 억제
+  const needsReview = (verify?.unverified ?? 0) + suspects.length
 
   return (
     <div className="flex flex-col gap-5">
@@ -48,17 +48,18 @@ export default function DeckFactPanel({ verify, canReverify }: Props) {
         </div>
         <div className="w-px bg-deck-line-soft" />
         <div className="flex-1 p-3.5">
-          <div className={`text-[30px] font-extrabold leading-none tabular-nums ${(verify?.unverified ?? 0) > 0 ? 'text-risk-medium' : 'text-ink-3'}`}>
-            {verify?.unverified ?? 0}
+          {/* 확인 필요 = 원문에 없는 수치 + 산수가 어긋난 수치. 아래 원장과 카운트가 일치해야 함 */}
+          <div className={`text-[30px] font-extrabold leading-none tabular-nums ${needsReview > 0 ? 'text-risk-medium' : 'text-ink-3'}`}>
+            {needsReview}
           </div>
           <div className="flex items-center gap-1.5 mt-2 text-[11px] text-ink-2">
-            <span className={`w-[7px] h-[7px] rounded-full ${(verify?.unverified ?? 0) > 0 ? 'bg-risk-medium' : 'bg-border'}`} aria-hidden="true" />확인 필요
+            <span className={`w-[7px] h-[7px] rounded-full ${needsReview > 0 ? 'bg-risk-medium' : 'bg-border'}`} aria-hidden="true" />확인 필요
           </div>
         </div>
       </div>
 
       {/* claim ledger — 헤더 클릭으로 접기/펼치기 */}
-      {shown.length > 0 && (
+      {(shown.length > 0 || suspects.length > 0) && (
         <div className="flex flex-col">
           <button
             onClick={() => setOpen((v) => !v)}
@@ -71,10 +72,22 @@ export default function DeckFactPanel({ verify, canReverify }: Props) {
                 className={`text-ink-3 transition-transform ${open ? 'rotate-90' : ''}`}><path d="m9 18 6-6-6-6" /></svg>
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3 group-hover:text-ink-2 transition-colors">Claim Ledger</span>
             </span>
-            <span className="font-mono text-[10.5px] text-ink-3 tabular-nums">{shown.length} / {claims.length}</span>
+            <span className="font-mono text-[10.5px] text-ink-3 tabular-nums">
+              {shown.length + suspects.length} / {claims.length + suspects.length}
+            </span>
           </button>
           {open && (
           <ul>
+            {/* V2 산수 불일치 — 원문에 있어도(VERIFIED) 카드 내부 계산이 어긋난 수치. 최우선 노출 */}
+            {suspects.map((d, i) => (
+              <li key={`d${i}`} className="flex items-center gap-2.5 py-2.5 border-t border-deck-line-soft first:border-t-0">
+                <span className="font-mono text-[12.5px] font-bold text-ink shrink-0 max-w-[128px] truncate" title={d.value}>{d.value}</span>
+                <span className="flex-1 text-[11px] text-ink-2 leading-snug line-clamp-2">
+                  카드 안 수치와 계산이 맞지 않아요 — &lsquo;% 증가&rsquo;와 &lsquo;배&rsquo;를 혼동했을 수 있어요. {d.context.trim()}
+                </span>
+                <span className="shrink-0 text-[9.5px] font-bold px-1.5 py-1 rounded-md bg-risk-medium-faint text-risk-medium border border-risk-medium-border">계산 불일치</span>
+              </li>
+            ))}
             {shown.map((c, i) => (
               <li key={i} className="flex items-center gap-2.5 py-2.5 border-t border-deck-line-soft first:border-t-0">
                 <span className="font-mono text-[12.5px] font-bold text-ink shrink-0 max-w-[128px] truncate" title={c.value}>{c.value}</span>
@@ -100,6 +113,11 @@ export default function DeckFactPanel({ verify, canReverify }: Props) {
             <span className="w-[15px] h-[15px] rounded-full bg-forest-green text-canvas grid place-items-center text-[9px] shrink-0" aria-hidden="true">✓</span>
             <span><b className="text-ink font-bold">모든 수치가 원문에서 추적됐습니다.</b> · 검증 완료 {verify?.verified ?? 0}/{claims.length}</span>
           </>
+        ) : suspects.length > 0 ? (
+          <span className="text-ink-3 leading-snug">
+            ⚠️ <b className="text-ink font-bold">계산이 어긋난 수치 {suspects.length}건</b> — 원문에 있는 숫자라도
+            카드 안에서 계산이 맞지 않아요. 발행 전 꼭 확인하세요.
+          </span>
         ) : (
           <span className="text-ink-3 leading-snug">⚠️ 표시된 수치는 AI가 더한 맥락/예시일 수 있어요 — 원문과 대조해 확인하세요.</span>
         )}

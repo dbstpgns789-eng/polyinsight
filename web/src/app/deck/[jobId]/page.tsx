@@ -23,9 +23,8 @@ import DeckRightTabs, { type DeckTab } from '@/components/deck/DeckRightTabs'
 import DeckFactPanel from '@/components/deck/DeckFactPanel'
 import DeckExportModal from '@/components/deck/DeckExportModal'
 import { extractCardLabels } from '@/lib/deckLabels'
+import { type VerifyData } from '@/lib/verifyStatus'
 
-interface VerifyClaim { value: string; context: string; verified: boolean }
-interface VerifyData { verified: number; unverified: number; claims: VerifyClaim[] }
 interface DeckPayload {
   jobId: string; filename?: string; status: string; warnings?: string[]
   html?: string | null; verify?: VerifyData | null; cardCount: number; canReverify?: boolean
