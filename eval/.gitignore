@@ -1,0 +1,2 @@
+# 카드 PNG는 대용량 — 결과 JSON(results/diversity/judge_noise)만 커밋한다.
+runs/**/*.png

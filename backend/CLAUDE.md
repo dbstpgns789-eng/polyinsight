@@ -14,6 +14,7 @@
 ../docs/contracts/07_api_data_model.md  ← API·DB 스키마
 ARCHITECTURE.md               ← 로컬 아키텍처 명세
 TESTING_HARNESS.md            ← 테스트 기준
+agents/deck/AUTHORING.md      ← 저작 자산 컨트롤룸(프롬프트·V·refs·측정) — 저작 관련 작업 시 필독
 ```
 
 ---
@@ -121,6 +122,8 @@ NEVER  에러 처리 선코딩 — 실 논문 돌린 에러 보고 후 대응
 NEVER  raw logging 없이 실호출 — 에러 재현 불가
 NEVER  uvicorn 재시작 없이 코드 변경 후 테스트
 NEVER  S6 출력 수치를 원문 확인 없이 그냥 통과
+NEVER  프롬프트/V/refs 변경 커밋에 agents/deck/AUTHORING.md §2 결정로그 누락
+NEVER  측정(eval 베이스라인) 없이 프롬프트 품질 변화를 "좋아졌다"고 주장
 ```
 
 ---
