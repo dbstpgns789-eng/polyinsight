@@ -13,11 +13,11 @@ import time
 
 from ...core import db
 from ...core.config import settings
-from ...core.fidelity import verify_deck
+from ...core.fidelity import derived_claims, verify_deck
 from ...core.llm_client import get_usage, start_usage_capture
 from ...core.models import JobStatus, S1Input
 from ..s1_extractor import s1_agent
-from .authoring import author_deck
+from .authoring import MAX_SOURCE_CHARS, author_deck
 from .deck_renderer import render_deck
 
 logger = logging.getLogger(__name__)
@@ -29,15 +29,20 @@ _ABORT_WORD_FLOOR = 80
 
 
 def _verify_to_json(html: str, paper_text: str | None) -> tuple[str, dict]:
-    """덱 HTML 충실성 검증 → (json 문자열, dict). paper_text 없으면 검증 보류(빈 결과)."""
+    """덱 HTML 충실성 검증 → (json 문자열, dict). paper_text 없으면 검증 보류(빈 결과).
+
+    V1(존재 대조) + V2(파생수치 산수 검산). V2는 '142→238을 170% 증가'처럼 원문 대조로는
+    못 잡는 내부 모순을 잡는다 — suspect는 웹 팩트 패널이 표면화한다(막지 않음).
+    """
     if not paper_text:
-        payload = {"verified": 0, "unverified": 0, "claims": [], "skipped": True}
+        payload = {"verified": 0, "unverified": 0, "claims": [], "derived": [], "skipped": True}
         return json.dumps(payload, ensure_ascii=False), payload
     claims = verify_deck(html, paper_text)
     payload = {
         "verified": sum(c.verified for c in claims),
         "unverified": sum(not c.verified for c in claims),
         "claims": [{"value": c.value, "context": c.context, "verified": c.verified} for c in claims],
+        "derived": derived_claims(html, paper_text),
     }
     return json.dumps(payload, ensure_ascii=False), payload
 
@@ -147,6 +152,15 @@ async def _execute(
         return
 
     # ── S6: 단일 저작 ──────────────────────────────────────────────────────
+    # 원문 절단은 소리 없이 일어나면 안 된다 — V는 원문 전문으로 검증하고 저지는 논문을 못 보므로,
+    # 후반부를 통째로 누락한 덱이 모든 계기판에서 클린 패스한다.
+    if len(s1_out.raw_text) > MAX_SOURCE_CHARS:
+        pct = (1 - MAX_SOURCE_CHARS / len(s1_out.raw_text)) * 100
+        warnings.append(
+            f"SOURCE_TRUNCATED: 원문 {len(s1_out.raw_text):,}자 중 {MAX_SOURCE_CHARS:,}자만 "
+            f"저작에 사용 ({pct:.0f}% 미전달) — 후반부 내용이 덱에 반영되지 않았을 수 있습니다."
+        )
+
     try:
         await db.update_job(job_id, status=JobStatus.RUNNING, stage="AUTHOR", progress=40)
         html = await author_deck(
@@ -165,14 +179,9 @@ async def _execute(
         await _log_done(job_id, user_id, started, card_count)
         return
 
-    # ── V: 충실성 검증 (재사용) ────────────────────────────────────────────
+    # ── V: 충실성 검증 (V1 존재 대조 + V2 파생수치 산수) ───────────────────
     await db.update_job(job_id, status=JobStatus.RUNNING, stage="VERIFY", progress=70)
-    claims = verify_deck(html, s1_out.raw_text)
-    verify_json = json.dumps({
-        "verified": sum(c.verified for c in claims),
-        "unverified": sum(not c.verified for c in claims),
-        "claims": [{"value": c.value, "context": c.context, "verified": c.verified} for c in claims],
-    }, ensure_ascii=False)
+    verify_json, _ = _verify_to_json(html, s1_out.raw_text)
 
     # 저장 (검증 리포트는 렌더 실패와 무관하게 확보). 원문은 편집본 재검증(Phase 3)용으로 보관.
     await db.save_authored_deck(job_id, html, verify_json, card_count, paper_text=s1_out.raw_text)

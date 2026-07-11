@@ -109,6 +109,96 @@ def verify_deck(html: str, paper_text: str) -> list[NumberClaim]:
     return claims
 
 
+# ── V2: 파생수치 산수 정합 (2026-07-11) ──────────────────────────────────────
+# 배경: 저작이 "142→238"을 '약 170% 증가'로 오기(1.7배와 %증가 혼동) — 원문 대조(존재)로는
+# 못 잡는 내부 모순이다(142·238·170 다 원문에 있으면 V1은 전부 VERIFIED로 통과시킨다).
+# 카드 단위로 파생표현(N% 증가·N배)을 찾아 같은 카드의 수치쌍과 검산한다.
+
+_CARD_SPLIT = re.compile(r'(?=<div[^>]+data-screen-label=)', re.I)
+_PCT_CHANGE = re.compile(r"(\d[\d,]*\.?\d*)\s*%\s*(증가|감소|향상|개선|절감|상승|하락)")
+_FOLD = re.compile(r"(\d[\d,]*\.?\d*)\s*배")
+_PCT_TOL = 5.0      # % 스케일 절대 오차 허용
+_FOLD_TOL = 0.15    # 배 스케일 절대 오차 허용
+
+# 검산쌍에서 뺄 크롬 노이즈. 프롬프트가 페이지번호(01/07)를 전 카드에 강제하므로 (1,7) 같은
+# 가짜 쌍이 상시 생긴다 → 틀린 주장을 '정합'으로 세탁하거나 정당한 주장을 suspect로 만든다.
+# (verify_deck이 맨정수를 노이즈로 제외한 ★핵심 설계 2와 같은 이유. 단 여기선 맨정수를 전면
+#  제외할 수 없다 — 142/238처럼 단위 없는 맨정수가 정당한 근거쌍인 경우가 있다. 표적 제외만.)
+_PAGINATION = re.compile(r"\b\d{1,2}\s*/\s*\d{1,2}\b")
+
+
+def _card_numbers(text: str) -> list[float]:
+    """카드 본문의 검산 가능한 숫자. 페이지네이션·연도(1900~2100)는 제외."""
+    cleaned = _PAGINATION.sub(" ", text)
+    out: list[float] = []
+    for m in _CORE.finditer(cleaned):
+        raw = m.group()
+        try:
+            v = float(raw.replace(",", ""))
+        except ValueError:
+            continue
+        if v <= 0:
+            continue
+        if "." not in raw and 1900 <= v <= 2100:   # 연도 — 쌍이 되면 비율이 ≈100%라 오탐 유발
+            continue
+        out.append(v)
+    return out
+
+
+def _check_pairs(nums: list[float], claimed: float, kind: str) -> tuple[bool, bool]:
+    """(suspect, unresolved). 같은 카드 수치쌍 (a<b)의 비율과 주장값을 대조.
+
+    - pct_change: (b/a-1)*100 ≈ claimed 면 정합. b/a*100 ≈ claimed 인데 위가 아니면 혼동 의심.
+    - fold: b/a ≈ claimed 면 정합.
+    비교쌍이 하나도 없으면 unresolved=True — 모르면 죄 아님(막지 않는다).
+    """
+    pairs = [(min(a, b), max(a, b))
+             for i, a in enumerate(nums) for b in nums[i + 1:] if a != b]
+    # 주장값 자신은 비교쌍에서 제외 (170이 카드 안 숫자로 다시 잡히는 자기참조 방지)
+    pairs = [(a, b) for a, b in pairs if a != claimed and b != claimed]
+    if not pairs:
+        return False, True
+    if kind == "fold":
+        ok = any(abs(b / a - claimed) <= _FOLD_TOL for a, b in pairs)
+        if ok:
+            return False, False
+        confusion = any(abs((b / a - 1) - claimed) <= _FOLD_TOL for a, b in pairs)
+        return confusion, not confusion
+    # pct_change
+    if any(abs((b / a - 1) * 100 - claimed) <= _PCT_TOL for a, b in pairs):
+        return False, False
+    confusion = any(abs(b / a * 100 - claimed) <= _PCT_TOL for a, b in pairs)
+    return confusion, not confusion
+
+
+def derived_claims(html: str, paper_text: str) -> list[dict]:
+    """카드별 파생수치(N% 증가·N배)를 같은 카드 수치쌍과 검산.
+
+    반환: [{value, kind, suspect, unresolved, verified, context}]
+    suspect=True → 사용자에게 '계산 불일치' 표면화(막지 않음, 헌법 3조).
+    """
+    results: list[dict] = []
+    for chunk in _CARD_SPLIT.split(html):
+        if "data-screen-label" not in chunk:
+            continue
+        content = _content_text(chunk)
+        nums = _card_numbers(content)
+        for pat, kind in ((_PCT_CHANGE, "pct_change"), (_FOLD, "fold")):
+            for m in pat.finditer(content):
+                claimed = float(m.group(1).replace(",", ""))
+                suspect, unresolved = _check_pairs(nums, claimed, kind)
+                core = m.group(1).replace(",", "")
+                results.append({
+                    "value": m.group().strip(),
+                    "kind": kind,
+                    "suspect": suspect,
+                    "unresolved": unresolved,
+                    "verified": core in _flat(paper_text),
+                    "context": _clean_context(content, m.start(), m.end()),
+                })
+    return results
+
+
 def report(claims: list[NumberClaim]) -> str:
     """사람이 읽는 검증 리포트. UNVERIFIED는 사용자 판단용으로 맥락과 함께 노출."""
     ok = [c for c in claims if c.verified]

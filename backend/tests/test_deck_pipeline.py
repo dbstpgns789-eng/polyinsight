@@ -13,7 +13,7 @@ from backend.core import db
 from backend.core.config import settings
 from backend.core.fidelity import verify_deck
 from backend.core.models import PaperMetadata
-from backend.agents.deck import authoring, deck_renderer, mock
+from backend.agents.deck import authoring, deck_renderer, mock, pipeline
 from backend.agents.deck.pipeline import persist_edited_deck, run_authoring_pipeline
 
 _ATTN_PDF = pathlib.Path(
@@ -101,7 +101,7 @@ async def test_render_deck_produces_pngs():
 
 @pytest.mark.skipif(not _ATTN_PDF.exists(), reason="attention pdf 없음")
 async def test_authoring_pipeline_mock_e2e(mock_llm):
-    """S1 추출 → 저작(mock) → 검증 → 저장 → 렌더 → 이미지 저장 전 구간."""
+    """S1 추출 → 저작(mock) → 검증(V1+V2) → 저장 → 렌더 → 이미지 저장 전 구간."""
     jid = "test-deck-e2e"
     await db.delete_job(jid)
     await db.create_job(jid, title="attention.pdf")
@@ -114,7 +114,39 @@ async def test_authoring_pipeline_mock_e2e(mock_llm):
         assert deck and "data-screen-label" in deck["html"]
         v = json.loads(deck["verify_json"])
         assert v["verified"] >= 1
+        assert "derived" in v          # V2 파생수치 원장이 payload에 실린다(웹 표면화의 입력)
         assert len(imgs) >= 1
+    finally:
+        await db.delete_job(jid)
+
+
+@pytest.mark.skipif(not _ATTN_PDF.exists(), reason="attention pdf 없음")
+async def test_long_source_emits_truncation_warning(mock_llm, monkeypatch):
+    """60k자 초과 원문은 절단 경고를 남긴다.
+
+    없으면: 저작은 앞 60k만 보고, V는 원문 전문으로 검증하고, 저지는 논문을 못 본다
+    → 후반부를 통째로 누락한 덱이 세 계기판 모두에서 클린 패스한다(장문 논문의 침묵 실패).
+    """
+    from backend.agents.deck import authoring
+    from backend.agents.s1_extractor import s1_agent
+    from backend.core.models import S1Output, PaperMetadata
+
+    monkeypatch.setattr(authoring, "MAX_SOURCE_CHARS", 100)   # 절단 유발(테스트 속도)
+    monkeypatch.setattr(pipeline, "MAX_SOURCE_CHARS", 100)
+
+    async def _fake_s1(inp):
+        return S1Output(raw_text="가" * 500, page_map={1: "가" * 500}, word_count=500,
+                        metadata=PaperMetadata(title="t", authors=["a"], year=2026, doi=None))
+
+    monkeypatch.setattr(s1_agent, "execute", _fake_s1)
+
+    jid = "test-deck-trunc"
+    await db.delete_job(jid)
+    await db.create_job(jid, title="long.pdf")
+    try:
+        await run_authoring_pipeline(jid, b"%PDF-fake", card_count=7)
+        job = await db.get_job(jid)
+        assert "SOURCE_TRUNCATED" in str(job["warnings"])
     finally:
         await db.delete_job(jid)
 

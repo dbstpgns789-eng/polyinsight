@@ -17,7 +17,7 @@ from .mock import mock_deck_html
 logger = logging.getLogger(__name__)
 
 # 입력 원문 상한(컨텍스트 관리). 레퍼런스 HTML + 논문 전문이 입력에 함께 들어감.
-_MAX_SOURCE_CHARS = 60000
+MAX_SOURCE_CHARS = 60000
 
 
 def _strip_code_fence(text: str) -> str:
@@ -57,7 +57,7 @@ async def author_deck(
     )
     user = P.AUTHORING_USER.format(
         few_shot_refs=P.few_shot_refs(settings.AUTHOR_FEWSHOT_N),
-        section_map_text=raw_text[:_MAX_SOURCE_CHARS],
+        section_map_text=raw_text[:MAX_SOURCE_CHARS],
         title=metadata.title or "unknown",
         authors=", ".join(metadata.authors) if metadata.authors else "unknown",
         year=metadata.year or "unknown",
