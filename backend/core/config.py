@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # 자연어 편집(nl_patch)은 백지 저작이 아니라 기존 덱 국소 수정 — Opus 불필요. Sonnet으로 속도·비용↓
     # (Opus 편집 실측 ~2.5분/호출 → 편집 UX 붕괴). .env override 가능.
     LLM_MODEL_EDIT: str = "claude-sonnet-4-6"
+    # 블랙박스 저지(deck_judge) — 렌더된 카드 PNG를 외부 심사자 루브릭으로 채점(비전).
+    # ★sonnet-5는 _NO_SAMPLING_PREFIXES라 temperature 고정 불가 = 저지는 확률적.
+    #   점수 비교는 --repeat로 실측한 노이즈 밴드 기준으로만 한다(플랜 Task 4 Step 5).
+    LLM_MODEL_JUDGE: str = "claude-sonnet-5"
+    JUDGE_MAX_TOKENS: int = 2000
     AUTHOR_MAX_CARDS: int = 7            # 카드 max 장수(티어로 확장 예정)
     AUTHOR_FEWSHOT_N: int = 2            # few-shot 레퍼런스 수(입력 토큰/비용 트레이드오프)
     PLAYWRIGHT_TIMEOUT_MS: int = 15000
