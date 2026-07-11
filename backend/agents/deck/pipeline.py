@@ -19,6 +19,7 @@ from ...core.models import JobStatus, S1Input
 from ..s1_extractor import s1_agent
 from .authoring import MAX_SOURCE_CHARS, author_deck
 from .deck_renderer import render_deck
+from .manifest import build_history_block, parse_manifest, selfcheck_failures
 
 logger = logging.getLogger(__name__)
 
@@ -163,12 +164,15 @@ async def _execute(
 
     try:
         await db.update_job(job_id, status=JobStatus.RUNNING, stage="AUTHOR", progress=40)
+        # 이 계정의 최근 덱(아크·팔레트·모티프)을 소프트 변주 선호로 주입 — 동질화 차단.
+        recent = await db.get_recent_manifests(user_id)
         html = await author_deck(
             raw_text=s1_out.raw_text,
             metadata=s1_out.metadata,
             card_count=card_count,
             persona=persona,
             style_direction=style_direction,
+            history_block=build_history_block(recent),
         )
         if not html or "data-screen-label" not in html:
             raise ValueError("저작 결과에 카드(data-screen-label)가 없습니다")
@@ -178,6 +182,19 @@ async def _execute(
                             warnings=warnings + [f"ERR-AUTHOR: {exc}"])
         await _log_done(job_id, user_id, started, card_count)
         return
+
+    # 저작 지문 저장 (소프트 — 미선언은 경고일 뿐 실패 아님. 코드가 형태를 강제하지 않는다)
+    manifest = parse_manifest(html)
+    if manifest:
+        await db.save_deck_manifest(job_id, user_id, json.dumps(manifest, ensure_ascii=False))
+    else:
+        warnings.append("PI_MANIFEST 미선언 — 이 덱은 반복이력에 기록되지 않습니다.")
+
+    # 자가판정(PI_SELFCHECK) — 모델이 스스로 실패라 신고한 항목을 경고로 표면화.
+    # 자기신고라 정본은 아니고 V·저지와의 삼각측량 신호(막지 않음, 헌법 3조).
+    sc_fails = selfcheck_failures(html)
+    if sc_fails:
+        warnings.append("자가검수 미통과 항목: " + ", ".join(sc_fails))
 
     # ── V: 충실성 검증 (V1 존재 대조 + V2 파생수치 산수) ───────────────────
     await db.update_job(job_id, status=JobStatus.RUNNING, stage="VERIFY", progress=70)

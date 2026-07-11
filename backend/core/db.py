@@ -158,6 +158,16 @@ async def migrate() -> None:
                 updated_at TEXT
             );
 
+            -- 저작 지문(2026-07-11): 모델이 <!-- PI_MANIFEST --> 로 선언한 편집 결정.
+            -- 다음 저작 때 최근 3건을 소프트 변주 선호로 주입 → 계정 단위 동질화 차단.
+            -- (모델은 자기가 지난주에 뭘 만들었는지 모른다. 그 정보는 파이프라인만 갖고 있다.)
+            CREATE TABLE IF NOT EXISTS deck_manifest (
+                job_id TEXT PRIMARY KEY REFERENCES jobs(job_id),
+                user_id INTEGER,
+                manifest_json TEXT,
+                created_at TEXT
+            );
+
             -- 덱 이미지 삽입(스펙 2026-07-01): 바이트 원장. 저장 HTML엔 URL만, 렌더시 인라인.
             CREATE TABLE IF NOT EXISTS deck_assets (
                 asset_id TEXT,
@@ -341,6 +351,52 @@ async def card_data_job_ids(job_ids: list[str]) -> set[str]:
             f"SELECT job_id FROM card_data WHERE job_id IN ({placeholders})", job_ids
         ) as cursor:
             return {row[0] for row in await cursor.fetchall()}
+
+
+# ── 저작 지문: PI_MANIFEST 이력 (2026-07-11) ───────────────────────────────
+
+async def save_deck_manifest(job_id: str, user_id: int | None, manifest_json: str) -> None:
+    """저작 콜이 선언한 편집 결정(아크·팔레트·모티프) 저장 — 반복이력 소프트 주입용."""
+    async with _connect() as conn:
+        await conn.execute(
+            "INSERT OR REPLACE INTO deck_manifest (job_id, user_id, manifest_json, created_at) "
+            "VALUES (?, ?, ?, ?)",
+            (job_id, user_id, manifest_json, _utc_now_iso()),
+        )
+        await conn.commit()
+
+
+async def get_recent_manifests(user_id: int | None, limit: int = 3) -> list[dict]:
+    """이 유저의 최근 덱 매니페스트(신순). user_id 없으면 빈 리스트."""
+    if user_id is None:
+        return []
+    async with _connect() as conn:
+        async with conn.execute(
+            "SELECT manifest_json FROM deck_manifest WHERE user_id = ? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ) as cur:
+            rows = await cur.fetchall()
+    out: list[dict] = []
+    for (mj,) in rows:
+        try:
+            obj = json.loads(mj)
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            out.append(obj)
+    return out
+
+
+async def delete_deck_manifests(user_id: int) -> None:
+    """이 유저의 매니페스트 이력 전부 삭제 — eval 격리 전용(측정 시 이력 효과 배제).
+
+    이력이 남으면 eval 런의 2번째 논문부터 앞 덱의 매니페스트를 주입받아 실행 순서에 종속되고,
+    런을 반복할수록 조건이 달라져 전후 비교가 깨진다(비재현).
+    """
+    async with _connect() as conn:
+        await conn.execute("DELETE FROM deck_manifest WHERE user_id = ?", (user_id,))
+        await conn.commit()
 
 
 # ── 단일 저작 덱 (헌법 v3.0) ───────────────────────────────────────────────
