@@ -88,6 +88,7 @@ def test_prompts_format_without_keyerror():
     usr = P.AUTHORING_USER.format(
         few_shot_refs="", section_map_text="본문", title="t", authors="a",
         year=2024, card_count=7, art_direction="", publisher="한국생산기술연구원",
+        history_block="",
     )
     assert "발행 주체" in usr and "한국생산기술연구원" in usr
 

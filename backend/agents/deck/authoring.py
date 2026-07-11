@@ -41,12 +41,15 @@ async def author_deck(
     persona: str | None = None,
     style_direction: str | None = None,
     publisher: str | None = None,
+    history_block: str = "",
 ) -> str:
     """논문 원문 → standalone HTML 덱. DEV_MOCK_LLM 시 레퍼런스 HTML 반환(무비용).
 
     style_direction: 사용자가 자연어로 준 미감 방향("지브리풍"·"학교 칠판"·"공공기관" 등).
     비우면 모델이 논문에 맞는 방향을 자유 선택(동질화 방지의 핵심 — 아트 디렉션).
     publisher: 발행 주체(기관명·핸들). 유저가 주면 그대로, 비우면 모델이 논문 본문 소속에서 읽어 채운다.
+    history_block: 이 계정의 최근 덱 매니페스트(아크·팔레트·모티프) — 소프트 변주 선호.
+    모델은 자기가 지난주에 뭘 만들었는지 모른다. 다양성은 파이프라인만 가진 정보(이력)에서 나온다.
     """
     if settings.DEV_MOCK_LLM:
         logger.info("deck author: DEV_MOCK_LLM → mock deck")
@@ -64,6 +67,7 @@ async def author_deck(
         card_count=card_count,
         art_direction=P.art_direction_block(style_direction),
         publisher=publisher or "(미지정 — 논문 본문 소속에서 읽어 채워라)",
+        history_block=history_block,
     )
     raw = await llm_client.call(
         system_prompt=system,
