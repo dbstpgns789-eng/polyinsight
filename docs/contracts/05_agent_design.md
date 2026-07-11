@@ -191,14 +191,69 @@ async def run_pipeline(
 
 ---
 
+## 4-A. S6 — Deck Authoring (현행 정본, 2026-07-11)
+
+> 현행 저작 = `backend/agents/deck/authoring.py::author_deck` — 한 콜, 한 마음(헌법 §1).
+> **관리 정본**: `backend/agents/deck/AUTHORING.md`(컨트롤룸 — 자산맵·결정로그·refs 승격게이트·스코어보드).
+> 이 계약문서는 **구조**만 서술하고, 변경 이력·이유는 컨트롤룸이 관리한다.
+
+### 4-A-1. 프롬프트 5층 구조
+
+지식마다 운반 채널이 다르다 — 이걸 프롬프트 산문 한 채널에 섞은 것이 명령 포화·동질화·꼬리 실패의 뿌리였다.
+
+| 층 | 내용 | 채널 · 위치 |
+|---|---|---|
+| L0 계약 | 출력 포맷·치수(1080×1350)·폰트 로딩·카드 래핑 | 시스템 프롬프트(불변) |
+| L1 하드 가드 | 실측 결함 방지 + 모델 틱 블랙리스트(이모지·파생수치 혼동·표지 3줄·그림=본문) — **이진 판정문** | 시스템 프롬프트 |
+| L2 크래프트 | 발행급 마감 어휘(깊이·타이포 위계·절제). **조건부** — "큰 수치가 주인공"은 킬러 수치가 있는 논문에서만 | 시스템 프롬프트 + few-shot refs |
+| L3 방향 | 서사 아키타입 메뉴(**팔레트지 감옥 아님** — "맞는 게 없으면 새 아크를 발명하라") + `PI_MANIFEST` 선언 + 최근 덱 이력(소프트) | 시스템(메뉴) + 유저(이력·동적 주입) |
+| L4 자기검수 | 출력 직전 이진 체크리스트 + `PI_SELFCHECK` 자가보고 | **유저 프롬프트 맨 끝**(시스템 끝은 컨텍스트 중간이라 recency 없음) |
+
+### 4-A-2. PI_MANIFEST / PI_SELFCHECK 계약
+
+모델은 `<head>` 첫 줄에 편집 결정을 선언한다:
+
+```html
+<!-- PI_MANIFEST {"archetype": "...", "killer_asset": "...", "palette": "...", "motif": "...", "rejected_arc": "고려했으나 버린 아크 + 이유"} -->
+```
+
+`</html>` 직전에 자가판정을 보고한다:
+
+```html
+<!-- PI_SELFCHECK {"placeholder": false, "emoji": false, "unit_anchored": true, "derived_ok": true, ...} -->
+```
+
+- 선언→저작이 **같은 콜 안**이므로 한 마음(§1) 유지 — architect/writer 분리가 아니라 chain-of-thought다.
+- 파이프라인(`agents/deck/manifest.py`)이 파싱해 `deck_manifest`에 저장하고, 다음 저작 때 최근 3건을
+  **소프트 선호**("정확 반복은 피하되 적합이 신선함을 이긴다")로 주입한다.
+- **파싱 실패는 경고이지 실패가 아니다**(소프트 — 코드가 형태를 강제하지 않는다).
+- `PI_SELFCHECK`의 false 항목은 `warnings`로 표면화(자기신고라 정본 아님 — V·저지와 삼각측량).
+
+### 4-A-3. 검증(V) — 2단
+
+| 단계 | 함수 | 잡는 것 |
+|---|---|---|
+| V1 | `core/fidelity.py::verify_deck` | 수치가 원문에 **존재**하는가 |
+| V2 | `core/fidelity.py::derived_claims` | 파생수치(N% 증가·N배)가 **카드 안 수치쌍과 산수가 맞는가** |
+
+V2 신설 배경: "142→238"을 "약 170% 증가"로 오기(1.7배와 %증가 혼동) — 존재 대조로는 못 잡는 내부 모순.
+**표면화가 검증의 완성이다** — `web/src/lib/verifyStatus.ts` + `DeckFactPanel`이 suspect를 사용자에게 보인다.
+
+### 4-A-4. 측정
+
+프롬프트 변경은 **고정 eval셋 + 고정 루브릭**으로 전후 비교 후 채택한다(vibes 금지).
+`eval/eval_set.json`(6편) · `scripts/deck_judge.py`(5축·6결함 + 다양성 교차저지) · `eval/scoreboard.jsonl`.
+판정은 계층화: 1차 이진 defect(조항 귀속 가능) → 2차 다양성 → 3차 축 점수(저지 노이즈 커서 참고용).
+
+---
+
 ## 5. S6 — Card News JSON  (🗑️ L0 은퇴 — 역사 참조)
 
 > ⚠️ **L0 은퇴 배너 (2026-07-09).** 이 절 전체가 서술하는 S6 저작(코디네이터 `s6_card_json` +
 > `s6/` 설계팀 Architect·콘텐츠팀 Writer 멀티에이전트)은 헌법 v3.0(2026-06-28) 저작 역전으로
-> 폐기되었고 **L0에서 코드 삭제**되었다. 현행 S6 저작 = `backend/agents/deck/authoring.py::author_deck`
-> — 강한 모델이 **덱 전체(스토리+형태+표현)를 한 번에** HTML로 저작한다(architect/writer 분리 없음).
-> 그라운딩 검증은 저작 후 코드(`core/fidelity.py::verify_deck`)가 전담. 아래 5-1~5-7은 **역사 기록**이며
-> 현행 저작 규칙 정본은 루트 `CLAUDE.md §1·§2` + `backend/agents/deck/authoring_prompts.py`다.
+> 폐기되었고 **L0에서 코드 삭제**되었다. 현행 S6 저작 = **§4-A**(위) 참조.
+> 아래 5-1~5-7은 **역사 기록**이며 현행 저작 규칙 정본은 루트 `CLAUDE.md §1·§2` +
+> `backend/agents/deck/authoring_prompts.py` + `backend/agents/deck/AUTHORING.md`(컨트롤룸)다.
 
 **파일 (삭제됨)**: ~~`backend/agents/s6_card_json.py`(코디네이터) + `backend/agents/s6/`(설계팀·콘텐츠팀·mock·프롬프트)~~
 

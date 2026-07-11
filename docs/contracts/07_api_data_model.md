@@ -433,6 +433,23 @@ iframe editorAgent가 요소 선택 시 부여하는 **불투명 난수 id**(예
 
 ---
 
+### 2-1a. DeckManifest (SQLite: `deck_manifest`) — v3 저작 지문 (2026-07-11)
+
+저작 콜이 `<!-- PI_MANIFEST {...} -->`로 선언한 편집 결정. 다음 저작 때 최근 3건을 **소프트 변주
+선호**로 주입해 계정 단위 동질화를 막는다(모델은 자기가 지난주에 뭘 만들었는지 모른다 —
+**다양성은 파이프라인만 가진 정보(이력)에서 나온다**). 계약: `05_agent_design.md §4-A-2`.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `job_id` | TEXT PK | 덱 job |
+| `user_id` | INTEGER | 이력 조회 키(계정 단위 변주) |
+| `manifest_json` | TEXT | archetype · killer_asset · palette · motif · rejected_arc |
+| `created_at` | TEXT | ISO 8601 |
+
+미선언(파싱 실패)은 **경고이지 실패가 아니다** — 그 덱이 이력에 안 남을 뿐(소프트).
+
+---
+
 ### 2-1b. DeckAsset (SQLite: `deck_assets`) — v3 덱 이미지 삽입
 
 바이트 원장. 저장 HTML엔 URL만, 렌더시 data URI 인라인(§1-7). PK = `(job_id, asset_id)`.
@@ -691,6 +708,7 @@ type DegradeCode =
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-07-11 | v2.6 | `deck_manifest` 테이블 추가(§2-1a) — 저작 지문(PI_MANIFEST) 저장·반복이력 소프트 주입. `GET /api/deck/:jobId`의 `verify`에 `derived[]`(V2 파생수치 검산: value·kind·suspect·unresolved·verified·context) 추가 — 구 덱엔 없음(optional). |
 | 2026-06-24 | v2.5 | `CardSlot.visual_kind?`(사진/일러스트, 에디터 전용) 추가. `image_mode`(기존 코드에 있었으나 문서 누락) 문서화. `TemplateType` 14종 전체 반영(8→14, 드리프트 수정). |
 | 2026-06-08 | v2.4 | CardEditorData에 `bg_color?`/`accent_color?` 덱 오버라이드 추가. `--theme-*` 은퇴 명시. 상세: `docs/18_card_design_system.md §3 덱 단위 오버라이드`. |
 | 2026-06-03 | v2.3 | card_count 상한 15→7 (Haiku 출력 한계 안전권). S6 LLM 출력에서 risk_level·verified 제외 (코드 자동 판정). LLMTruncationError 도입 — 출력 천장 도달 시 ERR-S6-002 즉시 반환. |
