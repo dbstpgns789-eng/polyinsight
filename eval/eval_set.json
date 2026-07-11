@@ -1,0 +1,13 @@
+{
+  "_설명": "고정 평가셋 — 프롬프트 변경 전후 같은 논문으로 회귀 측정. path를 실제 PDF로 교체할 것.",
+  "_순서": "papers 배열 순서 = 실행 순서(고정). 라벨 간 비교 안정성을 위해 변경 금지.",
+  "_장르_의도": "재료2·CS1·바이오1 = 중심 분포 / 이론1(킬러 수치 없음)·장문1(60k 절단) = 꼬리 스트레스",
+  "papers": [
+    {"id": "materials-1", "genre": "재료·공정", "path": "CHANGE_ME.pdf"},
+    {"id": "materials-2", "genre": "재료·공정", "path": "CHANGE_ME.pdf"},
+    {"id": "csml-1", "genre": "CS·ML", "path": "CHANGE_ME.pdf"},
+    {"id": "bio-1", "genre": "바이오·임상", "path": "CHANGE_ME.pdf"},
+    {"id": "theory-1", "genre": "이론·수리(킬러 수치 없음)", "path": "CHANGE_ME.pdf"},
+    {"id": "long-1", "genre": "장문 30p+(60k자 절단 스트레스)", "path": "CHANGE_ME.pdf"}
+  ]
+}
