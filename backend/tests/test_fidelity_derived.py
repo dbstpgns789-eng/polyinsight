@@ -53,6 +53,51 @@ def test_page_footer_does_not_launder_wrong_claim():
     assert claims[0]["suspect"] is False
 
 
+def test_mismatch_when_pair_exists_but_ratio_wrong():
+    """실전 오류(2026-07-12 chitosan): 카드에 1.63→63.66이 있는데 '32.7배'라 씀(실제 39배).
+
+    구 로직은 '어떤 쌍과도 안 맞으면 unresolved(모름)'이라 이걸 놓쳤다.
+    쌍이 있는데 값이 틀린 것은 '모름'이 아니라 '오산'이다.
+    """
+    html = _card("<p>1.63 에서 63.66 μg/cm² 으로, 껍질을 입히니 32.7배 늘었다</p>")
+    claims = derived_claims(html, paper_text="1.63 63.66")
+    fold = [c for c in claims if c["kind"] == "fold"][0]
+    assert fold["suspect"] is True
+    assert fold["unresolved"] is False
+
+
+def test_unrelated_numbers_stay_unresolved():
+    """관련 쌍이 없으면(스케일이 전혀 다르면) 여전히 unresolved — 모르면 죄 아님."""
+    html = _card("<p>실험은 24시간, pH 5.5 조건. 흡수량이 32.7배 늘었다</p>")
+    claims = derived_claims(html, paper_text="24 5.5")
+    fold = [c for c in claims if c["kind"] == "fold"][0]
+    assert fold["unresolved"] is True
+    assert fold["suspect"] is False
+
+
+def test_pct_point_diff_tolerates_rounding():
+    """'2.8% 더 정확' + 차트 표시 27.9/25.0(반올림) → 차이 2.9. 반올림 오차는 결함이 아니다.
+
+    (저지는 이걸 오탐했다 — 원문 27.88→25.03=2.85라 2.8이 맞다.)
+    """
+    html = _card("<p>34층은 18층보다 2.8% 더 정확했다</p><p>27.9</p><p>25.0</p>")
+    claims = derived_claims(html, paper_text="27.88 25.03 2.85")
+    pp = [c for c in claims if c["kind"] == "pct_point"]
+    assert pp and pp[0]["suspect"] is False
+
+
+def test_pct_point_diff_catches_real_error():
+    """같은 스케일의 쌍이 있는데 값이 틀리면 오산. (차이는 2.9인데 5%라 씀)
+
+    반면 스케일이 아예 다른 주장(예: 10%)은 '관련 쌍 없음'으로 흘려보낸다 —
+    카드 밖 근거일 수 있어 과잉 경고보다 침묵이 낫다(모르면 죄 아님).
+    """
+    html = _card("<p>5% 더 정확했다</p><p>27.9</p><p>25.0</p>")
+    claims = derived_claims(html, paper_text="27.9 25.0")
+    pp = [c for c in claims if c["kind"] == "pct_point"][0]
+    assert pp["suspect"] is True
+
+
 def test_year_pair_does_not_create_false_suspect():
     # 연도 2개(2020·2026)가 쌍이 되면 b/a*100≈100.3 → 정당한 '약 100% 향상'이 가짜 suspect가 된다.
     html = _card("<p>2020년 대비 2026년, 성능이 약 100% 향상</p>")

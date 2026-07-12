@@ -117,8 +117,17 @@ def verify_deck(html: str, paper_text: str) -> list[NumberClaim]:
 _CARD_SPLIT = re.compile(r'(?=<div[^>]+data-screen-label=)', re.I)
 _PCT_CHANGE = re.compile(r"(\d[\d,]*\.?\d*)\s*%\s*(증가|감소|향상|개선|절감|상승|하락)")
 _FOLD = re.compile(r"(\d[\d,]*\.?\d*)\s*배")
+# 퍼센트 '차이'(%p) — "2.8% 더 정확", "3.5% 낮췄다". 증가율이 아니라 뺄셈이다.
+_PCT_POINT = re.compile(r"(\d[\d,]*\.?\d*)\s*%\s*(?:더|덜|만큼)?\s*(정확|낮|높|줄|늘|개선|앞서|우수|나빠)")
 _PCT_TOL = 5.0      # % 스케일 절대 오차 허용
 _FOLD_TOL = 0.15    # 배 스케일 절대 오차 허용
+_PP_TOL = 0.5       # %p 차이 — 표시값이 반올림돼 있으므로 관대하게(27.9/25.0 표시, 원문 27.88/25.03)
+
+# "쌍이 있는데 값이 안 맞는다" = 오산. "관련 쌍 자체가 없다" = 모름(unresolved).
+# 이 둘을 가르는 기준: 후보 비율이 주장값과 같은 스케일(0.4~2.5배)이면 '관련 쌍'으로 본다.
+# (2026-07-12 실전: 카드에 1.63→63.66이 있는데 '32.7배'라 씀. 실제 39배 — 구 로직은 이걸
+#  '어떤 쌍과도 안 맞으니 모름'으로 흘려보냈다. 쌍이 있는데 틀린 건 모름이 아니라 오산이다.)
+_RELATED_LO, _RELATED_HI = 0.4, 2.5
 
 # 검산쌍에서 뺄 크롬 노이즈. 프롬프트가 페이지번호(01/07)를 전 카드에 강제하므로 (1,7) 같은
 # 가짜 쌍이 상시 생긴다 → 틀린 주장을 '정합'으로 세탁하거나 정당한 주장을 suspect로 만든다.
@@ -146,29 +155,48 @@ def _card_numbers(text: str) -> list[float]:
 
 
 def _check_pairs(nums: list[float], claimed: float, kind: str) -> tuple[bool, bool]:
-    """(suspect, unresolved). 같은 카드 수치쌍 (a<b)의 비율과 주장값을 대조.
+    """(suspect, unresolved). 같은 카드 수치쌍 (a<b)에서 주장값을 검산.
 
-    - pct_change: (b/a-1)*100 ≈ claimed 면 정합. b/a*100 ≈ claimed 인데 위가 아니면 혼동 의심.
-    - fold: b/a ≈ claimed 면 정합.
-    비교쌍이 하나도 없으면 unresolved=True — 모르면 죄 아님(막지 않는다).
+    - fold:       b/a ≈ claimed
+    - pct_change: (b/a-1)*100 ≈ claimed  (b/a*100 과 혼동하면 '배↔%증가' 오류)
+    - pct_point:  b-a ≈ claimed          (증가율이 아니라 차이)
+
+    판정 3분기:
+      정합             → (False, False)
+      쌍이 있는데 불일치 → (True,  False)   ← 오산. 구 로직이 놓치던 지점
+      관련 쌍 자체 없음  → (False, True)    ← 모르면 죄 아님(막지 않는다)
     """
     pairs = [(min(a, b), max(a, b))
              for i, a in enumerate(nums) for b in nums[i + 1:] if a != b]
     # 주장값 자신은 비교쌍에서 제외 (170이 카드 안 숫자로 다시 잡히는 자기참조 방지)
     pairs = [(a, b) for a, b in pairs if a != claimed and b != claimed]
-    if not pairs:
+    if not pairs or claimed <= 0:
         return False, True
+
     if kind == "fold":
-        ok = any(abs(b / a - claimed) <= _FOLD_TOL for a, b in pairs)
-        if ok:
-            return False, False
-        confusion = any(abs((b / a - 1) - claimed) <= _FOLD_TOL for a, b in pairs)
-        return confusion, not confusion
-    # pct_change
-    if any(abs((b / a - 1) * 100 - claimed) <= _PCT_TOL for a, b in pairs):
+        cands = [b / a for a, b in pairs]
+        tol = max(_FOLD_TOL, claimed * 0.03)      # 큰 배율일수록 표기 반올림 여지가 크다
+    elif kind == "pct_point":
+        cands = [b - a for a, b in pairs]
+        tol = _PP_TOL
+    else:  # pct_change
+        cands = [(b / a - 1) * 100 for a, b in pairs]
+        tol = _PCT_TOL
+
+    if any(abs(c - claimed) <= tol for c in cands):
         return False, False
-    confusion = any(abs(b / a * 100 - claimed) <= _PCT_TOL for a, b in pairs)
-    return confusion, not confusion
+
+    # 혼동 패턴: '배'와 '% 증가'를 뒤바꿔 쓴 경우 (170% 증가 ↔ 1.7배)
+    if kind == "pct_change" and any(abs(b / a * 100 - claimed) <= _PCT_TOL for a, b in pairs):
+        return True, False
+    if kind == "fold" and any(abs((b / a - 1) - claimed) <= _FOLD_TOL for a, b in pairs):
+        return True, False
+
+    # 관련 쌍(주장값과 같은 스케일의 후보)이 존재하는데 값이 안 맞으면 → 오산
+    related = [c for c in cands if c > 0 and _RELATED_LO <= c / claimed <= _RELATED_HI]
+    if related:
+        return True, False
+    return False, True
 
 
 def derived_claims(html: str, paper_text: str) -> list[dict]:
@@ -183,7 +211,7 @@ def derived_claims(html: str, paper_text: str) -> list[dict]:
             continue
         content = _content_text(chunk)
         nums = _card_numbers(content)
-        for pat, kind in ((_PCT_CHANGE, "pct_change"), (_FOLD, "fold")):
+        for pat, kind in ((_PCT_CHANGE, "pct_change"), (_FOLD, "fold"), (_PCT_POINT, "pct_point")):
             for m in pat.finditer(content):
                 claimed = float(m.group(1).replace(",", ""))
                 suspect, unresolved = _check_pairs(nums, claimed, kind)
