@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     # ★sonnet-5는 _NO_SAMPLING_PREFIXES라 temperature 고정 불가 = 저지는 확률적.
     #   점수 비교는 --repeat로 실측한 노이즈 밴드 기준으로만 한다(플랜 Task 4 Step 5).
     LLM_MODEL_JUDGE: str = "claude-sonnet-5"
-    JUDGE_MAX_TOKENS: int = 2000
+    # 2000은 실전에서 천장에 닿아 LLMTruncationError 발생(2026-07-12). sonnet-5는 추론 토큰이
+    # output에 포함돼 짧은 JSON이어도 총량이 크다. 천장을 올려도 과금은 실사용분만.
+    JUDGE_MAX_TOKENS: int = 8000
     AUTHOR_MAX_CARDS: int = 7            # 카드 max 장수(티어로 확장 예정)
     AUTHOR_FEWSHOT_N: int = 2            # few-shot 레퍼런스 수(입력 토큰/비용 트레이드오프)
     PLAYWRIGHT_TIMEOUT_MS: int = 15000

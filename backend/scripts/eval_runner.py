@@ -110,6 +110,19 @@ def _submit_and_wait(client: httpx.Client, pdf: Path) -> dict:
     return {"status": "TIMEOUT", "job_id": job_id}
 
 
+def _safe_judge(png_dir: Path) -> dict | None:
+    """저지 실패가 런을 죽이면 안 된다 — 저작(Opus·비쌈)은 이미 태웠고 저지는 싸게 재시도 가능하다.
+
+    (2026-07-12: JUDGE_MAX_TOKENS=2000 천장에 닿아 LLMTruncationError로 러너가 죽고,
+     저작 성공한 1편의 결과가 results.json에 기록조차 안 됐다. 실패는 격리한다.)
+    """
+    try:
+        return asyncio.run(judge_dir(png_dir))
+    except Exception as exc:
+        print(f"    (저지 실패 — judge=None으로 기록, 나중에 저지만 재실행 가능: {exc})")
+        return None
+
+
 def _download_cards(client: httpx.Client, job_id: str, out_dir: Path) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     n = 0
@@ -191,6 +204,16 @@ def main() -> None:
         done_ids = {e["id"] for e in results if e.get("status") == "DONE"}
         print(f"[resume] 기존 결과 {len(results)}건 로드 — DONE {len(done_ids)}편 스킵")
 
+    # 저작은 됐는데 저지가 없는 항목 → PNG로 **저지만** 재실행(비싼 저작 재과금 0)
+    for e in results:
+        if e.get("status") == "DONE" and not e.get("judge"):
+            png_dir = run_dir / e["id"]
+            if any(png_dir.glob("*.png")):
+                print(f"[judge-only] {e['id']} — 저작 재사용, 저지만 재실행")
+                e["judge"] = _safe_judge(png_dir)
+                results_path.write_text(
+                    json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+
     with httpx.Client() as client:
         uid = _login(client)
         for i, p in enumerate(papers, 1):
@@ -203,9 +226,9 @@ def main() -> None:
             if r["status"] == "DONE":
                 png_dir = run_dir / p["id"]
                 entry["cards"] = _download_cards(client, r["job_id"], png_dir)
-                entry["judge"] = asyncio.run(judge_dir(png_dir))
                 deck = client.get(f"{BASE_URL}/api/deck/{r['job_id']}", timeout=30).json()
                 entry["verify"] = deck.get("verify")
+                entry["judge"] = _safe_judge(png_dir)   # 저지 실패는 격리 — 저작을 날리지 않는다
             results = [e for e in results if e["id"] != p["id"]] + [entry]
             results_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
 
