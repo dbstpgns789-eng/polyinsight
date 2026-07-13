@@ -26,11 +26,14 @@ class Settings(BaseSettings):
     # output에 포함돼 짧은 JSON이어도 총량이 크다. 천장을 올려도 과금은 실사용분만.
     JUDGE_MAX_TOKENS: int = 8000
     AUTHOR_MAX_CARDS: int = 7            # 카드 max 장수(티어로 확장 예정)
-    # few-shot 레퍼런스(남의 덱 HTML) 수. ★0이면 refs를 주지 않는다.
-    # 2026-07-13 실측: refs의 색 이름·헥스가 산출물에 그대로 복사됨(#36E0CE '전기 시안'
-    # → #3DD6D0 '전기 시안'). refs는 소프트 카탈로그로 작동해 '논문 수만큼의 룩'을 막는다.
-    # 대체 경로 = AUTHOR_FIGURES_N('논문이 곧 레퍼런스' — 논문 자신의 그림을 앵커로).
-    AUTHOR_FEWSHOT_N: int = 2
+    # ⛔ few-shot 레퍼런스(남의 덱 HTML) — **은퇴(2026-07-13)**. 시각 앵커는 논문 자신이다.
+    #
+    # 유죄: refs의 색 이름·헥스가 산출물에 그대로 복사됨(#36E0CE '전기 시안' → #3DD6D0 '전기 시안').
+    #       refs = 소프트 카탈로그. 유한한 레퍼런스로는 '논문 수만큼의 룩'에 도달할 수 없다.
+    # 무죄 주장("마감 하한 담보")은 **반증됨**: exp-D-paper-as-ref(refs 0 + 논문 그림 3장)에서
+    #       integrity 3→4, dead_zone 해소, 파생수치 오류 0. 마감이 무너지기는커녕 올랐다.
+    # 되살리려면 2로. 단 그 전에 AUTHORING.md §4(승격 루프 폐기)를 읽을 것.
+    AUTHOR_FEWSHOT_N: int = 0
     # 저작 시 모델에게 보여줄 '이 논문의 그림' 수(비전 입력). 0이면 끔.
     AUTHOR_FIGURES_N: int = 3
     PLAYWRIGHT_TIMEOUT_MS: int = 15000
