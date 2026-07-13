@@ -1,0 +1,8 @@
+# PolyInsight 앞문 — Caddy 자동 HTTPS (Azure 무료 호스트네임)
+# SITE_ADDRESS = .env의 공개 FQDN (예: polyinsight.japaneast.cloudapp.azure.com)
+# Caddy가 Let's Encrypt 인증서를 자동 발급/갱신 → 도메인 구매 0원.
+# 전제: NSG + VM 방화벽(ufw)에서 인바운드 80·443 개방(HTTP-01/TLS-ALPN 챌린지).
+
+{$SITE_ADDRESS} {
+	reverse_proxy web:3000
+}
