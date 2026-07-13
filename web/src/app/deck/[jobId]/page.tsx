@@ -38,17 +38,28 @@ function abortReason(warnings?: string[]): string | null {
 // ── 생성 진행 화면 — 진짜 공정 공개 (Mirra식 극장이되 문구=실제 파이프라인 단계) ──
 // 가짜 남은시간·가짜 취소버튼 금지. progress(10→40→70→85)는 실측, 사이는 완만히 creep.
 const PIPELINE_STEPS = [
-  { key: 'S1', emoji: '📖', label: '논문 읽기', msg: '논문을 읽고 있어요 — 텍스트와 수치를 추출합니다' },
-  { key: 'AUTHOR', emoji: '✍️', label: 'AI 저작', msg: 'AI가 스토리와 디자인을 저작하고 있어요' },
+  { key: 'S1', emoji: '📖', label: '논문 읽기', msg: '논문을 읽고 있어요 — 텍스트와 그림, 수치를 꺼냅니다' },
+  { key: 'AUTHOR', emoji: '✍️', label: 'AI 저작', msg: 'AI가 논문의 그림을 보며 스토리와 디자인을 저작하고 있어요' },
+  // Best-of-N(AUTHOR_CANDIDATES>1)일 때만 등장 — 여러 시안을 만들어 심사해 최고를 고른다
+  { key: 'SELECT', emoji: '⚖️', label: '시안 비교', msg: '여러 시안을 만들어 나란히 놓고 가장 좋은 것을 고르고 있어요' },
+  // 비전 자기수정 — 제품의 셀링포인트: AI가 자기 결과물을 '눈으로 보고' 고친다
+  { key: 'POLISH', emoji: '👁️', label: '보고 다듬기', msg: 'AI가 완성된 카드를 직접 보면서 겹침·빈칸·어려운 말을 다듬고 있어요' },
   { key: 'VERIFY', emoji: '🔍', label: '수치 검증', msg: '모든 수치를 원문과 대조하고 있어요' },
   { key: 'RENDER', emoji: '🎨', label: '카드 렌더', msg: '카드를 그리고 있어요' },
 ]
-const STAGE_CAP: Record<string, number> = { S1: 38, AUTHOR: 68, VERIFY: 83, RENDER: 97 }
+const STAGE_CAP: Record<string, number> = {
+  S1: 38, AUTHOR: 55, SELECT: 62, POLISH: 78, VERIFY: 86, RENDER: 97,
+}
 
 function GenerationTheater({ stage, progress }: { stage: string; progress: number }) {
   const [elapsed, setElapsed] = useState(0)
   const [creep, setCreep] = useState(0)
-  const stageIdx = Math.max(0, PIPELINE_STEPS.findIndex((s) => s.key === stage))
+  // 모르는 스테이지(백엔드가 새 단계를 추가했는데 프론트가 아직 모를 때)에서 -1이 나오면
+  // 진행이 처음으로 되돌아가 보인다. 마지막으로 알던 단계를 유지한다.
+  const [lastIdx, setLastIdx] = useState(0)
+  const found = PIPELINE_STEPS.findIndex((s) => s.key === stage)
+  const stageIdx = found >= 0 ? found : lastIdx
+  useEffect(() => { if (found >= 0) setLastIdx(found) }, [found])
   const current = PIPELINE_STEPS[stageIdx]
 
   useEffect(() => {
@@ -62,7 +73,13 @@ function GenerationTheater({ stage, progress }: { stage: string; progress: numbe
     const t = setInterval(() => setCreep((c) => c + 0.15), 1000)
     return () => clearInterval(t)
   }, [stage])
-  const pct = Math.min(Math.max(progress, 5) + creep, STAGE_CAP[stage] ?? 97)
+  // 진행률은 절대 뒤로 가지 않는다 — creep으로 앞선 뒤 다음 단계의 실측 progress가 더 낮아도
+  // 후퇴하면 "뭔가 잘못됐나" 싶다(POLISH cap 78 → VERIFY progress 70 구간에서 실제로 발생).
+  const [pct, setPct] = useState(5)
+  useEffect(() => {
+    const target = Math.min(Math.max(progress, 5) + creep, STAGE_CAP[stage] ?? 97)
+    setPct((p) => Math.max(p, target))
+  }, [progress, creep, stage])
 
   const mm = String(Math.floor(elapsed / 60))
   const ss = String(elapsed % 60).padStart(2, '0')
