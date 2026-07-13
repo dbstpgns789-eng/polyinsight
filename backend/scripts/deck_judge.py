@@ -77,12 +77,10 @@ def parse_judge_json(raw: str, required: tuple[str, ...] = ("scores", "defects")
     return obj
 
 
-async def judge_dir(png_dir: Path) -> dict | None:
-    """카드 PNG 폴더(정렬순) → 저지 결과 dict."""
-    pngs = sorted(png_dir.glob("*.png"))
-    if not pngs:
-        raise SystemExit(f"[ERROR] PNG 없음: {png_dir}")
-    images = [p.read_bytes() for p in pngs]
+async def judge_pngs(images: list[bytes]) -> dict | None:
+    """카드 PNG(메모리) → 저지 결과 dict. 파이프라인의 Best-of-N 후보 선택에도 쓰인다."""
+    if not images:
+        return None
     client = LLMClient()   # 호출당 생성 — asyncio.run 반복(eval_runner) 안전
     raw = await client.call(
         system_prompt=JUDGE_SYSTEM,
@@ -93,6 +91,28 @@ async def judge_dir(png_dir: Path) -> dict | None:
         images=images,
     )
     return parse_judge_json(raw)
+
+
+def judge_score(judged: dict | None) -> float:
+    """저지 결과 → 후보 비교용 단일 점수. 결함은 무겁게 친다(발행 불가 사유이므로).
+
+    5축 합(최대 25) − 결함당 3점. 저지가 죽으면 최하점(선택되지 않게).
+    """
+    if not judged:
+        return -1.0
+    scores = judged.get("scores") or {}
+    defects = judged.get("defects") or {}
+    total = sum(v for v in scores.values() if isinstance(v, (int, float)))
+    n_bad = sum(1 for v in defects.values() if v)
+    return total - 3.0 * n_bad
+
+
+async def judge_dir(png_dir: Path) -> dict | None:
+    """카드 PNG 폴더(정렬순) → 저지 결과 dict."""
+    pngs = sorted(png_dir.glob("*.png"))
+    if not pngs:
+        raise SystemExit(f"[ERROR] PNG 없음: {png_dir}")
+    return await judge_pngs([p.read_bytes() for p in pngs])
 
 
 async def judge_diversity(cover_pngs: list[bytes], labels: list[str]) -> dict | None:

@@ -17,7 +17,9 @@ from ...core.fidelity import derived_claims, verify_deck
 from ...core.llm_client import get_usage, start_usage_capture
 from ...core.models import JobStatus, S1Input
 from ..s1_extractor import s1_agent
+from ...scripts.deck_judge import judge_pngs
 from .authoring import MAX_SOURCE_CHARS, author_deck
+from .best_of import pick_best
 from .deck_renderer import render_deck
 from .figures import extract_figures
 from .manifest import build_history_block, parse_manifest, selfcheck_failures
@@ -120,6 +122,38 @@ async def _log_done(job_id: str, user_id: int | None, started: float, card_count
         logger.exception("deck_pipeline_complete 이벤트 기록 실패")
 
 
+async def _author_best_of(author_fn, n: int, job_id: str) -> tuple[str, str]:
+    """N개를 병렬 저작하고 저지가 최고를 고른다. (best_html, 선택 경고) 반환.
+
+    선택된 덱만 이후 비전 루프를 탄다 — 후보 전부를 다듬는 건 낭비다.
+    저작이 하나라도 살아남으면 진행(전부 죽으면 예외 → 상위에서 ERROR).
+    """
+    drafts = await asyncio.gather(*[author_fn() for _ in range(n)], return_exceptions=True)
+    cands: list[dict] = []
+    for d in drafts:
+        if isinstance(d, Exception) or not d or "data-screen-label" not in d:
+            logger.warning("best-of-N: 후보 저작 실패 — 제외 (%s)", type(d).__name__)
+            continue
+        cands.append({"html": d})
+    if not cands:
+        raise ValueError("모든 후보 저작이 실패했습니다")
+
+    await db.update_job(job_id, status=JobStatus.RUNNING, stage="SELECT", progress=52)
+
+    async def _score(c: dict) -> None:
+        try:
+            pngs, _ = await render_deck(c["html"])      # 저장하지 않는 임시 렌더
+            c["pngs"] = pngs
+            c["judge"] = await judge_pngs(pngs) if pngs else None
+        except Exception as exc:
+            logger.warning("best-of-N: 후보 심사 실패(%s)", exc)
+            c["judge"] = None
+
+    await asyncio.gather(*[_score(c) for c in cands])
+    best, log = pick_best(cands)
+    return best["html"], log
+
+
 async def _execute(
     job_id: str,
     pdf_bytes: bytes,
@@ -172,15 +206,29 @@ async def _execute(
         figures = extract_figures(pdf_bytes, max_figures=settings.AUTHOR_FIGURES_N)
         if not figures:
             warnings.append("논문에서 그림을 찾지 못했습니다 — 텍스트만으로 저작합니다.")
-        html = await author_deck(
-            raw_text=s1_out.raw_text,
-            metadata=s1_out.metadata,
-            card_count=card_count,
-            persona=persona,
-            style_direction=style_direction,
-            history_block=build_history_block(recent),
-            figures=figures,
-        )
+
+        async def _author_once() -> str:
+            return await author_deck(
+                raw_text=s1_out.raw_text,
+                metadata=s1_out.metadata,
+                card_count=card_count,
+                persona=persona,
+                style_direction=style_direction,
+                history_block=build_history_block(recent),
+                figures=figures,
+            )
+
+        n = max(1, settings.AUTHOR_CANDIDATES)
+        if n == 1:
+            html = await _author_once()
+        else:
+            # ★Best-of-N — 저작 분산을 통제하는 유일한 수단.
+            # (Opus 4.8은 sampling 파라미터를 거부해 temperature로 분산을 줄일 수 없다.
+            #  실측: 같은 논문·같은 코드 5회 저작에서 integrity 2↔4, finish 1~4.)
+            html, sel_warn = await _author_best_of(_author_once, n, job_id)
+            if sel_warn:
+                warnings.append(sel_warn)
+
         if not html or "data-screen-label" not in html:
             raise ValueError("저작 결과에 카드(data-screen-label)가 없습니다")
     except Exception as exc:
