@@ -19,6 +19,7 @@ from ...core.models import JobStatus, S1Input
 from ..s1_extractor import s1_agent
 from ...scripts.deck_judge import judge_pngs
 from .authoring import MAX_SOURCE_CHARS, author_deck
+from .source_trim import trim_source
 from .best_of import pick_best
 from .deck_renderer import render_deck
 from .figures import extract_figures
@@ -190,12 +191,13 @@ async def _execute(
 
     # ── S6: 단일 저작 ──────────────────────────────────────────────────────
     # 원문 절단은 소리 없이 일어나면 안 된다 — V는 원문 전문으로 검증하고 저지는 논문을 못 보므로,
-    # 후반부를 통째로 누락한 덱이 모든 계기판에서 클린 패스한다.
-    if len(s1_out.raw_text) > MAX_SOURCE_CHARS:
-        pct = (1 - MAX_SOURCE_CHARS / len(s1_out.raw_text)) * 100
+    # 본문을 누락한 덱이 모든 계기판에서 클린 패스한다.
+    # ★참고문헌 제거는 '손실'이 아니다(오히려 결론이 살아난다). 본문 생략만 경고한다.
+    _source, _ = trim_source(s1_out.raw_text, MAX_SOURCE_CHARS)
+    if "중략" in _source:
         warnings.append(
-            f"SOURCE_TRUNCATED: 원문 {len(s1_out.raw_text):,}자 중 {MAX_SOURCE_CHARS:,}자만 "
-            f"저작에 사용 ({pct:.0f}% 미전달) — 후반부 내용이 덱에 반영되지 않았을 수 있습니다."
+            f"SOURCE_TRUNCATED: 원문이 길어({len(s1_out.raw_text):,}자) 본문 중간부를 생략했습니다 "
+            f"— 앞머리(연구 배경)와 뒷부분(결과·결론)은 모두 저작에 사용했습니다."
         )
 
     try:

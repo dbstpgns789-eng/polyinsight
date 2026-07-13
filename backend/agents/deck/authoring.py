@@ -13,11 +13,14 @@ from ...core.llm_client import llm_client
 from ...core.models import PaperMetadata
 from . import authoring_prompts as P
 from .mock import mock_deck_html
+from .source_trim import trim_source
 
 logger = logging.getLogger(__name__)
 
-# 입력 원문 상한(컨텍스트 관리). 레퍼런스 HTML + 논문 전문이 입력에 함께 들어감.
-MAX_SOURCE_CHARS = 60000
+# 입력 원문 상한. 참고문헌을 먼저 걷어내므로(source_trim) 본문이 이 안에 들어오는 논문이 대부분이다.
+# 60,000이던 시절 chitosan(81,518자)의 **결론이 175자 차이로 잘렸다** — 참고문헌 22%가
+# 자리를 먹고 있었기 때문. 이제 참고문헌을 빼고 70,000까지 본다(원가 +$0.03).
+MAX_SOURCE_CHARS = 70000
 
 
 def _strip_code_fence(text: str) -> str:
@@ -61,9 +64,11 @@ async def author_deck(
     system = P.AUTHORING_SYSTEM.format(
         persona=persona or P.DEFAULT_PERSONA,
     )
+    # 참고문헌을 걷어내고, 그래도 길면 **중간을 생략**한다(앞에서 자르면 결론부터 버린다).
+    source, _ = trim_source(raw_text, MAX_SOURCE_CHARS)
     user = P.AUTHORING_USER.format(
         few_shot_refs=P.few_shot_refs(settings.AUTHOR_FEWSHOT_N),
-        section_map_text=raw_text[:MAX_SOURCE_CHARS],
+        section_map_text=source,
         title=metadata.title or "unknown",
         authors=", ".join(metadata.authors) if metadata.authors else "unknown",
         year=metadata.year or "unknown",
