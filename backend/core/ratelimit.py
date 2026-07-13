@@ -69,16 +69,34 @@ def public_ip(request: Request) -> str | None:
 
 
 def enforce_upload_quota(user: dict) -> None:
-    """인증된 업로드 엔드포인트 유저별 일일 쿼터. 미인증 계정은 더 낮은 상한(재정 DoS·스팸 방어).
-    IP(cf-connecting-ip) 조건 없이 user_id 키로 항상 적용 — 인증 필수 경로라 유저가 신뢰 가능한 키."""
+    """업로드 쿼터 — 유저별 일일 상한 + **전역 일일 캡**(스펜드 통제).
+
+    ★쿼터는 원가를 알아야 한다(2026-07-13 실측: 덱 1건 = $0.51~$3.39).
+    구 설정(인증 20/일)이면 유저 1명이 하루 $38을 태울 수 있었다 — 크레딧 $22가 반나절에 증발.
+    전역 캡은 유저 수가 늘어도 하루 총액을 묶는 **진짜 방어선**이다(유저별 쿼터만으론
+    유저 10명 × 5덱 = 50덱 = $95/일이 뚫린다).
+    """
     if not settings.RATE_LIMIT_ENABLED:
         return
+
+    # 1) 전역 일일 캡 — 먼저 확인(유저 쿼터를 소비하기 전에 막는다)
+    gl = settings.GLOBAL_DAILY_DECK_LIMIT
+    if gl > 0:
+        gkey = "upload:global"
+        ra = check(gkey, gl, settings.UPLOAD_USER_WINDOW_S)
+        if ra:
+            raise too_many(ra)
+
+    # 2) 유저별 일일 쿼터
     limit = settings.UPLOAD_USER_LIMIT if user.get("email_verified") else settings.UPLOAD_UNVERIFIED_LIMIT
     key = f"upload:user:{user['id']}"
     ra = check(key, limit, settings.UPLOAD_USER_WINDOW_S)
     if ra:
         raise too_many(ra)
+
     record(key)
+    if gl > 0:
+        record("upload:global")
 
 
 def too_many(retry_after: int) -> HTTPException:

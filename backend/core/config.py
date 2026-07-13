@@ -77,9 +77,14 @@ class Settings(BaseSettings):
 
     # ── 업로드 쿼터 (유저별 — 재정 DoS·스팸 방어, 2026-07-03) ──
     # 인증 필수 엔드포인트라 user_id 키로 항상 적용(cf-ip 조건 무관).
-    UPLOAD_USER_LIMIT: int = 20          # 인증(email_verified) 유저 일일 업로드 상한
-    UPLOAD_UNVERIFIED_LIMIT: int = 3     # 미인증 계정은 낮은 상한(grace 유지·남용 차단) → email_verified가 경제적 신뢰신호
+    # ★쿼터는 원가를 알아야 한다 (2026-07-13 실측: 덱 1건 = $0.51~$3.39, 기본 구성 $1.91).
+    # 구 설정(인증 20/일)이면 유저 1명이 하루 $38 — 크레딧 $22가 반나절에 증발한다.
+    UPLOAD_USER_LIMIT: int = 5           # 인증 유저 일일 상한 (= 최대 $9.6/일/유저)
+    UPLOAD_UNVERIFIED_LIMIT: int = 2     # 미인증은 더 낮게 (= 최대 $3.8/일)
     UPLOAD_USER_WINDOW_S: int = 86400    # 24h
+    # ★전역 일일 캡 — 진짜 방어선. 유저 수가 늘어도 하루 총액이 캡된다.
+    # 25덱 × $1.91 ≈ $48/일 최악. 0이면 무제한(로컬 개발).
+    GLOBAL_DAILY_DECK_LIMIT: int = 25
 
     # ── 소셜 로그인 OAuth (Google, 2026-07-03) ──────────────────
     # 비우면 dormant(버튼 눌러도 /login 복귀, 앱 안 깨짐). Google Cloud Console에서 발급.
