@@ -20,11 +20,21 @@ import logging
 import re
 
 from ...core.config import settings
+from ...core.fidelity import verify_deck
 from ...core.llm_client import LLMClient
 
 logger = logging.getLogger(__name__)
 
 _CARD_RE = re.compile(r"data-screen-label", re.I)
+
+
+def _quant_set(html: str) -> set[str]:
+    """덱에 실린 정량 수치 집합. fidelity의 검증된 추출기를 재사용(중복 구현 금지).
+
+    verify_deck은 (수치, 원문존재여부)를 내는데 여기선 수치 토큰만 쓴다 —
+    paper_text를 빈 문자열로 줘도 추출 자체는 동일하다.
+    """
+    return {c.value for c in verify_deck(html, "")}
 
 VISION_FIX_SYSTEM = """당신은 방금 이 카드뉴스 덱을 저작한 디자이너다. 이제 **처음으로 자기 결과물을
 눈으로 본다**. 첨부된 이미지는 당신의 HTML이 실제로 렌더된 카드들이다(순서대로 01, 02, …).
@@ -39,12 +49,17 @@ VISION_FIX_SYSTEM = """당신은 방금 이 카드뉴스 덱을 저작한 디자
    값이 8배인데 막대가 2배로 보이면 거짓말이다. 값의 스케일 차가 100배를 넘어 선형 막대로는
    작은 값이 보이지도 않는다면, 막대를 버리고 다른 형태(수치 나열·로그 축 명시·계단)로 바꿔라.
 5. **읽히지 않는 대비**: 배경과 글자 명도차가 부족해 뭉개지는 곳.
+6. **외계어**: 카드에 적힌 글자를 **비전공자의 눈으로 읽어라**. 앵커(쉬운 말·비유) 없이 등장한
+   전문용어·단위·약어가 있는가? (실측 결함: 'nm', 'wt%', '아민기·수산기·수소결합', 'SGD', 'O(n)')
+   있으면 그 자리에서 짧은 앵커를 붙여라('약 100나노미터 — 머리카락 굵기의 천분의 일').
+   앵커를 붙일 공간이 없으면 그 용어를 **쉬운 말로 갈아치워라**. 논문 용어를 지키는 것보다
+   독자가 이해하는 게 우선이다(단, 수치 자체는 절대 바꾸지 마라).
 
 [수정 규칙 — 엄수]
 - **결함이 없는 카드는 글자 하나도 바꾸지 마라.** 고칠 곳만 고쳐라(전면 재디자인 금지).
 - 카드를 삭제하거나 추가하지 마라. **카드 수는 반드시 그대로**다.
-- 수치·문구를 바꾸지 마라(레이아웃·시각 결함만 고친다). 단 겹쳐서 못 읽히는 텍스트를 줄이거나
-  요소를 키워 공간을 채우는 것은 허용된다.
+- ★**수치는 절대 바꾸지 마라.** 숫자·단위·비율은 원문에서 온 것이다. 건드리면 충실성이 깨진다.
+  (용어를 쉽게 풀거나 앵커를 붙이는 것은 허용 — 수치를 손대는 것과는 다르다.)
 - 팔레트·서체·아크를 바꾸지 마라. 이 덱의 정체성은 유지한다.
 
 출력: 수정된 **HTML 전문**만(코드펜스·설명 없이 <!DOCTYPE html> … </html>).
@@ -101,8 +116,17 @@ async def apply_vision_fix(html: str, card_pngs: list[bytes]) -> tuple[str, list
             f"비전 수정이 카드 수를 줄여({original_cards}→{fixed_cards}) 무시했습니다 — 원본을 유지합니다."
         ]
 
-    changed = abs(len(fixed) - len(html))
+    # ★수치 불변 가드 — 비전 수정은 레이아웃·표현을 고치는 단계이지 사실을 바꾸는 단계가 아니다.
+    # 프롬프트로 "수치를 바꾸지 마라"고 말했지만, 말은 지켜지지 않을 수 있다(실측: L4 자가검수는
+    # 5/5 무력했다). 코드가 확인한다 — 정량 수치 집합이 줄어들면 수정을 버린다.
+    before_nums = _quant_set(html)
+    after_nums = _quant_set(fixed)
+    lost = before_nums - after_nums
+    if lost:
+        logger.warning("vision fix: 수치 소실 %s — 무시", sorted(lost)[:5])
+        return html, [
+            f"비전 수정이 수치를 변경/삭제해({', '.join(sorted(lost)[:3])}) 무시했습니다 — 원본을 유지합니다."
+        ]
+
     logger.info("vision fix 적용: %d→%d chars (%+d)", len(html), len(fixed), len(fixed) - len(html))
-    if changed == 0:
-        return fixed, []
     return fixed, []

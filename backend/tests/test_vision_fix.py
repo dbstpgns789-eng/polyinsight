@@ -58,6 +58,40 @@ async def test_card_count_drop_falls_back(monkeypatch):
     assert any("카드 수" in w for w in warns)
 
 
+async def test_number_change_is_rejected(monkeypatch):
+    """★수치 불변 — 비전 수정은 표현을 고치는 단계지 사실을 바꾸는 단계가 아니다.
+
+    프롬프트로 "수치를 바꾸지 마라"고 말해도 지켜진다는 보장이 없다(실측: L4 자가검수는 5/5 무력).
+    코드가 확인한다. 레이아웃을 예쁘게 만드느라 238 MPa가 사라지면 그건 수정이 아니라 왜곡이다.
+    """
+    src = ('<div data-screen-label="01">압축강도 238 MPa</div>'
+           '<div data-screen-label="02">0.32 wt%</div>')
+
+    class _Fake:
+        async def call(self, **kw):   # 238 → 240으로 조작
+            return src.replace("238 MPa", "240 MPa")
+
+    monkeypatch.setattr(V, "LLMClient", lambda: _Fake())
+    html, warns = await apply_vision_fix(src, [b"p"])
+    assert html == src                      # 원본 유지
+    assert any("수치" in w for w in warns)
+
+
+async def test_wording_fix_is_allowed(monkeypatch):
+    """수치를 지키면서 용어를 쉽게 푸는 것은 허용 — 그게 이 단계의 목적이다."""
+    src = '<div data-screen-label="01">약 100nm 크기</div>'
+    better = '<div data-screen-label="01">약 100nm — 머리카락 굵기의 천분의 일 크기</div>'
+
+    class _Fake:
+        async def call(self, **kw):
+            return better
+
+    monkeypatch.setattr(V, "LLMClient", lambda: _Fake())
+    html, warns = await apply_vision_fix(src, [b"p"])
+    assert html == better
+    assert warns == []
+
+
 async def test_llm_failure_is_soft(monkeypatch):
     class _Fake:
         async def call(self, **kw):
