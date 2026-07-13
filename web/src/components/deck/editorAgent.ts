@@ -357,6 +357,28 @@ const AGENT_BODY = `
     }
     return false;
   }
+  // ★ 자식을 잃고 붕괴할 컨테이너(승격 대상이 아닌 = 이미 absolute/제외된 것)의 박스를 측정값으로 고정.
+  // bottom-앵커 + height:auto 컨테이너는 자식이 흐름에서 빠지면 붕괴→윗변이 하강하고, promoteAll이 붕괴
+  // 중인 offsetParent 좌표를 읽어 자식들이 압축·겹친다(크레딧 카드 마감 버그). 승격 前에 부모 박스를
+  // 못박아 붕괴를 차단 → offsetParent 안정 → 자식 픽셀 무이동. (top-앵커는 안 밀리지만 고정해도 무해.)
+  function pinCollapsingContainers(els, card) {
+    var targets = [];
+    for (var i = 0; i < els.length; i++) {
+      var a = els[i].parentElement;
+      while (a && a !== card) {
+        if (els.indexOf(a) < 0 && targets.indexOf(a) < 0) targets.push(a);
+        a = a.parentElement;
+      }
+    }
+    var rects = [];  // 먼저 전원 측정(고정이 다음 측정을 흔들지 않게)
+    for (var i = 0; i < targets.length; i++) rects.push(targets[i].getBoundingClientRect());
+    for (var i = 0; i < targets.length; i++) {
+      var t = targets[i], r = rects[i];
+      t.style.boxSizing = 'border-box';
+      t.style.width = Math.ceil(r.width) + 'px';
+      t.style.height = Math.ceil(r.height) + 'px';
+    }
+  }
   function freezeCard(card) {
     if (!card || card.getAttribute('data-pi-frozen') === '1') return;
     if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
@@ -371,6 +393,7 @@ const AGENT_BODY = `
       if (hasBareText(el.parentElement)) continue;
       els.push(el);
     }
+    pinCollapsingContainers(els, card);  // ★ 붕괴할 컨테이너 박스 고정 → 자식 겹침 방지(마감 크레딧 카드)
     promoteAll(els, card);  // 문서순 → 부모 먼저 → 자식 offsetParent 정확
     card.setAttribute('data-pi-frozen', '1');
   }
