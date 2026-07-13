@@ -53,6 +53,21 @@ def test_page_footer_does_not_launder_wrong_claim():
     assert claims[0]["suspect"] is False
 
 
+def test_source_paper_error_is_still_suspect():
+    """★원문이 틀렸어도 suspect다 — 우리 채널로 오류를 전파하지 않는다.
+
+    실측(2026-07-13): Cellulose 2024 논문 원문에 "142 → 238 MPa, an increase of approximately
+    170%"라고 쓰여 있다(저자 오기 — 실제로는 68% 증가). V1(존재 대조)은 "170이 원문에 있다"며
+    통과시킨다. V2는 카드 안 수치쌍과 검산해 **원문 저자의 산수 오류까지** 잡아야 한다.
+    (이것이 '원문 추적 가능 ≠ 참'인 유일한 지점이고, 코드 검증이 유일한 방어선이다.)
+    """
+    html = _card("<p>CON 첨가로 강도 142 → 238 MPa, 원문 표현: 약 170% 증가</p>")
+    claims = derived_claims(html, paper_text="an increase of approximately 170% (142 to 238 MPa)")
+    pct = [c for c in claims if c["kind"] == "pct_change"][0]
+    assert pct["verified"] is True      # 원문에 '170'이 실재한다(V1은 통과시킨다)
+    assert pct["suspect"] is True       # 그러나 산수는 틀렸다 — V2가 잡는다
+
+
 def test_mismatch_when_pair_exists_but_ratio_wrong():
     """실전 오류(2026-07-12 chitosan): 카드에 1.63→63.66이 있는데 '32.7배'라 씀(실제 39배).
 

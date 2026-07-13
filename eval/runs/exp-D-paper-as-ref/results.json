@@ -1,0 +1,157 @@
+[
+  {
+    "id": "microbead-cof",
+    "genre": "재료(셀룰로오스+COF 나노시트 전기분무) — 블랙박스 심사 논문",
+    "status": "DONE",
+    "job_id": "717129b1-8ed1-4f63-a3cf-01bbc37ffbe0",
+    "warnings": [],
+    "degraded": false,
+    "cards": 7,
+    "verify": {
+      "verified": 15,
+      "unverified": 3,
+      "claims": [
+        {
+          "value": "5%",
+          "context": "-> sphere -> fiber --> 점도(농도)를 높이면 → 5% 뭉개짐 10 cP 10% 완벽한 구슬 110 cP 15% 완벽한 구슬",
+          "verified": true
+        },
+        {
+          "value": "10%",
+          "context": "fiber --> 점도(농도)를 높이면 → 5% 뭉개짐 10 cP 10% 완벽한 구슬 110 cP 15% 완벽한 구슬 1960 cP 20%",
+          "verified": true
+        },
+        {
+          "value": "15%",
+          "context": "높이면 → 5% 뭉개짐 10 cP 10% 완벽한 구슬 110 cP 15% 완벽한 구슬 1960 cP 20% 실이 섞임 8160 cP cP =",
+          "verified": true
+        },
+        {
+          "value": "20%",
+          "context": "10% 완벽한 구슬 110 cP 15% 완벽한 구슬 1960 cP 20% 실이 섞임 8160 cP cP = 점도 단위. 물은 약 1, 꿀은 약",
+          "verified": true
+        },
+        {
+          "value": "10,000.",
+          "context": "실이 섞임 8160 cP cP = 점도 단위. 물은 약 1, 꿀은 약 10,000. 100~2,000 사이일 때 구슬이 가장 예쁘게 맺힌다. 농도",
+          "verified": false
+        },
+        {
+          "value": "80%",
+          "context": "사이일 때 구슬이 가장 예쁘게 맺힌다. 농도 10~15% , 습도 80% 일 때 지름 2.5μm (머리카락 두께의 약 30분의 1)짜리 동그란",
+          "verified": true
+        },
+        {
+          "value": "2.5μm",
+          "context": "가장 예쁘게 맺힌다. 농도 10~15% , 습도 80% 일 때 지름 2.5μm (머리카락 두께의 약 30분의 1)짜리 동그란 구슬이 안정적으로",
+          "verified": true
+        },
+        {
+          "value": "8시간",
+          "context": "to cellulose --> 두꺼운 COF 겹겹이 쌓인 판 초음파 8시간 벗겨내기 얇은 CON 약 100nm 나노시트 왜 붙잡는가 나노시트",
+          "verified": true
+        },
+        {
+          "value": "100nm",
+          "context": "두꺼운 COF 겹겹이 쌓인 판 초음파 8시간 벗겨내기 얇은 CON 약 100nm 나노시트 왜 붙잡는가 나노시트 표면의 아민기 가 셀룰로오스의 수산기",
+          "verified": true
+        },
+        {
+          "value": "0.32",
+          "context": "눌러도 쉽게 부서지지 않게 만든다. 놀라운 건 양이다 — 전체의 0.32wt% . 구슬 100g에 3분의 1g도 안 되는 양이다.",
+          "verified": true
+        },
+        {
+          "value": "100g",
+          "context": "않게 만든다. 놀라운 건 양이다 — 전체의 0.32wt% . 구슬 100g에 3분의 1g도 안 되는 양이다. 한국생산기술연구원 · 인하대학교",
+          "verified": true
+        },
+        {
+          "value": "1g",
+          "context": "놀라운 건 양이다 — 전체의 0.32wt% . 구슬 100g에 3분의 1g도 안 되는 양이다. 한국생산기술연구원 · 인하대학교 CON ·",
+          "verified": true
+        },
+        {
+          "value": "1.7 배",
+          "context": "MPa (깨질 때 버틴 압축강도) · 막대 길이는 실제 수치 비율 1.7 배 142 → 238 MPa 나노시트 한 꼬집으로 강도가 약 1.7배(약",
+          "verified": false
+        },
+        {
+          "value": "238 MPa",
+          "context": "버틴 압축강도) · 막대 길이는 실제 수치 비율 1.7 배 142 → 238 MPa 나노시트 한 꼬집으로 강도가 약 1.7배(약 68% 증가). 플라스틱",
+          "verified": true
+        },
+        {
+          "value": "1.7배",
+          "context": "1.7 배 142 → 238 MPa 나노시트 한 꼬집으로 강도가 약 1.7배(약 68% 증가). 플라스틱 구슬(199)마저 넘어섰다.",
+          "verified": false
+        },
+        {
+          "value": "68%",
+          "context": "142 → 238 MPa 나노시트 한 꼬집으로 강도가 약 1.7배(약 68% 증가). 플라스틱 구슬(199)마저 넘어섰다. 한국생산기술연구원 ·",
+          "verified": true
+        },
+        {
+          "value": "0.32%",
+          "context": "전기분무라는 간단한 방법으로 셀룰로오스 미세구슬을 만들고, 나노시트 0.32%로 강도를 끌어올렸다. 대부분이 셀룰로오스라 뛰어난 생분해성 은",
+          "verified": true
+        },
+        {
+          "value": "10.1007",
+          "context": "(2024) · Springer Nature DOI: 10.1007/s10570-024-05757-4 한국생산기술연구원 · 인하대학교 ©",
+          "verified": true
+        }
+      ],
+      "derived": [
+        {
+          "value": "68% 증가",
+          "kind": "pct_change",
+          "suspect": false,
+          "unresolved": false,
+          "verified": true,
+          "context": "142 → 238 MPa 나노시트 한 꼬집으로 강도가 약 1.7배(약 68% 증가). 플라스틱 구슬(199)마저 넘어섰다. 한국생산기술연구원 ·"
+        },
+        {
+          "value": "1.7 배",
+          "kind": "fold",
+          "suspect": false,
+          "unresolved": false,
+          "verified": false,
+          "context": "MPa (깨질 때 버틴 압축강도) · 막대 길이는 실제 수치 비율 1.7 배 142 → 238 MPa 나노시트 한 꼬집으로 강도가 약 1.7배(약"
+        },
+        {
+          "value": "1.7배",
+          "kind": "fold",
+          "suspect": false,
+          "unresolved": false,
+          "verified": false,
+          "context": "1.7 배 142 → 238 MPa 나노시트 한 꼬집으로 강도가 약 1.7배(약 68% 증가). 플라스틱 구슬(199)마저 넘어섰다."
+        }
+      ]
+    },
+    "judge": {
+      "scores": {
+        "hook": 3,
+        "narrative": 4,
+        "accessibility": 4,
+        "integrity": 4,
+        "finish": 2
+      },
+      "defects": {
+        "emoji": false,
+        "placeholder": false,
+        "untranslated_unit": true,
+        "derived_number_suspect": false,
+        "dead_zone": false,
+        "text_visual_mismatch": true
+      },
+      "verdict": "pause",
+      "top_problems": [
+        "카드1: 본문 캡션 두 줄이 하단 출처 텍스트와 겹쳐 읽기 불가",
+        "카드1: '구슬'을 설명하면서 실제로는 행성/나이테 같은 동심원 패턴의 큰 구體로 표현돼 본문 주장과 형상이 어긋남",
+        "카드5: 'nm' 단위가 앞서 μm처럼 쉬운 비유 없이 그대로 노출"
+      ],
+      "one_line": "스토리와 수치 정합성은 탄탄하지만 표지 카드의 텍스트 겹침과 애매한 '구슬' 비주얼이 발행 전 반드시 수정돼야 한다."
+    }
+  }
+]
