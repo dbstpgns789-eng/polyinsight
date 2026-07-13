@@ -46,16 +46,47 @@ async def test_broken_output_falls_back_to_original(monkeypatch):
     assert any("무시" in w for w in warns)
 
 
-async def test_card_count_drop_falls_back(monkeypatch):
-    """카드가 줄어들면 거부 — 수정이 카드를 삼키는 사고를 막는다."""
+async def test_only_patched_card_is_replaced(monkeypatch):
+    """★국소 패치 계약: 고친 카드만 출력 → 그 카드만 교체, 나머지는 그대로.
+
+    (전체 HTML 재출력이 최대 원가 드라이버였다 — 출력 15~18k 토큰 × $25/M.
+     실제 덱 5개로 무손실 교체를 검증하고 전환했다.)
+    """
     class _Fake:
         async def call(self, **kw):
-            return ('<html><body><div data-screen-label="01">only one</div></body></html>')
+            return '<div data-screen-label="01" style="width:1080px">A-fixed</div>'
 
     monkeypatch.setattr(V, "LLMClient", lambda: _Fake())
     html, warns = await apply_vision_fix(_HTML, [b"p1", b"p2"])
+    assert "A-fixed" in html
+    assert 'data-screen-label="02"' in html and ">B<" in html    # 손 안 댄 카드 보존
+    assert html.count("data-screen-label") == 2                  # 카드 수 불변
+    assert warns == []
+
+
+async def test_unknown_card_label_is_rejected(monkeypatch):
+    """모델이 원본에 없는 카드를 만들면 무시 — 카드를 새로 만들 권한은 없다."""
+    class _Fake:
+        async def call(self, **kw):
+            return '<div data-screen-label="09">유령 카드</div>'
+
+    monkeypatch.setattr(V, "LLMClient", lambda: _Fake())
+    html, warns = await apply_vision_fix(_HTML, [b"p1"])
     assert html == _HTML
-    assert any("카드 수" in w for w in warns)
+    assert "유령" not in html
+    assert any("09" in w for w in warns)
+
+
+async def test_no_changes_marker_converges(monkeypatch):
+    """고칠 게 없으면 NO_CHANGES → 원본 유지 + 루프 조기 종료."""
+    class _Fake:
+        async def call(self, **kw):
+            return "NO_CHANGES"
+
+    monkeypatch.setattr(V, "LLMClient", lambda: _Fake())
+    html, warns = await apply_vision_fix(_HTML, [b"p1"])
+    assert html == _HTML
+    assert warns == []
 
 
 async def test_number_change_is_rejected(monkeypatch):
@@ -64,12 +95,12 @@ async def test_number_change_is_rejected(monkeypatch):
     프롬프트로 "수치를 바꾸지 마라"고 말해도 지켜진다는 보장이 없다(실측: L4 자가검수는 5/5 무력).
     코드가 확인한다. 레이아웃을 예쁘게 만드느라 238 MPa가 사라지면 그건 수정이 아니라 왜곡이다.
     """
-    src = ('<div data-screen-label="01">압축강도 238 MPa</div>'
+    src = ('<div data-screen-label="01">압축강도 238 MPa</div>\n'
            '<div data-screen-label="02">0.32 wt%</div>')
 
     class _Fake:
-        async def call(self, **kw):   # 238 → 240으로 조작
-            return src.replace("238 MPa", "240 MPa")
+        async def call(self, **kw):   # 카드 01만 출력하되 238 → 240으로 조작
+            return '<div data-screen-label="01">압축강도 240 MPa</div>'
 
     monkeypatch.setattr(V, "LLMClient", lambda: _Fake())
     html, warns = await apply_vision_fix(src, [b"p"])
