@@ -128,17 +128,23 @@ def trim_source(text: str, limit: int) -> tuple[str, int]:
         logger.info("source_trim: 참고문헌 이후 %d자 제거 (%d → %d)",
                     original - len(body), original, len(body))
 
-    # ★참고문헌을 빼도 상한을 넘으면(리뷰 논문·학위논문): **앞에서 자르지 않는다.**
-    #   논문의 중요도는 균등하지 않다 —
-    #     앞: Abstract·Introduction (필수. 무엇을 왜 했는가)
-    #     중: Methods 상세·Related Work (덜 중요. 카드뉴스에 상세 공정은 안 들어간다)
-    #     뒤: Results·Discussion·Conclusion (★핵심. 무엇을 알아냈는가)
+    # ★★자르는 것은 **최후 수단**이다 — 정보를 버리는 짓이다.
+    #   상한(MAX_SOURCE_CHARS=180,000자)은 Opus 컨텍스트의 61%라, 사실상 모든 논문이 통째로 들어간다.
+    #   여기 도달하는 건 학위논문·단행본 수준뿐이다.
+    #
+    #   그때도 **앞에서 자르지 않는다**. 논문의 중요도는 균등하지 않다:
+    #     앞: Abstract·Introduction   (무엇을 왜 했는가)
+    #     중: Methods 상세·Related Work
+    #     뒤: Results·Discussion·Conclusion  (★무엇을 알아냈는가)
     #   앞에서부터 자르면 **가장 중요한 결론부터 버린다**(실측: chitosan에서 175자 차이로 결론 유실).
-    #   그래서 앞머리와 꼬리를 남기고 **중간을 생략**한다.
+    #
+    #   ⚠️ 단 중간 생략도 손실이다 — Methods의 실험 조건(12.5kV·0.32wt%)이 거기 있고,
+    #      우리 카드가 그 수치를 쓴다. 그래서 이 경로는 **최대한 안 타는 게 목표**다.
     if len(body) > limit:
         head = int(limit * HEAD_RATIO)
         tail = limit - head - len(ELLIPSIS)
         body = body[:head] + ELLIPSIS + body[-tail:]
-        logger.info("source_trim: 상한 초과 — 앞 %d자 + 뒤 %d자 보존, 중간 생략", head, tail)
+        logger.warning("source_trim: 상한(%d자) 초과 — 중간 생략(앞 %d + 뒤 %d). "
+                       "실험 조건이 중간에 있으면 유실될 수 있다.", limit, head, tail)
 
     return body, original - len(body)

@@ -196,8 +196,9 @@ async def _execute(
     _source, _ = trim_source(s1_out.raw_text, MAX_SOURCE_CHARS)
     if "중략" in _source:
         warnings.append(
-            f"SOURCE_TRUNCATED: 원문이 길어({len(s1_out.raw_text):,}자) 본문 중간부를 생략했습니다 "
-            f"— 앞머리(연구 배경)와 뒷부분(결과·결론)은 모두 저작에 사용했습니다."
+            f"SOURCE_TRUNCATED: 원문이 매우 길어({len(s1_out.raw_text):,}자) 본문 중간부를 생략했습니다. "
+            f"연구 배경과 결과·결론은 모두 반영했지만, **중간부(실험 조건 등)의 일부 수치가 "
+            f"덱에 빠졌을 수 있습니다.** 카드의 수치를 원문과 대조해 확인해 주세요."
         )
 
     try:
