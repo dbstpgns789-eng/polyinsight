@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # 텍스트 자가검수는 무력하다는 실측(5편 전부 '전항 통과' 신고 vs 저지는 5편 전부 결함) 대응.
     # 시각 결함(빈 공간·겹침·형상 오독)은 렌더를 봐야만 잡힌다.
     AUTHOR_VISION_FIX: bool = True
+    # ★2 이상이어야 '루프'다. 1패스면 **수정이 만든 새 결함**을 아무도 못 본다
+    # (실측 2026-07-13: 용어 앵커로 텍스트가 길어지자 제목과 수치가 겹침 — finish 4→1).
+    # 변경 없이 수렴하면 조기 종료하므로 대개 2콜을 다 쓰지 않는다.
+    AUTHOR_VISION_ROUNDS: int = 2
     PLAYWRIGHT_TIMEOUT_MS: int = 15000
     WEB_BASE_URL: str = "http://localhost:3000"  # S7 render 라우트 호스트 (Next.js)
     EXPORT_TTL_HOURS: int = 24

@@ -206,14 +206,22 @@ async def _execute(
     # ── POLISH: 비전 자기수정 — 모델이 자기 카드의 렌더를 처음으로 '본다' ──
     # 텍스트 자가검수는 무력하다(실측: 5편 전부 '전항 통과' 신고 vs 저지는 5편 전부 결함 발견).
     # 빈 공간·겹침·형상 오독은 렌더를 봐야만 잡힌다. 실패는 소프트 — 원본 유지.
+    # ★루프여야 한다(1패스가 아니라). 실측: 접근성 수정으로 텍스트를 늘리자 제목과 수치가
+    #   겹쳐 finish 4→1. **수정이 만든 새 결함을 아무도 못 봤다** — 수정 후 렌더를 다시 봐야 한다.
     if settings.AUTHOR_VISION_FIX and not settings.DEV_MOCK_LLM:
         try:
-            await db.update_job(job_id, status=JobStatus.RUNNING, stage="POLISH", progress=60)
-            draft_pngs, _ = await render_deck(html)      # job_id 없이 = 저장하지 않는 임시 렌더
-            html, fix_warns = await apply_vision_fix(html, draft_pngs)
-            warnings.extend(fix_warns)
+            for rnd in range(1, settings.AUTHOR_VISION_ROUNDS + 1):
+                await db.update_job(job_id, status=JobStatus.RUNNING, stage="POLISH",
+                                    progress=55 + rnd * 5)
+                draft_pngs, _ = await render_deck(html)   # job_id 없이 = 저장하지 않는 임시 렌더
+                fixed, fix_warns = await apply_vision_fix(html, draft_pngs, round_no=rnd)
+                warnings.extend(fix_warns)
+                if fixed == html:                         # 고칠 게 없다 → 수렴, 조기 종료
+                    logger.info("POLISH round %d: 변경 없음 — 수렴", rnd)
+                    break
+                html = fixed
         except Exception as exc:
-            logger.warning("POLISH 단계 실패(%s) — 저작 원본으로 계속", exc)
+            logger.warning("POLISH 단계 실패(%s) — 직전 HTML로 계속", exc)
             warnings.append(f"비전 수정 단계를 건너뛰었습니다 ({type(exc).__name__}).")
 
     # ── V: 충실성 검증 (V1 존재 대조 + V2 파생수치 산수) ───────────────────

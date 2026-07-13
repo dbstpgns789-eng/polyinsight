@@ -92,6 +92,25 @@ async def test_wording_fix_is_allowed(monkeypatch):
     assert warns == []
 
 
+async def test_round2_prompt_tells_model_it_is_reviewing_own_fix(monkeypatch):
+    """2라운드는 '당신이 방금 수정한 결과'임을 알려야 한다 — 수정이 만든 새 결함을 잡기 위해.
+
+    실측(2026-07-13): 1패스만 돌리자 접근성 수정으로 텍스트가 길어져 제목과 수치가 겹쳤다
+    (finish 4→1). 수정 후 렌더를 다시 보지 않으면 루프가 아니라 그냥 1패스다.
+    """
+    seen = {}
+
+    class _Fake:
+        async def call(self, **kw):
+            seen["prompt"] = kw["user_prompt"]
+            return _HTML
+
+    monkeypatch.setattr(V, "LLMClient", lambda: _Fake())
+    await apply_vision_fix(_HTML, [b"p"], round_no=2)
+    assert "방금 수정한 결과" in seen["prompt"]
+    assert "억지로 더 고치지 마라" in seen["prompt"]
+
+
 async def test_llm_failure_is_soft(monkeypatch):
     class _Fake:
         async def call(self, **kw):
