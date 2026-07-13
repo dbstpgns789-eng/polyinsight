@@ -1,0 +1,120 @@
+[
+  {
+    "id": "microbead-cof",
+    "genre": "재료(셀룰로오스+COF 나노시트 전기분무) — 블랙박스 심사 논문",
+    "status": "DONE",
+    "job_id": "442f56f2-b216-4c17-9ee0-54c4be4c2228",
+    "warnings": [],
+    "degraded": false,
+    "cards": 7,
+    "verify": {
+      "verified": 8,
+      "unverified": 1,
+      "claims": [
+        {
+          "value": "12.5kV",
+          "context": "ELECTROSPRAY → SPHERE → DEACETYLATION 12.5kV로 뿌린다 CA 10wt% 용액 2.5μm 구슬 머리카락의 1/30",
+          "verified": true
+        },
+        {
+          "value": "2.5μm",
+          "context": "DEACETYLATION 12.5kV로 뿌린다 CA 10wt% 용액 2.5μm 구슬 머리카락의 1/30 크기 셀룰로오스로 NaOH에 담가 되돌림",
+          "verified": true
+        },
+        {
+          "value": "100nm",
+          "context": "꼬집의 아이디어 가 등장한다. CON · 공유결합 유기 나노시트 약 100nm 얇은 판 트리아진 골격의 나노시트. 풍부한 아민기 가 셀룰로오스의",
+          "verified": true
+        },
+        {
+          "value": "0.32",
+          "context": "속을 촘촘히 붙잡는 보강재(필러) 로 작동한다. 넣은 양은 전체의 단 0.32wt% — 무게로 치면 거의 한 꼬집. KITECH 05 / 07",
+          "verified": true
+        },
+        {
+          "value": "238MPa",
+          "context": "+ 나노시트 (이 연구) 238 ±18 나노시트를 더하니 142→238MPa , 약 1.7배(67% 증가). 플라스틱(199)마저 넘어섰다. *",
+          "verified": true
+        },
+        {
+          "value": "1.7배",
+          "context": "연구) 238 ±18 나노시트를 더하니 142→238MPa , 약 1.7배(67% 증가). 플라스틱(199)마저 넘어섰다. * 논문 본문 표현:",
+          "verified": false
+        },
+        {
+          "value": "67%",
+          "context": "238 ±18 나노시트를 더하니 142→238MPa , 약 1.7배(67% 증가). 플라스틱(199)마저 넘어섰다. * 논문 본문 표현: \"약",
+          "verified": true
+        },
+        {
+          "value": "170%",
+          "context": "증가). 플라스틱(199)마저 넘어섰다. * 논문 본문 표현: \"약 170% 증가\" — 근거 수치 142→238를 함께 표기함 KITECH 06",
+          "verified": true
+        },
+        {
+          "value": "10.1007",
+          "context": "한국생산기술연구원 융합기술연구소 · 인하대학교 화학화학공학과 DOI 10.1007/s10570-024-05757-4 · © 2024 Springer",
+          "verified": true
+        }
+      ],
+      "derived": [
+        {
+          "value": "67% 증가",
+          "kind": "pct_change",
+          "suspect": false,
+          "unresolved": false,
+          "verified": true,
+          "context": "238 ±18 나노시트를 더하니 142→238MPa , 약 1.7배(67% 증가). 플라스틱(199)마저 넘어섰다. * 논문 본문 표현: \"약"
+        },
+        {
+          "value": "170% 증가",
+          "kind": "pct_change",
+          "suspect": true,
+          "unresolved": false,
+          "verified": true,
+          "context": "증가). 플라스틱(199)마저 넘어섰다. * 논문 본문 표현: \"약 170% 증가\" — 근거 수치 142→238를 함께 표기함"
+        },
+        {
+          "value": "1.7배",
+          "kind": "fold",
+          "suspect": false,
+          "unresolved": false,
+          "verified": false,
+          "context": "연구) 238 ±18 나노시트를 더하니 142→238MPa , 약 1.7배(67% 증가). 플라스틱(199)마저 넘어섰다. * 논문 본문 표현:"
+        },
+        {
+          "value": "1.7배",
+          "kind": "fold",
+          "suspect": true,
+          "unresolved": false,
+          "verified": false,
+          "context": "— 그래서 뛰어난 생분해성은 그대로 유지된다. 한 꼬집이 강도를 1.7배 로 — 거의 공짜로 얻은 힘. (function(){ var"
+        }
+      ]
+    },
+    "judge": {
+      "scores": {
+        "hook": 4,
+        "narrative": 4,
+        "accessibility": 3,
+        "integrity": 2,
+        "finish": 3
+      },
+      "defects": {
+        "emoji": false,
+        "placeholder": false,
+        "untranslated_unit": true,
+        "derived_number_suspect": true,
+        "dead_zone": true,
+        "text_visual_mismatch": false
+      },
+      "verdict": "pause",
+      "top_problems": [
+        "카드5: '67%(1.7배)'로 강조해놓고 각주에 논문 원문 '170% 증가'를 병기해 숫자가 서로 모순돼 보임",
+        "카드4: '트리아진 골격', '공유결합 유기 나노시트', 'NaOH' 등 비전공자용 앵커 없이 전문용어 나열",
+        "카드3·5: 제목-부제 이후 하단 카드까지 세로 공백이 커서 시선이 늘어짐(카드5는 그래프 이후 여백이 특히 큼)"
+      ],
+      "one_line": "구슬 서사 자체는 매끄럽지만 핵심 수치(67% vs 170%)가 스스로 충돌하고 화학 전문용어가 설명 없이 튀어나와 그대로 올리기엔 위험하다."
+    }
+  }
+]

@@ -1,0 +1,104 @@
+[
+  {
+    "id": "microbead-cof",
+    "genre": "재료(셀룰로오스+COF 나노시트 전기분무) — 블랙박스 심사 논문",
+    "status": "DONE",
+    "job_id": "b1f49ed9-0dd6-4bcf-871e-2b5a5b201108",
+    "warnings": [],
+    "degraded": false,
+    "cards": 7,
+    "verify": {
+      "verified": 8,
+      "unverified": 1,
+      "claims": [
+        {
+          "value": "100nm",
+          "context": "알갱이'는 대부분 폴리에틸렌·폴리프로필렌 같은 석유계 플라스틱입니다. 100nm~5mm 크기라 하수 처리로 걸러지지 않고, 그대로 강과 바다로",
+          "verified": true
+        },
+        {
+          "value": "5mm",
+          "context": "대부분 폴리에틸렌·폴리프로필렌 같은 석유계 플라스틱입니다. 100nm~5mm 크기라 하수 처리로 걸러지지 않고, 그대로 강과 바다로 흘러갑니다.",
+          "verified": true
+        },
+        {
+          "value": "0.32%",
+          "context": "THE REINFORCEMENT 머리카락 5백분의 1 두께, 단 0.32%의 보강판 약한 셀룰로오스를 어떻게 단단하게? 연구팀은 트리아진 기반",
+          "verified": true
+        },
+        {
+          "value": "142 MPa",
+          "context": "수소결합으로 손을 맞잡아, 구슬을 안에서 붙들어 줍니다. 보강판 없음 142 MPa 쉽게 부서짐 나노시트 보강 238 MPa 서로 붙잡아 버팀",
+          "verified": true
+        },
+        {
+          "value": "238 MPa",
+          "context": "붙들어 줍니다. 보강판 없음 142 MPa 쉽게 부서짐 나노시트 보강 238 MPa 서로 붙잡아 버팀 한국생산기술연구원 · 인하대학교 05 / 07",
+          "verified": true
+        },
+        {
+          "value": "1.7배",
+          "context": "기존 플라스틱 238 나노시트 셀룰로오스 이번 연구 보강 전 대비 약 1.7배 (142→238 MPa, 약 68% 증가) . 단위 MPa =",
+          "verified": false
+        },
+        {
+          "value": "68%",
+          "context": "이번 연구 보강 전 대비 약 1.7배 (142→238 MPa, 약 68% 증가) . 단위 MPa = 메가파스칼, 눌러 부수는 데 버티는 힘.",
+          "verified": true
+        },
+        {
+          "value": "2.5μm",
+          "context": "플라스틱만큼 단단하게 전기분사로 만든 셀룰로오스 마이크로비드(약 2.5μm)에 나노시트를 0.32% 더해, 석유계 플라스틱을 대체할 친환경",
+          "verified": true
+        },
+        {
+          "value": "10.1007",
+          "context": "한국생산기술연구원 융합기술연구소 · 인하대학교 화학화학공학과 DOI 10.1007/s10570-024-05757-4 · 지원 NRF · KITECH",
+          "verified": true
+        }
+      ],
+      "derived": [
+        {
+          "value": "68% 증가",
+          "kind": "pct_change",
+          "suspect": false,
+          "unresolved": false,
+          "verified": true,
+          "context": "이번 연구 보강 전 대비 약 1.7배 (142→238 MPa, 약 68% 증가) . 단위 MPa = 메가파스칼, 눌러 부수는 데 버티는 힘. 값이"
+        },
+        {
+          "value": "1.7배",
+          "kind": "fold",
+          "suspect": false,
+          "unresolved": false,
+          "verified": false,
+          "context": "기존 플라스틱 238 나노시트 셀룰로오스 이번 연구 보강 전 대비 약 1.7배 (142→238 MPa, 약 68% 증가) . 단위 MPa ="
+        }
+      ]
+    },
+    "judge": {
+      "scores": {
+        "hook": 4,
+        "narrative": 4,
+        "accessibility": 3,
+        "integrity": 4,
+        "finish": 1
+      },
+      "defects": {
+        "emoji": false,
+        "placeholder": false,
+        "untranslated_unit": true,
+        "derived_number_suspect": false,
+        "dead_zone": false,
+        "text_visual_mismatch": false
+      },
+      "verdict": "pause",
+      "top_problems": [
+        "카드6: 제목 '이겼다' 뒤에 수치 '238'이 겹쳐 찍혀 마감이 깨짐(즉시 리젝 사유)",
+        "카드5에서 MPa 단위가 설명 없이 먼저 등장하고, 정작 설명은 카드6 각주에 뒤늦게 나옴(순서 오류)",
+        "카드2·3·5 공통으로 헤더와 콘텐츠 박스 사이 여백이 과도해 리듬이 끊김"
+      ],
+      "one_line": "서사와 수치 정합성은 준수하지만 카드6 제목·수치 겹침이 발행 불가 수준의 마감 결함이라 손봐야 올릴 수 있음."
+    }
+  }
+]
