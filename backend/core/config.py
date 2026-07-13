@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     AUTHOR_FEWSHOT_N: int = 0
     # 저작 시 모델에게 보여줄 '이 논문의 그림' 수(비전 입력). 0이면 끔.
     AUTHOR_FIGURES_N: int = 3
+    # POLISH: 렌더된 카드를 모델에게 보여주고 시각 결함을 고치게 한다(+1 LLM 콜, 덱당 ~$0.5).
+    # 텍스트 자가검수는 무력하다는 실측(5편 전부 '전항 통과' 신고 vs 저지는 5편 전부 결함) 대응.
+    # 시각 결함(빈 공간·겹침·형상 오독)은 렌더를 봐야만 잡힌다.
+    AUTHOR_VISION_FIX: bool = True
     PLAYWRIGHT_TIMEOUT_MS: int = 15000
     WEB_BASE_URL: str = "http://localhost:3000"  # S7 render 라우트 호스트 (Next.js)
     EXPORT_TTL_HOURS: int = 24
