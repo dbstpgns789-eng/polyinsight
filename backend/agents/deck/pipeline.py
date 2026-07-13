@@ -14,7 +14,7 @@ import time
 from ...core import db
 from ...core.config import settings
 from ...core.fidelity import derived_claims, verify_deck
-from ...core.llm_client import get_usage, start_usage_capture
+from ...core.llm_client import LLMCreditError, get_usage, start_usage_capture
 from ...core.models import JobStatus, S1Input
 from ..s1_extractor import s1_agent
 from ...scripts.deck_judge import judge_pngs
@@ -234,6 +234,13 @@ async def _execute(
 
         if not html or "data-screen-label" not in html:
             raise ValueError("저작 결과에 카드(data-screen-label)가 없습니다")
+    except LLMCreditError as exc:
+        # 크레딧 소진 — 유저 잘못이 아니다. 영문 스택트레이스 대신 사람 말로.
+        logger.error("deck AUTHOR: 크레딧 소진")
+        await db.update_job(job_id, status=JobStatus.ERROR, stage="AUTHOR", progress=40,
+                            warnings=warnings + [str(exc)])
+        await _log_done(job_id, user_id, started, card_count)
+        return
     except Exception as exc:
         logger.error("deck AUTHOR fatal: %s", exc)
         await db.update_job(job_id, status=JobStatus.ERROR, stage="AUTHOR", progress=40,

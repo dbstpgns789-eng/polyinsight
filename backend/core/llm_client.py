@@ -59,6 +59,35 @@ class LLMAPIError(Exception):
         self.status_code = status_code
 
 
+class LLMCreditError(LLMAPIError):
+    """API 크레딧 소진 — **유저 잘못이 아니라 운영자가 고칠 문제**다.
+
+    실전(2026-07-13): 크레딧이 떨어지자 유저 화면에 이게 떴다 —
+      "Error code: 400 - {'type': 'invalid_request_error', 'message': 'Your credit balance
+       is too low to access the Anthropic API. Please go to Plans & Billing...'}"
+    박사님이 첫 논문을 올렸는데 이걸 보면 안 된다. 운영자가 고칠 문제를 유저 탓처럼 보이게 하는 건
+    최악의 에러 메시지다.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "지금은 카드뉴스를 만들 수 없습니다 — AI 사용량이 한도에 도달했습니다. "
+            "운영자가 곧 복구합니다. 잠시 후 다시 시도해 주세요.",
+            status_code=402,
+        )
+
+
+_CREDIT_MARKERS = ("credit balance is too low", "insufficient credit", "billing")
+
+
+def classify_api_error(msg: str, status_code: int | None = None) -> LLMAPIError:
+    """API 에러 문자열 → 적절한 예외. 크레딧 소진은 유저에게 사람 말로 전한다."""
+    low = (msg or "").lower()
+    if any(m in low for m in _CREDIT_MARKERS):
+        return LLMCreditError()
+    return LLMAPIError(msg, status_code)
+
+
 class LLMTruncationError(Exception):
     """출력이 max_tokens 천장에서 잘림. 동일 입력·저온이면 재시도해도 같은 결과이므로
     호출자는 재시도하지 말고 입력(예: 카드 수)을 줄여야 한다."""
@@ -146,7 +175,8 @@ class LLMClient:
         except asyncio.TimeoutError as exc:
             raise LLMAPIError("timeout") from exc
         except anthropic.APIError as exc:
-            raise LLMAPIError(str(exc), status_code=getattr(exc, "status_code", None)) from exc
+            # 크레딧 소진은 유저 잘못이 아니다 — 영문 원문 대신 사람 말로 전한다.
+            raise classify_api_error(str(exc), getattr(exc, "status_code", None)) from exc
 
         # Fable 5 등 thinking-on 모델은 thinking 블록이 앞에 올 수 있어 content[0]이 text가 아닐 수 있다.
         text = next((b.text for b in message.content if getattr(b, "type", None) == "text"), "")
