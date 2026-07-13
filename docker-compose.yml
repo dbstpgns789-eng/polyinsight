@@ -10,11 +10,13 @@ services:
     environment:
       - WEB_BASE_URL=http://web:3000          # S7 Playwright가 방문할 렌더 라우트
       - DATABASE_URL=sqlite:////data/polyinsight.db
+      - STORAGE_DIR=/data/blobstore           # L1(C3): 파일저장(카드PNG·export·유저자산)을 영속 볼륨에. 안 걸면 재배포 시 증발
     volumes:
       - polyinsight-data:/data
     expose:
       - "8000"
     restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }   # 로그 무한증식→디스크풀 방지
 
   web:
     build:
@@ -29,6 +31,7 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -38,6 +41,7 @@ services:
     depends_on:
       - web
     restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
 
 volumes:
   polyinsight-data:
