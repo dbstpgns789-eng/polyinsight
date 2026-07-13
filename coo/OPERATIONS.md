@@ -5,6 +5,8 @@
 > 출처: 6축 운영 진단 워크플로(13 에이전트) — 실제 스택(`docker-compose.yml`·`backend/Dockerfile`·`backup_db.py`·`config.py`·`main.py`) file:line 근거. 상위: `docs/contracts/24_system_architecture.md`(아키텍처), `docs/superpowers/plans/2026-07-09-candidates-risk-register-and-roadmap.md`(위험대장).
 > **관리 규칙**: 인프라·설정 바꿀 때마다 이 문서 갱신. 아래 §11 열린 결정은 정하는 대로 이 문서에 박는다.
 
+> 🔄 **2026-07-13 앞문 교체 — cloudflared 터널 → Caddy 리버스 프록시.** 공개 URL = **https://polyinsight.japaneast.cloudapp.azure.com**(Azure 공용 IP의 무료 DNS 호스트네임, 도메인 구매 없음). Caddy(image `caddy:2`)가 인바운드 **80·443**을 VM에서 직접 듣고 Let's Encrypt로 HTTPS를 자동 종단해 `web:3000`으로 프록시한다(설정=`deploy/Caddyfile` = `{$SITE_ADDRESS} { reverse_proxy web:3000 }`, `docker-compose.yml:37-51`). `TUNNEL_TOKEN` 폐기, `SITE_ADDRESS=polyinsight.japaneast.cloudapp.azure.com` 신규(caddy 필수). **보안 서사 변경**: NSG 인바운드 **22·80·443** 개방, VM 공용 IP(20.210.112.15) 인터넷에 직접 노출 — 옛 "웹 포트 0개·공격표면 SSH만·IP 은닉·Cloudflare DDoS 방어"는 **더 이상 참이 아님**. backend·web은 여전히 `expose`만이라 외부에서 닿는 건 Caddy(80/443)와 SSH(22)뿐. 아래 본문은 이 사실로 갱신됨.
+
 ---
 
 ## 0. 이 문서 쓰는 법 (제일 먼저)
@@ -17,7 +19,7 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
 - **돈 걱정** → §5(비용).
 - **박사님한테 넘기기 전 체크** → §1 + §10(보완 필요) + §11(네가 정할 것).
 
-**우리 구조 한 줄**: Azure VM 한 대에 도커 컨테이너 3개(backend·web·cloudflared)가 돈다. 앞문은 Cloudflare 터널이라 **VM에 웹 포트를 하나도 안 연다**(공격 표면 = SSH 22 하나). 데이터는 `/data` 볼륨(SQLite + 파일). LLM(Opus)이 유일한 진짜 변동비.
+**우리 구조 한 줄**: Azure VM 한 대에 도커 컨테이너 3개(backend·web·caddy)가 돈다. 앞문은 **Caddy 리버스 프록시**라 VM이 인바운드 **80·443**을 직접 듣고 Let's Encrypt로 HTTPS를 종단해 `web:3000`으로 넘긴다. 공격 표면 = SSH 22 + 웹 80/443이고 **VM 공용 IP(20.210.112.15)가 인터넷에 직접 노출**된다(Cloudflare 은닉·DDoS 방어 없음). backend·web은 `expose`만이라 외부에서 직접 닿진 못한다. 데이터는 `/data` 볼륨(SQLite + 파일). LLM(Opus)이 유일한 진짜 변동비.
 
 ---
 
@@ -28,9 +30,9 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
 - [ ] **1) STORAGE_DIR 볼륨 픽스 (C3 — 최우선)**. 지금 `docker-compose.yml`은 `/data`(SQLite)만 볼륨에 걸고, 파일저장(`STORAGE_DIR` 기본 `backend/var/blobstore`)은 컨테이너 임시 레이어에 떨어진다 → **재배포 한 번에 카드·유저 업로드 자산 전량 증발.** compose backend `environment`에 `STORAGE_DIR=/data/blobstore` 추가 → `docker compose down && up -d` 후 자산 살아남는지 웹에서 눈으로 확인. **모든 배포·백업의 선행조건.** (상세 §6)
 - [ ] **2) 두 '돈 짐승'에 자동 상한·경보**. ⓐ Anthropic 콘솔에 **월 하드 스펜드캡 + 청구 경보**(오픈 가입발 변동비 폭탄 차단 — 유일한 자동 방어), ⓑ Azure 예산 **약 $80 + 50/80/100% 이메일 경보**(크레딧 소진 감시 = Oracle 이사 트리거). (상세 §5)
 - [ ] **3) 자동 백업 cron 등록 + 복원 리허설 1회**. DB + L1 자산을 `/data/backups`(영속 볼륨)로 매일, 그 백업을 실제로 복원해 뜨는지 확인. **검증 안 된 백업은 백업 아님.** (상세 §8)
-- [ ] **4) 앞문 잠그기**. SSH 키 로그인만(비번 off) + NSG 22를 **내 IP만** + fail2ban. `.env`의 `PUBLIC_BASE_URL`·`ALLOWED_ORIGINS`를 **반드시 https 터널 도메인**으로 → prod 게이트 켜짐(둘 다 http면 공개 https 위에서 개발모드로 조용히 뜨는 함정). (상세 §4)
+- [ ] **4) 앞문 잠그기**. SSH 키 로그인만(비번 off) + NSG 22를 **내 IP만**(80·443은 Caddy의 Let's Encrypt 검증·서비스용이라 전체 개방 유지) + fail2ban. `.env`의 `PUBLIC_BASE_URL`·`ALLOWED_ORIGINS`를 **반드시 https 공개 도메인**(`https://polyinsight.japaneast.cloudapp.azure.com`)으로 → prod 게이트 켜짐(둘 다 http면 공개 https 위에서 개발모드로 조용히 뜨는 함정). (상세 §4)
 - [ ] **5) 이메일 (로그인은 안 막힘 — 오해 정정)**. 가입은 **이메일 인증 없이** 바로 됨(자동로그인→대시보드, grace 모드 비차단 — `auth.py:168`). 미인증의 실제 영향은 딱 2개: ⓐ **하루 업로드 3개 상한**(인증 시 20 — `ratelimit.py:76`), ⓑ 비번 분실 시 **자가 재설정 불가**(재설정 메일이 테스트모드라 안 감). → 파일럿엔 그냥 가입해 써도 되고(하루 3개), 상한 풀거나 비번사고 대비하려면 `seed_user`로 인증. 외부 정식 공개 때만 도메인 DKIM. (상세 §10-1)
-- [ ] **6) 외부 업타임 모니터**. UptimeRobot 등으로 터널 URL 핑 → 이메일/푸시 경보. 단일 프로세스라 밤에 조용히 죽어도 아무도 모른다. (상세 §7)
+- [ ] **6) 외부 업타임 모니터**. UptimeRobot 등으로 공개 URL 핑 → 이메일/푸시 경보. 단일 프로세스라 밤에 조용히 죽어도 아무도 모른다. (상세 §7)
 
 ---
 
@@ -49,7 +51,7 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
 
 | 증상 | 먼저 볼 것 | 상세 |
 |---|---|---|
-| **앱 접속 안 됨** | `docker compose ps` → 죽은 컨테이너 `logs` → 터널 죽었나(cloudflared 로그) → `df -h`(디스크풀?) → 메모리(Chromium OOM?) | §7 |
+| **앱 접속 안 됨** | `docker compose ps` → 죽은 컨테이너 `logs` → 앞문/HTTPS 문제인가(`docker compose logs caddy` — 인증서·ACME) → `df -h`(디스크풀?) → 메모리(Chromium OOM?) | §7 |
 | **덱 생성이 자꾸 실패/멈춤** | backend logs서 ERR-S1/S6/AUTHOR/RENDER · Chromium OOM(`MAX_CONCURRENT_JOBS` 낮춰) · **재배포/재시작 중이었나**(recover_stale_jobs가 진행 잡 몰살) | §7 |
 | **Anthropic 청구 급증** | 콘솔 사용량 확인 → 키 유출 의심 시 즉시 revoke·교체 → 업로드 쿼터 낮추기(`UPLOAD_USER_LIMIT`) | §4-C, §5 |
 | **데이터 날아감/복구 필요** | 최신 백업 찾기 → DB 복원 + assets tar **같은 시점 쌍**으로 → WAL/SHM 삭제 → 기동 → 로그인 확인 | §8 |
@@ -64,7 +66,7 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
 ## 4. 보안
 
 > 독자: DevOps에 약한 1인 운영자. "무엇을·언제·터지면 뭐"까지 그대로 따라 하면 되게 썼다.
-> 우리 구조의 핵심 이점 한 줄: **cloudflared 터널이라 VM에 웹 포트를 하나도 안 연다.** 터널이 `web:3000` 한 곳으로만 트래픽을 넣고(`docker-compose.yml:3,33-40`), backend는 compose 내부망에서만 보인다(`expose`만, 호스트 포트 없음 — `docker-compose.yml:15-16,27-28`). 외부 공격 표면 = **SSH(22) 하나**. 이걸 안 망치면 절반은 안전하다.
+> 우리 구조의 핵심 사실 한 줄: **앞문은 Caddy 리버스 프록시**다. Caddy가 VM에서 인바운드 **80·443**을 직접 듣고 Let's Encrypt로 HTTPS를 종단해 `web:3000`으로만 프록시한다(`docker-compose.yml:37-51`). backend·web은 여전히 compose 내부망에서만 보인다(`expose`만, 호스트 포트 없음 — backend `docker-compose.yml:17-18`, web `30-31`). 외부 공격 표면 = **SSH(22) + 웹(80/443)**, 그리고 **VM 공용 IP(20.210.112.15)가 직접 노출**된다(Cloudflare 은닉·DDoS 방어 없음 — 인터넷 봇이 IP를 스캔한다). 이 세 포트를 안 망치는 게 절반이다.
 
 ---
 
@@ -72,12 +74,12 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
 
 | 무엇 | 어디 | 현실 |
 |---|---|---|
-| 앞문 | cloudflared 터널 → `web:3000` | VM이 Cloudflare로 **나가는** 연결만 맺음. 인바운드 80/443/3000/8000 개방 **불필요**. VM 공인 IP 은닉 |
-| TLS | Cloudflare 엣지 | HTTPS 종단이 Cloudflare. VM엔 인증서·nginx·certbot **설치 안 함** |
-| 시크릿 | `.env` (VM 디스크, `env_file`로 주입 — `docker-compose.yml:9`) | `ANTHROPIC_API_KEY`(=진짜 돈), `TUNNEL_TOKEN`, `RESEND_API_KEY`, `RENDER_TOKEN`, `GOOGLE_CLIENT_SECRET` |
+| 앞문 | Caddy(`caddy:2`) → `web:3000` (`docker-compose.yml:37-51`) | Caddy가 인바운드 **80·443**을 직접 수신. VM 공용 IP(20.210.112.15) **직접 노출**(Let's Encrypt가 이 IP로 도메인 검증, 봇이 스캔). Cloudflare 은닉·DDoS 방어 **없음** |
+| TLS | Caddy(Let's Encrypt 자동) | HTTPS 종단이 VM 안의 Caddy 컨테이너. 인증서 자동 발급·갱신, `caddy-data` 볼륨에 영속(`docker-compose.yml:46`). 호스트에 nginx/certbot **설치 안 함** |
+| 시크릿 | `.env` (VM 디스크, `env_file`로 주입 — `docker-compose.yml:10`) | `ANTHROPIC_API_KEY`(=진짜 돈), `RESEND_API_KEY`, `RENDER_TOKEN`, `GOOGLE_CLIENT_SECRET`. (`SITE_ADDRESS`는 시크릿 아님 — 공개 FQDN. `TUNNEL_TOKEN`은 폐기) |
 | 앱 게이트 | `main.py:33-46` `_validate_prod_config` | 오리진에 `https://`가 보이면 `COOKIE_SECURE`·`PUBLIC_BASE_URL`·`RENDER_TOKEN` 없을 때 **기동 실패(crash)** — 의도된 방어 |
 | 세션 | DB 저장 + 해시 | 별도 "세션 시크릿" 환경변수 **없음**. 토큰은 DB에 해시로. 만료 `SESSION_TTL_HOURS=72`(`config.py:39`) |
-| 유일한 열린 포트 | SSH 22 | 여기만 지키면 됨. 키 로그인 + 내 IP만 + fail2ban |
+| 열린 포트 | SSH 22 + 웹 80·443 | 22는 키 로그인 + 내 IP만 + fail2ban. 80·443은 Caddy 앞문이라 전체 개방 유지(Let's Encrypt 검증에 필요) |
 
 ---
 
@@ -110,8 +112,9 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
   ⚠️ 재시작 전에 **새 터미널로 키 로그인 되는지 먼저 확인** — 안 그러면 나를 잠근다.
 - [ ] **Azure NSG(네트워크 보안 그룹)** 인바운드 규칙:
   - [ ] 22(SSH)는 **내 집/사무실 IP만**(Source = My IP address). 전체(0.0.0.0/0) 금지.
-  - [ ] 80/443/3000/8000은 **규칙 추가 안 함.** cloudflared가 아웃바운드로 나가므로 인바운드 개방 불필요. 열면 VM IP 노출 + 터널 우회 허용.
-  - [ ] 확인: Azure Portal → VM → Networking → 인바운드에 22(+ 기본 Deny)만.
+  - [ ] **80·443은 전체(0.0.0.0/0) 개방** — Caddy 앞문이 여기로 트래픽을 받고, Let's Encrypt HTTP-01 챌린지가 80으로 들어와야 인증서가 발급된다. 닫으면 사이트가 안 열리거나 인증서 발급 실패.
+  - [ ] 3000/8000은 **열지 마라.** web·backend는 `expose`만이라 Caddy 경유로만 닿는다. 호스트로 열면 우회·rate limit IP 위조 위험.
+  - [ ] 확인: Azure Portal → VM → Networking → 인바운드에 **22·80·443**(+ 기본 Deny)만.
 - [ ] **fail2ban 설치**(SSH 무차별 대입 자동 차단):
   ```bash
   sudo apt update && sudo apt install -y fail2ban
@@ -119,12 +122,13 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
   sudo fail2ban-client status sshd
   ```
 
-#### A-3. HTTPS / 터널 / prod 게이트
+#### A-3. HTTPS / 앞문(Caddy) / prod 게이트
 
-- [ ] HTTPS는 Cloudflare가 처리 — VM에서 인증서·nginx·certbot **설치 안 함**.
-- [ ] `.env`에 아래 4개를 넣는다. **`ALLOWED_ORIGINS` 또는 `PUBLIC_BASE_URL`에 `https://`가 들어와야 prod 게이트가 켜진다**(`main.py:36-39`). ⚠️ **함정: 둘 다 http면 게이트가 아예 안 돌고, 공개 https 터널 위에서 `COOKIE_SECURE=False`(개발 모드)로 조용히 뜬다.** 반드시 터널 도메인을 https로 넣어라:
-  - [ ] `PUBLIC_BASE_URL=https://<내-터널-도메인>` (인증메일 링크도 이걸 씀 — `config.py:75-78`)
-  - [ ] `ALLOWED_ORIGINS=https://<내-터널-도메인>` (CORS 심층방어 — `config.py:44`)
+- [ ] HTTPS는 **Caddy가 처리** — VM 안 Caddy 컨테이너가 Let's Encrypt로 인증서를 자동 발급·갱신한다. 호스트에 nginx/certbot **설치 안 함**.
+- [ ] `.env`에 `SITE_ADDRESS=polyinsight.japaneast.cloudapp.azure.com`(스킴 없는 맨호스트)를 넣는다 — caddy 서비스가 이 값으로 자동 HTTPS를 켠다(`docker-compose.yml:40`). NSG **80·443**이 열려 있어야 발급된다(A-2).
+- [ ] `.env`에 아래 4개를 넣는다. **`ALLOWED_ORIGINS` 또는 `PUBLIC_BASE_URL`에 `https://`가 들어와야 prod 게이트가 켜진다**(`main.py:36-39`). ⚠️ **함정: 둘 다 http면 게이트가 아예 안 돌고, 공개 https 위에서 `COOKIE_SECURE=False`(개발 모드)로 조용히 뜬다.** 반드시 공개 도메인을 https로 넣어라:
+  - [ ] `PUBLIC_BASE_URL=https://polyinsight.japaneast.cloudapp.azure.com` (인증메일 링크·OAuth 콜백 베이스도 이걸 씀 — `config.py:75-78`. Google OAuth를 켜면 `OAUTH_REDIRECT_BASE`도 같은 값)
+  - [ ] `ALLOWED_ORIGINS=https://polyinsight.japaneast.cloudapp.azure.com` (CORS 심층방어 — `config.py:44`)
   - [ ] `COOKIE_SECURE=True` (`config.py:40`. 이게 켜지면 HSTS 헤더도 자동 전송 — `main.py:81-82`)
   - [ ] `RENDER_TOKEN=<길고 랜덤>`:
     ```bash
@@ -144,7 +148,7 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
 
 - [ ] **베이스 이미지 핀 고정**: `backend/Dockerfile:3` = `mcr.microsoft.com/playwright/python:v1.44.0-jammy`(arm64 지원 — 나중 Oracle Ampere 이사 대비). 재현성엔 좋으나 오래되면 Chromium 취약점 누적 → 아래 상시 체크로 갱신 판단.
 - [ ] **root 실행 수용**: Playwright 공식 이미지는 컨테이너 안에서 root로 돈다. 파일럿에선 수용하되, `docker.sock`을 컨테이너에 마운트 안 한다(우리 compose는 안 함 — 유지).
-- [ ] **backend에 `ports:` 절대 추가 금지**: `Dockerfile:21`이 `--forwarded-allow-ips *`로 뜬다(터널→web→backend 체인의 실 IP 신뢰용, 내부망이라 안전). 만약 backend에 호스트 포트를 열면 아무나 X-Forwarded-For를 위조해 **rate limit IP 카운터를 우회**할 수 있다. backend·web은 `expose`만 유지.
+- [ ] **backend에 `ports:` 절대 추가 금지**: `Dockerfile:21`이 `--forwarded-allow-ips *`로 뜬다(Caddy→web→backend 체인의 실 IP 신뢰용, 내부망이라 안전). 만약 backend에 호스트 포트를 열면 아무나 X-Forwarded-For를 위조해 **rate limit IP 카운터를 우회**할 수 있다. backend·web은 `expose`만 유지(외부 노출은 Caddy 80/443뿐).
 
 #### A-6. 데이터 보호 / 백업
 
@@ -191,7 +195,6 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
 | 유출/의심 대상 | 즉시 할 일 | 발급처 |
 |---|---|---|
 | `ANTHROPIC_API_KEY`(청구 급증·노출) | 콘솔에서 해당 키 revoke → 새 키 → `.env` 교체 → `docker compose up -d backend` | console.anthropic.com |
-| `TUNNEL_TOKEN` | Cloudflare Zero Trust에서 터널 삭제·재생성 → `.env` 교체 → `docker compose up -d cloudflared` | Cloudflare Zero Trust |
 | `RESEND_API_KEY` | Resend에서 키 삭제·재발급 → `.env` 교체 → backend 재기동 | resend.com |
 | `RENDER_TOKEN` | A-3 명령으로 새 랜덤 → `.env` 교체 → backend 재기동 | 자체 생성 |
 | `GOOGLE_CLIENT_SECRET` | Google Cloud Console에서 시크릿 재설정 → `.env` 교체 | Google Cloud Console |
@@ -205,12 +208,12 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
 
 ### D. 절대 하지 마 (Never)
 
-- [ ] **NSG에 80/443/3000/8000 인바운드 열지 마.** cloudflared라 불필요 + VM IP 노출 + 터널 우회.
+- [ ] **NSG에 3000/8000 인바운드 열지 마.** 외부 노출은 Caddy(80/443)뿐. web·backend를 직접 열면 우회·rate limit IP 위조. (80·443은 Caddy 앞문이라 열어 둔다 — 여긴 정상.)
 - [ ] **backend/web에 compose `ports:` 추가하지 마.** `--forwarded-allow-ips *` 때문에 rate limit IP 우회 가능(A-5).
 - [ ] **`.env`를 git에 커밋하지 마.** `git add -f`로 `.gitignore` 뚫지 마.
 - [ ] **SSH 22를 0.0.0.0/0으로 열지 마.** 내 IP만.
 - [ ] **SSH 비밀번호·root 로그인 켜지 마.**
-- [ ] **VM에 직접 nginx/certbot로 HTTPS 붙이지 마.** TLS는 Cloudflare 종단. 이중 종단은 구멍.
+- [ ] **호스트에 별도 nginx/certbot로 HTTPS 붙이지 마.** TLS 종단은 Caddy 컨테이너가 전담(Let's Encrypt 자동). 이중 종단은 구멍.
 - [ ] **`COOKIE_SECURE=False`로 프로덕션 돌리지 마.** prod 게이트가 crash로 막지만, 게이트를 끄려 하지 마.
 - [ ] **`ALLOWED_ORIGINS`/`PUBLIC_BASE_URL`을 http로만 두고 공개 배포하지 마.** 게이트가 안 켜져 secure 쿠키 없이 뜬다(A-3 함정).
 - [ ] **`RATE_LIMIT_ENABLED=False`로 배포하지 마.** 재정 DoS·무차별 대입 방어선.
@@ -239,7 +242,7 @@ backend 컨테이너는 **Playwright/Chromium(카드 렌더)**을 띄운다(`bac
 | **B2s** | 2 / 4GB | **약 $30/월** | ⚠️ 최소 사양. 됨. 단 동시 렌더 몰리면 스왑/OOM → `MAX_CONCURRENT_JOBS`(현재 5, `config.py:36`)를 2~3으로 낮춰 방어 |
 | B2ms | 2 / 8GB | 약 $60/월 | ✅ 여유. 크레딧이 버티면 안전빵 |
 
-여기에 **OS 디스크(관리 디스크)** 약 $2~10/월(30GB StandardSSD ≈ 약 $2.4)이 더 붙는다. cloudflared 터널을 쓰므로(`docker-compose.yml:33-40`) **공용 IP·인바운드 포트가 필요 없어** 그 비용은 0, 아웃바운드도 월 약 100GB까지 무료라 대역폭도 사실상 0이다.
+여기에 **OS 디스크(관리 디스크)** 약 $2~10/월(30GB StandardSSD ≈ 약 $2.4)이 더 붙는다. 앞문이 Caddy라 **공용 IP + 인바운드 80/443**을 쓴다(`docker-compose.yml:37-51`). 공용 IP는 소액(기본 SKU면 사실상 크레딧 커버 범위)이고 **Azure cloudapp 호스트네임·Let's Encrypt 인증서는 무료**라 앞문 비용은 0에 가깝다. 아웃바운드도 월 약 100GB까지 무료라 대역폭도 사실상 0이다.
 
 **→ 파일럿 총 인프라비 ≈ 약 $30~35/월 (B2s + 디스크).**
 
@@ -251,7 +254,7 @@ backend 컨테이너는 **Playwright/Chromium(카드 렌더)**을 띄운다(`bac
 az vm deallocate --resource-group <RG> --name <VM>   # 시간당 과금 정지(디스크비는 계속)
 az vm start      --resource-group <RG> --name <VM>   # 재개
 ```
-- ⚠️ 할당해제하면 VM이 꺼져 **cloudflared 터널·시연 URL이 죽는다.** 파일럿 시연 링크를 상시 열어둬야 하면 항상켜짐이 강제되고, 그럼 3개월 시계가 돈다.
+- ⚠️ 할당해제하면 VM이 꺼져 **Caddy 앞문·시연 URL이 죽는다.** 파일럿 시연 링크를 상시 열어둬야 하면 항상켜짐이 강제되고, 그럼 3개월 시계가 돈다. (공용 IP 리소스에 DNS 라벨이 붙어 있어 호스트네임 자체는 유지되지만, VM이 꺼지면 응답이 없다.)
 
 - [ ] 배포 후 첫 주: Azure Portal → 해당 VM → **Cost analysis**에서 하루치 실비를 보고 위 추정과 맞는지 대조
 - [ ] B2s(4GB)면 `MAX_CONCURRENT_JOBS`를 2~3으로 낮췄는지 확인(`config.py:36`, `.env`로 override). OOM = 렌더 실패 = Chromium 좀비 프로세스
@@ -320,11 +323,12 @@ az consumption budget create \
 
 ### 5) 크레딧 소진 시 → Oracle ARM 무료로 이사
 
-이 Azure VM은 다리다. 크레딧이 바닥나면(또는 러너웨이 계산상 임박하면) **같은 docker-compose를 Oracle Cloud Always Free ARM(Ampere A1)로 옮긴다.**
+이 Azure VM은 다리다. 크레딧이 바닥나면(또는 러너웨이 계산상 임박하면) **컴퓨트를 Oracle Cloud Always Free ARM(Ampere A1)로 옮긴다.**
 
 - **트리거:** Azure 예산 알림 80% 도달, 또는 잔여 크레딧으로 남은 개월 < 1.
-- **왜 마찰이 적나:** `docker-compose.yml:1` 주석부터 이미 "Oracle Always Free VM" 대상이고, `backend/Dockerfile:1-3`이 playwright 공식 이미지(arm64/Ampere 지원 명시)라 **ARM에서 그대로 뜬다.** compose 3서비스·터널·SQLite 전부 이식.
-- **비용:** Oracle Always Free ARM = **월 $0** (최대 4 OCPU/24GB까지 무료 — 4GB Azure보다 넉넉해 Chromium OOM 걱정도 줄어든다). 드는 건 인프라비가 아니라 **이사 노동(몇 시간)과 데이터 이전**뿐.
+- **왜 컴퓨트는 마찰이 적나:** `backend/Dockerfile:1-3`이 playwright 공식 이미지(arm64/Ampere 지원 명시)라 **ARM에서 그대로 뜬다.** backend·web·SQLite·볼륨은 그대로 이식된다.
+- **⚠️ 앞문/도메인은 Oracle에서 '열린 결정'(그대로 이식 안 됨):** 지금 앞문은 **Caddy + Azure `cloudapp.azure.com` 무료 호스트네임**이고 이 호스트네임은 **Azure 전용**이다. Oracle엔 동급 무료 DNS 호스트네임이 없다. 그래서 Oracle에선 앞문/공개 주소를 다시 정해야 한다 — 옵션: ⓐ 도메인 구매 + Caddy(Let's Encrypt), ⓑ Cloudflare named 터널 + 도메인, ⓒ DuckDNS 같은 무료 동적 DNS + Caddy. 셋 다 `SITE_ADDRESS`(또는 앞문 서비스)만 바꾸면 되지만 **"같은 compose가 Oracle에서 앞문까지 그대로 뜬다"고 가정하지 말 것.** 공개 주소가 바뀌면 `.env`의 `PUBLIC_BASE_URL`·`ALLOWED_ORIGINS`·`SITE_ADDRESS`(+ OAuth 콜백·인증메일 링크)도 함께 갱신.
+- **비용:** Oracle Always Free ARM = **컴퓨트 월 $0** (최대 4 OCPU/24GB까지 무료 — 4GB Azure보다 넉넉해 Chromium OOM 걱정도 줄어든다). 드는 건 인프라비가 아니라 **이사 노동(몇 시간)·데이터 이전·새 앞문 셋업**뿐(도메인을 사면 그 비용만 추가).
 
 **★이사 전 반드시 C3 위험 먼저 해소 (안 고치면 이사 때 자산 통째로 소실):**
 현재 `STORAGE_DIR` 기본값 = `backend/var/blobstore`(`config.py:35`, **이미지/레포 안쪽**). compose는 `/data` 볼륨만 마운트한다(`docker-compose.yml:13-14`). 즉 컨테이너 재생성·이사 시 카드PNG·export·유저자산이 증발한다(위험대장 C3, `docs/superpowers/plans/2026-07-09-candidates-risk-register-and-roadmap.md:27`).
@@ -339,7 +343,7 @@ az consumption budget create \
 - [ ] DB 스냅샷과 assets tar를 **같은 시점 쌍**으로 이전(어긋나면 storage_key 댕글링, `backup_db.py:15`)
 - [ ] 이사 리허설: Oracle ARM에 compose 한 번 띄워 렌더(Chromium)까지 도는지 확인 후 실이전
 
-**이사 후 잊지 말 것(prod-config 게이트가 startup에서 죽인다, `main.py:33-46`):** HTTPS/터널 감지 시 `COOKIE_SECURE=True`·`PUBLIC_BASE_URL`(공개 터널 도메인)·`RENDER_TOKEN`이 없으면 backend가 startup crash한다. 신 호스트 `.env`에 이 3개 반드시 세팅.
+**이사 후 잊지 말 것(prod-config 게이트가 startup에서 죽인다, `main.py:33-46`):** HTTPS 오리진 감지 시 `COOKIE_SECURE=True`·`PUBLIC_BASE_URL`(새 공개 도메인)·`RENDER_TOKEN`이 없으면 backend가 startup crash한다. 신 호스트 `.env`에 이 3개 + 앞문 서비스용 `SITE_ADDRESS`(또는 Oracle에서 고른 앞문 옵션) 반드시 세팅.
 
 ---
 
@@ -353,7 +357,7 @@ az consumption budget create \
 - [ ] **남은 학생 크레딧 ÷ 월 지출 = 남은 개월.** 1개월 미만이면 Oracle 이사 착수
 - [ ] `MAX_CONCURRENT_JOBS`와 VM RAM이 여전히 안전 범위인가(OOM 로그 유무)
 
-**관련 파일:** `backend/core/config.py`(모델·쿼터·`AUTHOR_MAX_TOKENS`·`MAX_CONCURRENT_JOBS`·`STORAGE_DIR`), `backend/agents/deck/pipeline.py`(thin-input 조기차단 `_ABORT_WORD_FLOOR`·잡 세마포어), `backend/core/llm_client.py`(스트리밍 1회·truncation 무재시도), `backend/scripts/backup_db.py`(이사용 백업·자산 tar 커버리지), `backend/main.py`(`recover_stale_jobs`·prod-config 게이트), `docker-compose.yml`(볼륨·터널·DATABASE_URL).
+**관련 파일:** `backend/core/config.py`(모델·쿼터·`AUTHOR_MAX_TOKENS`·`MAX_CONCURRENT_JOBS`·`STORAGE_DIR`), `backend/agents/deck/pipeline.py`(thin-input 조기차단 `_ABORT_WORD_FLOOR`·잡 세마포어), `backend/core/llm_client.py`(스트리밍 1회·truncation 무재시도), `backend/scripts/backup_db.py`(이사용 백업·자산 tar 커버리지), `backend/main.py`(`recover_stale_jobs`·prod-config 게이트), `docker-compose.yml`(볼륨·앞문 caddy·DATABASE_URL), `deploy/Caddyfile`(앞문 리버스 프록시).
 
 ## 6. 배포 (첫 배포 · 재배포 · 롤백)
 
@@ -361,8 +365,8 @@ az consumption budget create \
 
 이 스택의 핵심 그림 (실측):
 
-- Azure VM 리눅스 1대 위에서 `docker compose`가 컨테이너 3개를 돌린다: `backend`(FastAPI + Playwright/Chromium), `web`(Next.js), `cloudflared`(외부 공개 터널). (`docker-compose.yml:4-40`)
-- 외부에서 접속하는 주소는 **Cloudflare 터널 도메인** 하나뿐이다. `backend`·`web`은 `expose`만 하고 포트를 호스트로 공개하지 않는다(`docker-compose.yml:15,27`). VM 방화벽은 22번(SSH)만 연다.
+- Azure VM 리눅스 1대 위에서 `docker compose`가 컨테이너 3개를 돌린다: `backend`(FastAPI + Playwright/Chromium), `web`(Next.js), `caddy`(앞문 리버스 프록시 + 자동 HTTPS). (`docker-compose.yml:5-51`)
+- 외부에서 접속하는 주소는 **Azure 무료 호스트네임 `https://polyinsight.japaneast.cloudapp.azure.com`** 하나뿐이다. Caddy가 인바운드 80·443을 받아 `web:3000`으로 프록시하고, `backend`·`web`은 `expose`만 하고 포트를 호스트로 공개하지 않는다(backend `docker-compose.yml:17`, web `30`). VM 방화벽(NSG)은 **22·80·443**을 연다.
 - 데이터는 두 곳에 산다: **DB**(`/data/polyinsight.db`, SQLite)와 **파일 저장소**(카드 PNG·export·유저 업로드 자산, `STORAGE_DIR`). 이 둘이 **재배포 후에도 살아남게** 만드는 게 이 문서에서 제일 중요한 부분이다.
 
 ---
@@ -370,7 +374,7 @@ az consumption budget create \
 ### 0. 배포 전 체크리스트 (첫 배포·재배포 공통)
 
 - [ ] `ANTHROPIC_API_KEY`(Opus 저작용) 유효한 키 확보 — 없으면 덱 생성이 전부 실패한다(유일한 진짜 변동비, `config.py:7,15` `LLM_MODEL_AUTHOR=claude-opus-4-8`).
-- [ ] Cloudflare 터널 토큰(`TUNNEL_TOKEN`)과 연결된 공개 도메인 확정(예: `https://app.example.com`).
+- [ ] `SITE_ADDRESS=polyinsight.japaneast.cloudapp.azure.com` 확정(Azure 공용 IP의 DNS 이름 레이블 = `polyinsight`, 리전 Japan East). Caddy가 이 도메인으로 자동 HTTPS를 켠다. NSG **80·443** 개방 필수.
 - [ ] `RENDER_TOKEN` 강한 랜덤값 생성해 둠(`openssl rand -hex 32`).
 - [ ] `.env` 준비 완료 + 아래 §2의 **프로덕션 필수 항목**이 채워짐.
 - [ ] **STORAGE_DIR 볼륨 픽스**(§1-5)가 `docker-compose.yml`에 반영됨 — 안 하면 재배포 한 번에 유저 자산 전량 증발(위험대장 C3, `docker-compose.yml:13-14`가 `/data`만 마운트 + `config.py:35` 기본값이 레포 안 `backend/var/blobstore`).
@@ -393,9 +397,9 @@ Azure Portal → **Virtual machines → Create → Azure virtual machine**.
 | Size | **Standard_B2s** (2 vCPU / 4 GiB) 권장 | Chromium 렌더(`backend/Dockerfile:3` Playwright 이미지) + Next 빌드가 메모리를 먹는다. 1GB(B1s)는 빌드·렌더 중 OOM 위험 |
 | Authentication | **SSH public key** | 비밀번호 로그인보다 안전 |
 | OS disk | Standard SSD **30 GiB** | DB·자산·도커 이미지 여유 |
-| Public inbound ports | **SSH (22)만** | 웹은 터널로 나가므로 80/443 안 연다 |
+| Public inbound ports | **SSH (22) + HTTP (80) + HTTPS (443)** | 앞문이 Caddy라 80/443을 직접 받고 Let's Encrypt가 80으로 도메인을 검증한다. 3000/8000은 열지 않는다 |
 
-> 비용 감각: B2s 종량제(Korea Central)는 약 월 $30~35 수준이라 $100 Azure for Students 크레딧(12개월)을 **약 3개월**에 소진한다. 이 VM은 "다리 호스트"다 — 크레딧 소진 전 Oracle ARM 무료 호스트로 같은 compose를 이사하는 게 계획(`docker-compose.yml:1` 주석, backend Playwright 이미지가 arm64 지원 `backend/Dockerfile:2`). 크레딧을 아끼려 VM을 꺼두면(deallocate) 터널 링크가 끊기므로 **켜둔 채로** 크레딧 잔량을 Portal에서 주기적으로 확인한다.
+> 비용 감각: B2급 종량제는 약 월 $30~35 수준이라 $100 Azure for Students 크레딧(12개월)을 **약 3개월**에 소진한다. 이 VM은 "다리 호스트"다 — 크레딧 소진 전 Oracle ARM 무료 호스트로 **컴퓨트를** 이사하는 게 계획(backend Playwright 이미지가 arm64 지원 `backend/Dockerfile:2`. 단 앞문/도메인은 Azure 전용이라 Oracle에선 재결정 — §5-5). 크레딧을 아끼려 VM을 꺼두면(deallocate) Caddy 앞문·공개 링크가 끊기므로 **켜둔 채로** 크레딧 잔량을 Portal에서 주기적으로 확인한다.
 
 생성 후 SSH 접속:
 
@@ -471,9 +475,14 @@ openssl rand -hex 32     # 출력값을 .env의 RENDER_TOKEN= 에 붙여넣기
 
 > 이 픽스는 배포 아티팩트(compose)의 문제라 코드 테스트로는 안 잡힌다. 배포 후 §7 스모크의 "재배포 후 자산 잔존" 검증으로만 증명된다(위험대장 H5).
 
-#### 1-6. Cloudflare 터널 토큰
+#### 1-6. 앞문(Caddy) + 공개 호스트네임 세팅
 
-`TUNNEL_TOKEN`은 Cloudflare Zero Trust → Networks → Tunnels에서 발급한 named 터널 토큰이다(`docker-compose.yml:33-40`). 그 터널의 Public Hostname 설정에서 **서비스 대상을 `http://web:3000`**(compose 내부 web 서비스)으로 지정한다. 토큰을 `.env`의 `TUNNEL_TOKEN=`에 넣는다. VM이 항상 켜져 있으므로 무료 터널이라도 링크가 안정적이다.
+앞문은 **Caddy 컨테이너**(`caddy:2`, `docker-compose.yml:37-51`)다. 별도 토큰 발급은 없다. 준비할 것은 두 가지뿐:
+
+1. **Azure 공용 IP에 DNS 이름 레이블 지정** — Azure Portal → VM → 개요의 공용 IP 클릭 → **Configuration** → "DNS 이름 레이블"에 `polyinsight` 입력·저장. 그러면 `polyinsight.japaneast.cloudapp.azure.com`이 이 공용 IP(20.210.112.15)로 해석된다. **도메인 구매 0원.**
+2. **`.env`에 `SITE_ADDRESS`** — `SITE_ADDRESS=polyinsight.japaneast.cloudapp.azure.com`(스킴 없는 맨호스트). Caddy가 이 값으로 Let's Encrypt HTTPS를 자동 발급하고 `web:3000`으로 프록시한다(`deploy/Caddyfile` = `{$SITE_ADDRESS} { reverse_proxy web:3000 }`).
+
+인증서 발급 조건: **NSG 80·443 개방 + 호스트네임이 공용 IP로 해석**돼야 Let's Encrypt HTTP-01 챌린지가 통과한다. 발급된 인증서는 `caddy-data` 볼륨(`docker-compose.yml:46`)에 영속되어 재시작마다 재발급(레이트리밋)되지 않는다.
 
 #### 1-7. 빌드 & 기동
 
@@ -490,7 +499,7 @@ docker compose up -d --build
 docker compose ps                            # 세 서비스 모두 Up, restarting 아님
 docker compose logs backend --tail=50
 docker compose logs web --tail=30
-docker compose logs cloudflared --tail=20    # "Registered tunnel connection" 나오면 링크 성공
+docker compose logs caddy --tail=20          # "certificate obtained successfully" 나오면 HTTPS 발급 성공
 ```
 
 backend 로그에서 확인할 것:
@@ -502,10 +511,10 @@ backend 로그에서 확인할 것:
 **★ startup crash 함정** (`main.py:33-46`): `_validate_prod_config`는 `ALLOWED_ORIGINS`나 `PUBLIC_BASE_URL`에서 `https://`를 감지하면(=프로덕션 판단) `COOKIE_SECURE`·`PUBLIC_BASE_URL`·`RENDER_TOKEN` 셋을 강제한다. 하나라도 비면 backend가 **기동 직후 죽는다**(fail-closed, `restart: unless-stopped`라 계속 재시작 루프). 로그에 아래가 보이면 `.env`를 고치고 `docker compose up -d backend`:
 
 - `HTTPS 배포인데 COOKIE_SECURE=False` → `.env`에 `COOKIE_SECURE=True`
-- `HTTPS 배포인데 PUBLIC_BASE_URL 미설정` → `.env`에 공개 터널 도메인
+- `HTTPS 배포인데 PUBLIC_BASE_URL 미설정` → `.env`에 공개 도메인(`https://polyinsight.japaneast.cloudapp.azure.com`)
 - `HTTPS 배포인데 RENDER_TOKEN 미설정` → `openssl rand -hex 32` 값
 
-마지막으로 브라우저에서 **공개 터널 도메인**을 열어 랜딩 페이지가 뜨는지 확인한다.
+마지막으로 브라우저에서 **공개 도메인(`https://polyinsight.japaneast.cloudapp.azure.com`)**을 열어 자물쇠(유효 인증서)와 랜딩 페이지가 뜨는지 확인한다. 인증서가 아직이면 `docker compose logs caddy`에서 ACME 진행/에러를 본다.
 
 ---
 
@@ -514,10 +523,10 @@ backend 로그에서 확인할 것:
 | 키 | 설명 | 프로덕션 |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Opus 덱 저작용 키. 없으면 덱 생성 전부 실패(유일한 실 변동비) | **필수** |
-| `COOKIE_SECURE` | 세션 쿠키 Secure. 터널=HTTPS라 `True` 안 하면 startup crash | **필수(=True)** |
-| `PUBLIC_BASE_URL` | 사용자 접속 공개 터널 도메인(예: `https://app.example.com`). 인증메일 링크·OAuth 콜백 베이스. 비우면 내부호스트로 링크 깨지고 crash (`config.py:76-78`) | **필수** |
+| `COOKIE_SECURE` | 세션 쿠키 Secure. 앞문(Caddy)=HTTPS라 `True` 안 하면 startup crash | **필수(=True)** |
+| `PUBLIC_BASE_URL` | 사용자 접속 공개 도메인 `https://polyinsight.japaneast.cloudapp.azure.com`. 인증메일 링크·OAuth 콜백 베이스. 비우면 내부호스트로 링크 깨지고 crash (`config.py:76-78`) | **필수** |
 | `RENDER_TOKEN` | 내부 렌더(Playwright) 우회 토큰(`openssl rand -hex 32`). 최상위 시크릿 — 로그 금지 | **필수** |
-| `TUNNEL_TOKEN` | Cloudflare 터널 토큰. 이게 있어야 외부 공개됨 | **필수** |
+| `SITE_ADDRESS` | Caddy 앞문이 자동 HTTPS를 켤 **공개 FQDN**(스킴 없이) `polyinsight.japaneast.cloudapp.azure.com`. caddy 서비스가 이걸로 인증서 발급(`docker-compose.yml:40`). 시크릿 아님 | **필수(caddy)** |
 | `ALLOWED_ORIGINS` | CORS 허용 오리진(쉼표구분). 여기에 `https://`가 들어가야 prod 게이트가 켜짐(`main.py:39`) | **필수** |
 | `RESEND_API_KEY` | Resend 이메일 키. 비우면 인증메일 no-op(가입은 되나 메일 안 감). 현재 테스트모드 | 권장 |
 | `EMAIL_FROM` | 발신 주소. DKIM 도메인 검증 전엔 `onboarding@resend.dev`로 본인함 테스트만 (`config.py:72`) | 조건부 |
@@ -525,7 +534,7 @@ backend 로그에서 확인할 것:
 | `STORAGE_DIR` | 자산 루트. compose environment에서 `/data/blobstore` 지정(§1-5) | **필수(§1-5)** |
 | `PEXELS_API_KEY` / `UNSPLASH_ACCESS_KEY` | 스톡 이미지 검색(선택). 비우면 검색만 빈결과, 업로드는 정상 | 선택 |
 
-> `ALLOWED_ORIGINS`(또는 `PUBLIC_BASE_URL`)에 반드시 `https://` 도메인을 넣어야 prod 보안 게이트(HSTS·Secure 쿠키)가 켜진다(`main.py:37-39,81`). `http://`만 있으면 코드가 "로컬 개발"로 오판해 보안 헤더가 빠진다.
+> `ALLOWED_ORIGINS`(또는 `PUBLIC_BASE_URL`)에 반드시 `https://` 도메인을 넣어야 prod 보안 게이트(HSTS·Secure 쿠키)가 켜진다(`main.py:37-39,81`). `http://`만 있으면 코드가 "로컬 개발"로 오판해 보안 헤더가 빠진다. Google OAuth를 켜면 `OAUTH_REDIRECT_BASE`도 같은 `https://polyinsight.japaneast.cloudapp.azure.com`으로 맞춘다(현재 OAuth는 dormant).
 
 ---
 
@@ -619,7 +628,7 @@ docker compose up -d --build
 
 ### 7. 배포 후 스모크 테스트 (사람이 브라우저로 직접)
 
-공개 터널 도메인에서 실제 유저 흐름을 처음부터 끝까지:
+공개 도메인(`https://polyinsight.japaneast.cloudapp.azure.com`)에서 실제 유저 흐름을 처음부터 끝까지:
 
 - [ ] **가입**: 회원가입 → 동의 체크 → 대시보드 도착(자동 로그인). 인증메일 쓰면 메일함(스팸함 포함) 확인.
 - [ ] **논문 1건 업로드**: `/deck/new`에서 PDF + 아트디렉션 브리핑 입력 → 잡 생성됨.
@@ -642,7 +651,7 @@ docker compose up -d --build
   - `--dest /data/backups` 필수 — §1-5에서 `./backups`를 호스트로 마운트했으므로 백업이 VM 파일로 남는다.
   - `--min-bytes 1` — 기본 가드가 1MB라(`backup_db.py:43,107`) 파일럿 초기 소형 DB에서 백업이 조용히 실패(exit 1)하는 걸 막는다. DB가 커지면 원래 가드로 올려도 된다.
   - 주기적으로 `scp azureuser@<VM>:~/polyinsight/backups/ ...`로 **VM 밖에도** 복사해 두면 VM 자체 소실에 대비된다. → 상세는 백업/복구 섹션.
-- **크레딧 소진 전 Oracle ARM 이사**: 같은 `docker-compose.yml`이 arm64에서 뜬다(backend Playwright 이미지 arm64 지원, `backend/Dockerfile:2`). 이사 = 새 호스트에 §1-2~1-8 반복 + `/data` 볼륨·`backups/` 복사. → 마이그레이션 섹션.
+- **크레딧 소진 전 Oracle ARM 이사(컴퓨트 한정)**: backend·web·SQLite는 arm64에서 그대로 뜬다(backend Playwright 이미지 arm64 지원, `backend/Dockerfile:2`). 이사 = 새 호스트에 §1-2~1-5·1-7·1-8 반복 + `/data` 볼륨·`backups/` 복사. ⚠️ **단 §1-6 앞문은 Azure cloudapp 호스트네임 전용** — Oracle에선 앞문/도메인을 재결정해야 한다(도메인 구매+Caddy / Cloudflare named 터널+도메인 / DuckDNS+Caddy, §5-5). → 마이그레이션 섹션.
 
 ## 7. 모니터링 & 유지보수 (일상 운영)
 
@@ -655,7 +664,7 @@ docker compose up -d --build
 ### 0. 먼저 외울 4가지 (우리 스택의 진실)
 
 1. **전용 헬스 엔드포인트가 없다.** `/api/health` 같은 건 없습니다. 등록된 API는 auth·jobs·projects·export·images·deck 뿐입니다(`backend/main.py:97-102`). "살아있나?"는 **컨테이너 상태 + 실제 접속**으로 판단하고, 내부 핑은 FastAPI 자동 문서 페이지 `/docs`(200이면 앱 프로세스 살아있음)를 씁니다.
-2. **백엔드는 외부에 노출되지 않는다.** `docker-compose.yml`에서 backend는 `expose: 8000`만 있고 포트 매핑(`ports:`)이 없습니다(`docker-compose.yml:15-16`). 외부로 나가는 문은 **cloudflared 터널 → web:3000** 한 곳뿐(`docker-compose.yml:3`). 그래서 백엔드 점검은 `docker compose exec`로 컨테이너 안에 들어가서 합니다.
+2. **백엔드는 외부에 노출되지 않는다.** `docker-compose.yml`에서 backend는 `expose: 8000`만 있고 포트 매핑(`ports:`)이 없습니다(`docker-compose.yml:17-18`). 외부로 나가는 문은 **Caddy(80/443) → web:3000** 한 곳뿐(`docker-compose.yml:37-51`). 그래서 백엔드 점검은 `docker compose exec`로 컨테이너 안에 들어가서 합니다.
 3. **재시작하면 진행 중이던 덱 생성은 전부 죽는다.** `recover_stale_jobs`(`backend/core/db.py:509`, `main.py:54`)가 서버 시작 시 PENDING/RUNNING 잡을 **전량 ERROR로 회수**합니다(단일 프로세스 전제). 즉 **덱을 만드는 중(수 분, Opus 호출 진행 중)에는 `docker compose restart`/재배포를 하지 마세요.** 사용자에게 실패가 뜨고 그 덱의 Opus 비용은 날아갑니다.
 4. **파일 로그(`run.log`)에는 날짜가 없다.** 로그 포맷이 시간(`%H:%M:%S`)만 찍습니다(`backend/main.py:24`). 언제 난 에러인지 알려면 `docker compose logs -t`(도커 타임스탬프)를 함께 보세요.
 
@@ -669,22 +678,22 @@ docker compose up -d --build
   ```bash
   docker compose ps
   ```
-  `backend`, `web`, `cloudflared` 세 서비스가 모두 `Up`(또는 `running`)이어야 정상. `Restarting`이 반복되면 크래시 루프 → §5-B.
+  `backend`, `web`, `caddy` 세 서비스가 모두 `Up`(또는 `running`)이어야 정상. `Restarting`이 반복되면 크래시 루프 → §5-B.
 - [ ] **실제 사이트가 열리나** (진짜 최종 확인)
-  브라우저로 공개 터널 URL(사용자 접속 주소) 접속 → 로그인 화면이 뜨면 OK. 이게 되면 터널·web·(로그인까지 되면 backend까지) 살아있는 것.
+  브라우저로 공개 URL(`https://polyinsight.japaneast.cloudapp.azure.com`) 접속 → 로그인 화면이 뜨면 OK. 이게 되면 Caddy·web·(로그인까지 되면 backend까지) 살아있는 것.
 - [ ] **백엔드가 응답하나** (사이트가 안 열릴 때만)
   ```bash
   docker compose exec backend python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8000/docs').status)"
   ```
-  `200`이면 백엔드 자체는 정상 → 문제는 web 또는 터널.
-- [ ] **터널이 연결돼 있나** (사이트가 안 열릴 때만)
+  `200`이면 백엔드 자체는 정상 → 문제는 web 또는 앞문(Caddy).
+- [ ] **앞문(Caddy)이 인증서를 받았나** (사이트가 안 열리거나 자물쇠 경고일 때만)
   ```bash
-  docker compose logs --tail=30 cloudflared
+  docker compose logs --tail=30 caddy
   ```
-  `Registered tunnel connection` / `Connection ... registered` 줄이 보이면 연결됨. `error`/`Unauthorized`가 반복되면 §5-A.
+  `certificate obtained successfully` / `serving initial configuration` 줄이 보이면 정상. `ACME`/`obtaining certificate` 에러가 반복되면 §5-A(NSG 80/443·호스트네임 해석 확인).
 
 > 팁: `~/.bashrc`에 별칭 추가 →
-> `alias pi-check='docker compose ps && docker compose logs --tail=5 cloudflared'`
+> `alias pi-check='docker compose ps && docker compose logs --tail=5 caddy'`
 
 ---
 
@@ -692,7 +701,7 @@ docker compose up -d --build
 
 | 위치 | 내용 | 보는 법 |
 |---|---|---|
-| Docker 표준 로그(stdout) | uvicorn 요청/에러, Next.js, cloudflared 연결 상태 | `docker compose logs` |
+| Docker 표준 로그(stdout) | uvicorn 요청/에러, Next.js, Caddy 인증서·프록시 상태 | `docker compose logs` |
 | `backend` 컨테이너 내부 `/app/run.log` | 백엔드 파이프라인·LLM·렌더 상세(`backend/main.py:28`이 파일로깅, WORKDIR=/app) | `docker compose exec backend tail -f /app/run.log` |
 
 ⚠️ **`run.log`는 컨테이너 내부 파일 → 컨테이너를 새로 만들면(재배포) 사라진다.** 장애 원인을 남기려면 재배포 전에 꺼내세요:
@@ -726,12 +735,13 @@ docker compose logs -f -t backend      # 백엔드만 (파이프라인/LLM/렌�
 내가 로그를 24시간 볼 수 없으므로, 밖에서 주기적으로 찔러보고 죽으면 **이메일/문자 알림**을 받게 해둡니다.
 
 - [ ] 무료 모니터(예: UptimeRobot) 가입.
-- [ ] **HTTP(S) 모니터** 추가 → URL = 공개 터널 URL(로그인 페이지), 5분 간격.
+- [ ] **HTTP(S) 모니터** 추가 → URL = 공개 URL `https://polyinsight.japaneast.cloudapp.azure.com`(로그인 페이지), 5분 간격.
   - 헬스 엔드포인트가 없으니 로그인/랜딩 페이지의 **HTTP 200**을 살아있음 신호로 씁니다(§0-1).
-  - 가능하면 "키워드 모니터"로 페이지 고정 문구(예: "PolyInsight")까지 검사 → 터널은 살아도 앱이 에러 페이지를 주는 경우까지 잡힘.
+  - 가능하면 "키워드 모니터"로 페이지 고정 문구(예: "PolyInsight")까지 검사 → 앞문은 살아도 앱이 에러 페이지를 주는 경우까지 잡힘.
+  - TLS 만료 감시도 켜두면(UptimeRobot의 SSL 모니터) Let's Encrypt 자동 갱신이 실패한 경우를 조기에 잡습니다.
 - [ ] 알림 수신처(이메일/휴대폰) 등록. **다운 + 복구** 둘 다 알림 켜기.
 
-> 이 감시는 "터널+web 살아있나"까지만 봅니다. 백엔드 파이프라인/LLM 실패는 로그(§2)와 사용자 신고로 파악.
+> 이 감시는 "Caddy+web 살아있나"까지만 봅니다. 백엔드 파이프라인/LLM 실패는 로그(§2)와 사용자 신고로 파악.
 
 ---
 
@@ -768,17 +778,17 @@ docker compose logs -f -t backend      # 백엔드만 (파이프라인/LLM/렌�
 
 항상 `docker compose ps`로 어느 컨테이너가 문제인지 특정한 뒤 아래로.
 
-#### A. 터널 죽음 — 사이트만 안 열림, 컨테이너는 Up
-- 진단: `docker compose exec backend python -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8000/docs').status)"` → 200(=백엔드 정상). `docker compose logs --tail=50 cloudflared`에 `Unauthorized`/연결 에러.
+#### A. 앞문(Caddy)/HTTPS 문제 — 사이트만 안 열림 또는 인증서 경고, 컨테이너는 Up
+- 진단: `docker compose exec backend python -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8000/docs').status)"` → 200(=백엔드 정상). 그러면 문제는 web 또는 Caddy. `docker compose logs --tail=50 caddy`에서 `certificate obtained successfully`(정상) 또는 `ACME`/`obtaining certificate` 에러를 본다.
 - 조치:
   ```bash
-  docker compose restart cloudflared
+  docker compose restart caddy
   ```
-  그래도 `Unauthorized`면 `.env`의 `TUNNEL_TOKEN`(`docker-compose.yml:37`) 만료/오류 → Cloudflare 대시보드에서 토큰 재발급 → `.env` 교체 → `docker compose up -d cloudflared`.
+  그래도 인증서 에러면: ① **NSG 80·443이 열려 있나**(닫히면 Let's Encrypt HTTP-01 챌린지 실패) ② **호스트네임이 공용 IP로 해석되나**(`nslookup polyinsight.japaneast.cloudapp.azure.com` → 20.210.112.15) ③ `.env`의 `SITE_ADDRESS`가 맞나 → 고친 뒤 `docker compose up -d caddy`. 발급 성공 인증서는 `caddy-data` 볼륨에 남아 재시작에도 유지된다.
 
 #### B. 컨테이너 죽음 / 재시작 반복 — `Restarting` 또는 `Exit`
 - 진단: `docker compose logs --tail=80 backend`(또는 web) 맨 위 예외를 읽는다.
-  - `RuntimeError: HTTPS 배포인데 COOKIE_SECURE=False ...` 류 → `_validate_prod_config` 게이트(`main.py:33-46`). `.env`에 `COOKIE_SECURE=True`, `PUBLIC_BASE_URL=<터널 도메인>`, `RENDER_TOKEN=<임의 긴 문자열>` 채우기.
+  - `RuntimeError: HTTPS 배포인데 COOKIE_SECURE=False ...` 류 → `_validate_prod_config` 게이트(`main.py:33-46`). `.env`에 `COOKIE_SECURE=True`, `PUBLIC_BASE_URL=<공개 도메인>`, `RENDER_TOKEN=<임의 긴 문자열>` 채우기.
   - 그 외 예외 → 최근 코드/`.env` 변경 되돌리기.
 - 조치: `.env` 고친 뒤 `docker compose up -d`.
 
@@ -805,7 +815,7 @@ docker compose logs -f -t backend      # 백엔드만 (파이프라인/LLM/렌�
 
 **매일 (30초)**
 - [ ] `docker compose ps` — 3개 Up
-- [ ] 터널 URL 눈으로 한 번 접속
+- [ ] 공개 URL 눈으로 한 번 접속
 
 **매주 (5분)**
 - [ ] `docker compose logs --since 168h backend | grep -iE "error|exception|truncat|overload|timeout"` — 한 주간 에러 훑기 (도커 `--since`는 "7d"를 못 읽으니 시간 단위 `168h` 사용)
@@ -817,7 +827,7 @@ docker compose logs -f -t backend      # 백엔드만 (파이프라인/LLM/렌�
 - [ ] **백업 복원 리허설** — 백업본으로 실제 복구 1회 시험. 절차는 `backend/scripts/backup_db.py` 상단 docstring(복원 6~7단계). "백업이 있다" ≠ "복원된다".
 - [ ] Azure for Students **크레딧 잔액**(포털 → Cost Management). 약 $100/12개월. 소진 임박하면 Oracle ARM 무료 이전(같은 compose) 준비.
 - [ ] **Anthropic Opus 사용량**(console.anthropic.com → Usage) 확인 — 유일한 진짜 변동비. 예상보다 급증하면 로그에서 재시도 폭주/남용 계정 의심.
-- [ ] `docker compose pull cloudflared && docker compose up -d cloudflared` — 터널 이미지 업데이트.
+- [ ] `docker compose pull caddy && docker compose up -d caddy` — 앞문(Caddy) 이미지 업데이트.
 
 **분기 / 필요 시**
 - [ ] 앱 코드 배포: 반드시 **정지 → DB·자산 백업 → migrate → 재배포** 순서(위험대장 H1). 재배포 전 §0-3대로 **진행 중 덱이 없을 때** 수행.
@@ -831,7 +841,7 @@ docker compose logs -f -t backend      # 백엔드만 (파이프라인/LLM/렌�
 - **Chromium이 메모리를 먹는다.** 렌더가 backend 안에서 돈다 → 동시성(`MAX_CONCURRENT_JOBS`, `config.py:36`)과 VM RAM이 안정성의 핵심 레버.
 - **헬스 엔드포인트 없음.** 살아있음 판단 = `docker compose ps` + 실제 접속 + `/docs` 내부 핑(§0-1).
 - **`run.log`는 비영속·날짜 없음.** 컨테이너 재생성 시 소멸, 시간만 찍힘(`main.py:24,28`). 원인 보존은 재배포 전 `docker compose cp`, 날짜는 `docker compose logs -t`.
-- **진짜 변동비는 Opus 호출뿐.** 인프라(VM·터널)는 사실상 고정/무료. 로그에 LLM 에러가 잦다 = 곧 새는 돈.
+- **진짜 변동비는 Opus 호출뿐.** 인프라(VM·앞문 Caddy)는 사실상 고정/무료. 로그에 LLM 에러가 잦다 = 곧 새는 돈.
 - **백업 스크립트는 컨테이너를 모른다.** `backup_db.py`는 cwd 상대경로 전제인데 compose DB는 컨테이너 안 절대경로(`/data/polyinsight.db`, `docker-compose.yml:12`)이고 호스트엔 `.venv`가 없다 → 호스트에서 그냥 실행하면 DB를 못 찾음. 백업은 **컨테이너 안에서** 돌려야 함(백업 섹션 참조).
 - **`--volumes` prune 절대 금지.** 그 한 번에 DB가 사라진다.
 
@@ -1007,7 +1017,7 @@ VM 삭제·디스크 장애·실수로 `docker compose down -v`(볼륨까지 삭
 **먼저 반드시 알 것 — `.env`는 백업에 없다.** DB 백업에도 자산 tar에도 안 들어간다. 그런데 `.env`가 없으면 애초에 서비스가 안 뜬다:
 
 - `main.py:_validate_prod_config`(33-46행)가 https 오리진 감지 시 `COOKIE_SECURE`·`PUBLIC_BASE_URL`·`RENDER_TOKEN` 없으면 **startup crash**(fail-closed).
-- `TUNNEL_TOKEN` 없으면 앞문(공개 URL) 자체가 안 생김.
+- `SITE_ADDRESS` 없으면 Caddy가 자동 HTTPS를 못 켜 앞문(공개 URL)이 안 뜬다.
 - `ANTHROPIC_API_KEY` 없으면 덱 저작 불가.
 
 → `.env`는 **비밀번호 매니저나 Azure Key Vault 등 VM 밖 안전한 곳에 따로 보관**하고, secret 로테이션 때마다 갱신한다. 이것 없으면 데이터 복원해도 못 띄운다.
@@ -1039,11 +1049,12 @@ docker run --rm -v polyinsight-data:/data -v "$PWD/restore":/restore alpine sh -
 # 6. 기동 (compose가 STORAGE_DIR=/data/blobstore 넣도록 0단계 반영됐는지 확인)
 docker compose up -d --build
 
-# 7. 확인 — cloudflared가 같은 TUNNEL_TOKEN으로 같은 공개 도메인에 자동 재연결
-docker compose logs -f cloudflared
+# 7. 확인 — Caddy가 새 VM에서 Let's Encrypt 인증서를 다시 발급하는지
+docker compose logs -f caddy      # "certificate obtained successfully"
 ```
 
-- [ ] `.env`의 `TUNNEL_TOKEN`이 이전과 동일 → 기존 공개 URL 그대로 복귀(named 터널이라 링크 안 바뀜)
+- [ ] **공개 URL 복구**: 새 VM은 **새 공용 IP**를 받는다. 같은 리전(Japan East)에서 새 공용 IP에 DNS 이름 레이블 `polyinsight`를 재지정하면 **같은 호스트네임(`polyinsight.japaneast.cloudapp.azure.com`)이 복구**된다(구 IP 리소스는 먼저 삭제/해제해야 라벨 충돌 안 남). 라벨을 못 되살리면 새 호스트네임 → `.env`의 `SITE_ADDRESS`·`PUBLIC_BASE_URL`·`ALLOWED_ORIGINS`(+ OAuth 콜백·인증메일 링크) 갱신 후 재기동.
+- [ ] NSG 80·443 개방 확인(신규 VM은 규칙을 다시 걸어야 인증서 발급됨).
 - [ ] 로그인·덱 열기·새 덱 저작(Anthropic 키 살아있나) 각 1회 확인
 - [ ] `restore/`에 스냅샷이 여러 개면 **DB와 assets를 같은 타임스탬프 짝**만 골라 복원(위 명령의 `*` 글롭은 짝이 1개일 때만 안전 — 여러 개면 파일명을 명시)
 
@@ -1087,20 +1098,20 @@ docker compose logs -f cloudflared
 ### 0. 한눈에 — 지금 우리가 굴리는 것
 
 ```
-[내 노트북]  ──ssh──▶  [Azure VM (Ubuntu)]
+[내 노트북]  ──ssh(22)──▶  [Azure VM (Ubuntu), 공용 IP 20.210.112.15]
                           └ docker compose 로 컨테이너 3개
                              ├ backend  (FastAPI + Playwright/Chromium)  ← 무거움(RAM 먹는 놈)
                              ├ web      (Next.js)
-                             └ cloudflared (터널)  ──outbound──▶ [Cloudflare] ──HTTPS──▶ 사용자
-                          └ docker 볼륨 polyinsight-data → /data (SQLite DB)
+                             └ caddy (앞문)  ◀──inbound 80/443──  [Let's Encrypt HTTPS]  ◀──  사용자
+                          └ docker 볼륨 polyinsight-data → /data (SQLite DB) · caddy-data(인증서)
 ```
 
 핵심 사실 4가지 (이거만 외워도 절반):
 
-- **앞문은 cloudflared 터널**이다. `docker-compose.yml`은 호스트로 포트를 **하나도 안 연다**(`expose`만, `ports` 없음 — compose:15-16,27-28). cloudflared가 밖으로만 나가 Cloudflare에 붙는다. → **NSG에서 80/443 열 필요 없음. SSH(22)만.**
+- **앞문은 Caddy 리버스 프록시**다. caddy 컨테이너가 호스트 **80·443**을 열어(compose:41-43) Let's Encrypt로 HTTPS를 종단하고 `web:3000`으로 프록시한다. backend·web은 여전히 호스트 포트를 안 연다(`expose`만 — compose:17-18,30-31). → **NSG에 22·80·443**을 연다(80은 인증서 발급용). ⚠️ VM 공용 IP(20.210.112.15)가 직접 노출되고 Cloudflare 은닉·DDoS 방어는 없다.
 - **데이터는 docker 볼륨 `polyinsight-data`(/data) 한 곳**에만 산다(compose:13-14,42-43). VM이 죽어도 이 볼륨만 살아있으면 DB는 산다. ⚠️ **단, 지금은 SQLite DB만 이 볼륨에 있고, 카드 PNG·export·유저 업로드 자산(STORAGE_DIR)은 볼륨 밖**(컨테이너 안 `backend/var/blobstore`, config.py:35). 컨테이너를 새로 만들면 이게 사라진다(위험 C3 — §5에서 반드시 조치).
-- **진짜 돈 나가는 건 두 개뿐**: Azure VM(고정비, 크레딧 차감) + Anthropic **Opus** 토큰(덱 만들 때마다 변동비, config.py:15 `LLM_MODEL_AUTHOR`). 나머지(터널·Next·FastAPI)는 약 $0.
-- **Azure는 다리(bridge)다.** 학생 크레딧 다 쓰면 **같은 `docker-compose.yml` 그대로** Oracle ARM 무료로 이사한다(§6). backend 이미지가 arm64 지원(`mcr.microsoft.com/playwright/python`, Dockerfile:2-3)이라 그대로 뜬다.
+- **진짜 돈 나가는 건 두 개뿐**: Azure VM(고정비, 크레딧 차감) + Anthropic **Opus** 토큰(덱 만들 때마다 변동비, config.py:15 `LLM_MODEL_AUTHOR`). 나머지(Caddy·Next·FastAPI, Let's Encrypt 인증서)는 약 $0.
+- **Azure는 다리(bridge)다.** 학생 크레딧 다 쓰면 **컴퓨트를** Oracle ARM 무료로 이사한다(§6). backend 이미지가 arm64 지원(`mcr.microsoft.com/playwright/python`, Dockerfile:2-3)이라 그대로 뜬다. ⚠️ **단 앞문(Caddy + Azure cloudapp 호스트네임)은 Azure 전용** — Oracle엔 무료 DNS 호스트네임이 없어 앞문/도메인은 재결정(§5-5·§9-3). "compose가 앞문까지 그대로 뜬다"고 보지 말 것.
 
 ---
 
@@ -1113,15 +1124,15 @@ docker compose logs -f cloudflared
 | **리소스 그룹** | 나머지 5개를 담는 폴더 | 검색창 → "리소스 그룹" | 이걸 삭제하면 안의 모든 게 한 번에 삭제됨. 실수 주의 |
 | **가상 머신(VM)** | 우리 컴퓨터 1대 | "가상 머신" → 이름 클릭 | 켜짐/꺼짐·크기·비용의 원천 |
 | **디스크(Disk)** | VM에 붙은 OS 저장소 | VM → 왼쪽 "디스크" | 꽉 차면 배포·렌더 실패. `df -h`로 감시(§4) |
-| **네트워크 보안 그룹(NSG)** | 방화벽 규칙 | VM → "네트워킹" | **SSH(22)만 열려 있어야 정상.** 80/443 열려 있으면 닫아라 |
-| **공용 IP** | SSH 접속용 주소 | VM 개요 화면 상단 | 이 주소로 ssh. 사용자 접속용 아님(그건 터널 URL) |
+| **네트워크 보안 그룹(NSG)** | 방화벽 규칙 | VM → "네트워킹" | **22·80·443이 열려 있어야 정상**(80/443=Caddy 앞문·인증서). 3000/8000 열려 있으면 닫아라 |
+| **공용 IP** | 앞문·SSH 주소 (20.210.112.15) | VM 개요 화면 상단 | 이 주소로 ssh. 동시에 **앞문(80/443)이자 공개 도메인이 가리키는 IP** — DNS 이름 레이블 `polyinsight`가 여기 붙어 `polyinsight.japaneast.cloudapp.azure.com`으로 해석됨 |
 | **예산(Budget)** | 크레딧 소진 경보 | 검색 → "비용 관리 + 청구" → "예산" | **가장 중요.** 안 걸면 조용히 크레딧 증발 |
 
 체크리스트 — VM 만들고 나서 한 번에 확인:
 - [ ] 리소스 그룹 이름을 적어 뒀다 (예: `rg-polyinsight`) → §7 기록장에.
-- [ ] NSG 인바운드 규칙에 **22(SSH)만** 있다. 80/443/기타 열려 있으면 삭제.
-- [ ] SSH를 **내 IP에서만** 허용(NSG 규칙 source = `My IP`). 안 되면 최소한 키 인증만 쓰고 비밀번호 로그인 끈다.
-- [ ] 공용 IP를 적어 뒀다.
+- [ ] NSG 인바운드 규칙에 **22·80·443**이 있다(80/443=Caddy 앞문). 3000/8000/기타 열려 있으면 삭제.
+- [ ] SSH(22)를 **내 IP에서만** 허용(NSG 규칙 source = `My IP`). 80·443은 전체 개방(Let's Encrypt·서비스용). 안 되면 최소한 키 인증만 쓰고 비밀번호 로그인 끈다.
+- [ ] 공용 IP(20.210.112.15)와 DNS 이름 레이블(`polyinsight`)을 적어 뒀다.
 - [ ] 예산 경보를 걸었다(아래).
 
 #### 비용·예산 — 크레딧 감시 (이게 §6 이사 트리거)
@@ -1131,7 +1142,7 @@ docker compose logs -f cloudflared
   - 즉 "$100 = 12개월"은 **가끔 켜는** 파일럿 기준. 상시 운영이면 크레딧은 몇 달치다. 이 현실을 박사님께 미리 공유.
 - **예산 경보 거는 법**: Portal → "비용 관리 + 청구" → "예산" → 만들기 → 금액 약 $80, 경보 임계 50%/80%/100% → 알림 이메일 = 운영자 주소.
 - **매주 1회** "비용 관리 → 비용 분석"에서 이번 달 누적·남은 크레딧을 눈으로 본다. 이 숫자가 §6(Oracle 이사)의 방아쇠다.
-- 돈 아끼는 스위치: **파일럿이라 밤엔 안 쓴다면 VM을 꺼둔다**(Portal에서 VM "중지/할당 취소"). 꺼진 시간은 컴퓨팅 과금 안 됨(디스크 소액만). 단, 껐다 켜면 공용 IP가 바뀔 수 있음 → 접속 전 Portal에서 IP 재확인(사용자용 터널 URL은 안 바뀜).
+- 돈 아끼는 스위치: **파일럿이라 밤엔 안 쓴다면 VM을 꺼둔다**(Portal에서 VM "중지/할당 취소"). 꺼진 시간은 컴퓨팅 과금 안 됨(디스크 소액만). 단, VM이 꺼진 동안은 **Caddy 앞문도 죽어 공개 URL이 응답 안 함**(시연 링크 상시개방과 양립 불가). DNS 이름 레이블은 공용 IP 리소스에 붙어 있어 호스트네임 자체는 유지되지만, 껐다 켤 때 공용 IP가 바뀌면(동적 IP) 접속 전 Portal에서 IP를 재확인한다(호스트네임은 자동으로 새 IP를 가리킴).
 
 ---
 
@@ -1141,7 +1152,7 @@ docker compose logs -f cloudflared
 
 - IaC는 VM을 수십 대 반복 생성/폐기할 때 빛난다. 우리는 **VM 1대**다. 손으로 한 번 만드는 게 배우는 것보다 빠르다.
 - **이미 코드화되어 우리를 지켜주는 것**(이게 진짜 IaC 자산):
-  - `docker-compose.yml` — 어떤 컨테이너가 어떻게 뜨는지. VM이 죽어도 이 파일 + `.env`만 있으면 **어디서든 30분 안에 재현**(Oracle 이사가 쉬운 이유).
+  - `docker-compose.yml` + `deploy/Caddyfile` — 어떤 컨테이너가 어떻게 뜨는지. VM이 죽어도 이 파일 + `.env`만 있으면 **어디서든 30분 안에 컴퓨트 재현**(Oracle 이사가 쉬운 이유). ⚠️ 단 앞문의 공개 주소(Azure cloudapp 호스트네임)는 Azure 전용이라 다른 클라우드에선 `SITE_ADDRESS`·DNS를 다시 잡아야 한다.
   - `.env` — 비밀·설정 전부. 코드가 아니라 비밀이라 git에 안 올림(§7에서 따로 백업).
   - `backend/Dockerfile` — arm64 지원 이미지라 Oracle ARM에서도 그대로 뜸.
 - **나중에(배포가 반복되면) 코드화 후보** — 지금은 하지 마라:
@@ -1151,35 +1162,37 @@ docker compose logs -f cloudflared
 
 ---
 
-### 3. 앞문 / DNS 관리 — cloudflared 터널
+### 3. 앞문 / DNS 관리 — Caddy + Azure cloudapp 호스트네임
 
-우리 서비스의 공개 주소는 **Cloudflare 터널**이 만든다. Azure 공용 IP가 아니다.
+우리 서비스의 공개 주소는 **Azure 공용 IP의 무료 DNS 호스트네임**(`polyinsight.japaneast.cloudapp.azure.com`)이고, HTTPS는 **Caddy 컨테이너**가 종단한다. 도메인 구매는 없다.
 
 작동 방식 (왜 편한가):
-- `cloudflared` 컨테이너가 **밖으로** Cloudflare에 붙는다(named tunnel, command `tunnel --no-autoupdate run`, compose:33-40). → Azure 인바운드 포트 개방 불필요, 서버 IP 은닉, 기본 DDoS 방어가 공짜.
-- VM이 항상 켜져 있으면 이 터널 링크는 안정적으로 유지된다.
+- `caddy` 컨테이너(`caddy:2`)가 호스트 **80·443**을 열고(compose:41-43) Let's Encrypt로 인증서를 자동 발급·갱신해 `web:3000`으로 프록시한다(compose:37-51). → 도메인 0원, TLS 0원.
+- ⚠️ 대가: **Azure 인바운드 80/443 개방 필요 + VM 공용 IP 직접 노출**(Cloudflare의 IP 은닉·기본 DDoS 방어는 없어짐). 인터넷 봇이 이 IP를 스캔한다.
+- 발급된 인증서는 `caddy-data` 볼륨(compose:46)에 영속돼 재시작마다 재발급(Let's Encrypt 레이트리밋)되지 않는다.
 
-토큰·설정이 어디 있나:
-- 터널 토큰 = **`.env`의 `TUNNEL_TOKEN`** 한 줄. `docker-compose.yml:37`이 이걸 읽는다.
-- 발급/재발급 = Cloudflare 대시보드 → **Zero Trust → Networks → Tunnels**.
-- 라우팅(어느 도메인 → `web:3000`)은 Cloudflare 터널 설정(대시보드의 Public Hostname)에 저장됨. compose는 `web:3000`만 안다.
+설정이 어디 있나:
+- 공개 FQDN = **`.env`의 `SITE_ADDRESS`** 한 줄(스킴 없이). caddy 서비스가 이 값으로 자동 HTTPS를 켠다(compose:40).
+- 앞문 라우팅 = **`deploy/Caddyfile`** (`{$SITE_ADDRESS} { reverse_proxy web:3000 }`). compose는 이 파일을 read-only로 마운트(compose:45).
+- 호스트네임의 근원 = Azure 공용 IP 리소스의 **DNS 이름 레이블**(`polyinsight`, 리전 Japan East). Portal → 공용 IP → Configuration에서 설정.
 
-**링크(공개 URL)가 바뀌는 조건** — 바뀌면 사용자 접속 끊김 + 인증메일 링크 깨짐:
-- 터널을 **삭제하고 새로 만들면** 바뀐다 → 하지 마라. 이사할 땐 **같은 토큰을 새 호스트에** 그대로 옮긴다(§6). URL 유지.
-- `TUNNEL_TOKEN`을 새 걸로 갈아끼우면 바뀐다.
-- ⚠️ 공개 URL(도메인)이 바뀌면 **`.env`의 `PUBLIC_BASE_URL`도 같이 바꿔야** 인증메일 링크가 안 깨진다(config.py:78). 미설정으로 https 배포하면 backend가 startup에서 크래시(main.py:43-44).
+**공개 URL이 바뀌는 조건** — 바뀌면 사용자 접속 끊김 + 인증메일/OAuth 링크 깨짐:
+- 공용 IP 리소스를 **삭제하고 새로 만들면** DNS 이름 레이블을 다시 붙여야 한다(같은 리전이면 같은 레이블 재사용 가능 → 같은 호스트네임 복구).
+- **다른 클라우드(Oracle 등)로 이사**하면 cloudapp 호스트네임을 못 쓴다 → 앞문/도메인 재결정(§5-5).
+- ⚠️ 공개 URL이 바뀌면 **`.env`의 `SITE_ADDRESS`·`PUBLIC_BASE_URL`·`ALLOWED_ORIGINS`(+ OAuth 콜백)를 같이 바꿔야** 인증서·인증메일 링크가 안 깨진다(config.py:78). `PUBLIC_BASE_URL` 미설정으로 https 배포하면 backend가 startup에서 크래시(main.py:43-44).
 
 **HTTPS 배포 시 반드시 세팅**(안 하면 backend 컨테이너가 아예 안 뜸 — `_validate_prod_config`, main.py:33-46). 게이트가 켜지는 조건 = `ALLOWED_ORIGINS` 또는 `PUBLIC_BASE_URL` 중 하나라도 `https://`면 자동 감지(main.py:39):
+- [ ] `.env`에 `SITE_ADDRESS=polyinsight.japaneast.cloudapp.azure.com`  (없으면 Caddy가 앞문을 못 켬)
 - [ ] `.env`에 `COOKIE_SECURE=True`  (없으면 crash, main.py:42)
-- [ ] `.env`에 `PUBLIC_BASE_URL=https://우리터널도메인`  (없으면 crash, main.py:44)
+- [ ] `.env`에 `PUBLIC_BASE_URL=https://polyinsight.japaneast.cloudapp.azure.com`  (없으면 crash, main.py:44)
 - [ ] `.env`에 `RENDER_TOKEN=<랜덤 긴 문자열>`  (없으면 crash, main.py:46)
-  - 셋 중 하나라도 빠지면 startup 크래시(일부러 그렇게 막아둠 = fail-closed). `docker compose logs backend`에 한글 에러가 찍힌다.
+  - 앱 게이트 셋(COOKIE_SECURE·PUBLIC_BASE_URL·RENDER_TOKEN) 중 하나라도 빠지면 startup 크래시(일부러 그렇게 막아둠 = fail-closed). `docker compose logs backend`에 한글 에러가 찍힌다.
 
 **나중에 진짜 도메인 붙이는 법**(예: `polyinsight.kitech.re.kr`):
-1. 도메인을 Cloudflare에 추가(또는 KITECH DNS에 CNAME으로 터널 지정).
-2. Cloudflare Tunnel → Public Hostname에 그 도메인 → `http://web:3000` 매핑.
-3. `.env`의 `PUBLIC_BASE_URL`·`ALLOWED_ORIGINS`를 새 도메인으로 교체.
-4. `docker compose up -d backend`로 backend 재시작(설정 다시 읽힘). ⚠️ **`ALLOWED_ORIGINS`는 web 이미지에 빌드 시점에 굽지 않으니 backend만 재시작하면 됨. 단 `BACKEND_ORIGIN`처럼 web build-arg를 바꾸면 `--build`로 web 재빌드 필요**(compose:23-26).
+1. 도메인의 DNS(A 레코드)를 VM 공용 IP(20.210.112.15)로 가리킨다(또는 KITECH DNS에 A/CNAME 등록).
+2. `.env`의 `SITE_ADDRESS`를 새 도메인으로 교체 → Caddy가 그 도메인으로 새 Let's Encrypt 인증서를 자동 발급.
+3. `.env`의 `PUBLIC_BASE_URL`·`ALLOWED_ORIGINS`도 새 도메인으로 교체.
+4. `docker compose up -d caddy backend`로 재기동. ⚠️ **`ALLOWED_ORIGINS`는 web 이미지에 빌드 시점에 굽지 않으니 backend만 재시작하면 됨. 단 `BACKEND_ORIGIN`처럼 web build-arg를 바꾸면 `--build`로 web 재빌드 필요**(compose:26-29).
 
 ---
 
@@ -1189,7 +1202,7 @@ docker compose logs -f cloudflared
 
 일상 감시 (SSH 들어가서 30초):
 ```bash
-docker compose ps          # 컨테이너 3개(backend/web/cloudflared) 다 Up 인가
+docker compose ps          # 컨테이너 3개(backend/web/caddy) 다 Up 인가
 free -h                    # 남는 메모리 (Chromium이 램 먹음)
 df -h /                    # 디스크 여유 (꽉 차면 배포/렌더 실패)
 docker stats --no-stream   # 컨테이너별 CPU/메모리 순간값
@@ -1256,7 +1269,7 @@ docker compose exec -T backend python -m backend.scripts.backup_db --dest /data/
 
 ### 6. ★ 크레딧 소진 → Oracle ARM 무료 이사
 
-**왜 쉬운가**: 배포가 통째로 `docker-compose.yml` + `.env` 두 파일에 담기고, `backend/Dockerfile`이 arm64 지원 이미지(`mcr.microsoft.com/playwright/python:v1.44.0-jammy`, Dockerfile:3)라 **Oracle Ampere(ARM)에서 그대로 뜬다.** 터널 토큰을 그대로 옮기면 **공개 URL도 안 바뀐다**(DNS 손댈 필요 없음).
+**왜 (컴퓨트는) 쉬운가**: 배포가 통째로 `docker-compose.yml` + `deploy/Caddyfile` + `.env`에 담기고, `backend/Dockerfile`이 arm64 지원 이미지(`mcr.microsoft.com/playwright/python:v1.44.0-jammy`, Dockerfile:3)라 **Oracle Ampere(ARM)에서 backend·web·SQLite가 그대로 뜬다.** ⚠️ **앞문은 그대로가 아니다**: 지금 공개 주소는 Azure `cloudapp.azure.com` 무료 호스트네임이라 Oracle에선 못 쓴다 → 앞문/도메인을 새로 정하고(도메인 구매+Caddy / Cloudflare named 터널+도메인 / DuckDNS+Caddy) `.env`의 `SITE_ADDRESS`·`PUBLIC_BASE_URL`·`ALLOWED_ORIGINS` + DNS를 새로 잡아야 한다. **공개 URL이 바뀌면 인증메일·OAuth 링크도 갱신.**
 
 **이사 트리거**(하나라도):
 - Azure 비용 분석의 남은 크레딧이 약 $20 밑으로.
@@ -1271,9 +1284,9 @@ docker compose exec -T backend python -m backend.scripts.backup_db --dest /data/
   - Azure VM에서: `docker compose exec -T backend python -m backend.scripts.backup_db --dest /data/backups` → DB+자산 스냅샷 쌍 생성.
   - 그 스냅샷 쌍(`polyinsight_*.db` + `assets_*.tar.gz`)을 새 VM으로 `scp`.
   - 새 VM에서 compose 한 번 떠서 볼륨 생성 후, **복원 리허설**(backup_db.py 1~7단계): backend 정지 → DB를 `/data/polyinsight.db`로 복사 → `assets_*.tar.gz`를 STORAGE_DIR(`/data/blobstore`)에 풀기 → backend 기동 → 로그인 확인.
-- [ ] 5. **터널 토큰 그대로** — 새 VM `.env`의 `TUNNEL_TOKEN`을 **기존 값 그대로** 둔다. cloudflared가 새 호스트에서 붙으면 **같은 공개 URL로 트래픽이 넘어옴**(URL·인증메일 링크 무손상).
+- [ ] 5. **새 앞문 세팅(★열린 결정)** — Oracle엔 Azure cloudapp 호스트네임이 없다. 앞문 옵션을 하나 고른다: ⓐ 도메인 구매 후 그 도메인 A레코드를 Oracle VM 공용 IP로 → `SITE_ADDRESS`=그 도메인(Caddy가 Let's Encrypt 발급), ⓑ Cloudflare named 터널+도메인, ⓒ DuckDNS 등 무료 동적 DNS+Caddy. 고른 뒤 새 VM `.env`의 `SITE_ADDRESS`·`PUBLIC_BASE_URL`·`ALLOWED_ORIGINS`(+ OAuth 콜백)를 새 주소로 맞춘다. 공개 URL이 바뀌므로 인증메일 링크·시연 링크를 새로 안내.
 - [ ] 6. 새 VM에서 `docker compose up -d --build`. 사용자 접속·덱 1개 열림 확인.
-- [ ] 7. **양쪽 동시 실행 주의**: 같은 터널 토큰으로 두 호스트가 동시에 뜨면 트래픽이 갈린다. 새 VM 검증 끝나면 **Azure의 cloudflared만 내려**(`docker compose stop cloudflared`) 트래픽은 새 VM으로 몰되 Azure 데이터는 롤백용으로 며칠 보존.
+- [ ] 7. **전환(컷오버) 주의**: 새 VM 검증이 끝나면 공개 주소(DNS)를 새 Oracle 앞문으로 넘긴다. Azure는 앞문만 내려(`docker compose stop caddy`) 트래픽을 끊되 데이터는 롤백용으로 며칠 보존. (Azure↔Oracle은 주소가 다르니 트래픽이 자동으로 안 갈린다 — DNS/링크 안내를 새 주소로 바꾸는 시점이 컷오버다.)
 - [ ] 8. 안정 확인 후 Azure 리소스 그룹 삭제(과금 종료). **삭제 전 마지막 백업 한 벌을 VM 밖에 보관.**
 
 ---
@@ -1283,16 +1296,16 @@ docker compose exec -T backend python -m backend.scripts.backup_db --dest /data/
 **bus factor = 운영자(너)가 갑자기 사라져도 다음 사람이 복구할 수 있나.** 지금은 1명이라 취약하다. 아래 최소 기록만 있으면 남이 30분 안에 서비스를 되살릴 수 있다.
 
 **어딘가 안전한 곳(1Password/암호화 메모/박사님과 공유 드라이브)에 보관** — git에 올리지 말 것:
-- [ ] `.env` 파일 **통째로 백업**(`TUNNEL_TOKEN`·`RENDER_TOKEN`·`ANTHROPIC_API_KEY`·`RESEND_API_KEY`·`PUBLIC_BASE_URL` 등 전부). 서버 잃으면 이 파일이 서비스의 심장.
+- [ ] `.env` 파일 **통째로 백업**(`SITE_ADDRESS`·`RENDER_TOKEN`·`ANTHROPIC_API_KEY`·`RESEND_API_KEY`·`PUBLIC_BASE_URL` 등 전부). 서버 잃으면 이 파일이 서비스의 심장.
 - [ ] **Azure 리소스 이름들**: 리소스 그룹명, VM명, 공용 IP, 리전.
-- [ ] **Cloudflare 터널 위치**: 어느 Cloudflare 계정, Zero Trust → Tunnels의 터널 이름, 토큰 재발급 경로.
+- [ ] **앞문(Azure) 위치**: 공용 IP(20.210.112.15), 공용 IP의 DNS 이름 레이블(`polyinsight`, 리전 Japan East), 리소스 그룹명(`polyinsight`), NSG 규칙(22·80·443). 앞문 설정 = `deploy/Caddyfile` + `.env`의 `SITE_ADDRESS`.
 - [ ] **Anthropic 콘솔 계정**(Opus 키 재발급·사용량·비용 확인처) + **Resend 계정**(이메일).
 - [ ] SSH 접속법: `ssh user@<공용IP>` + 키 파일 위치.
 - [ ] 복구 한 줄 요약: "레포 clone → `.env` 복원 → `docker compose up -d --build` → 백업 DB·자산 복원(§5)".
 
 **이 매뉴얼을 최신으로 유지하는 규칙** (인프라 변경 = 문서 변경, 프로젝트 CLAUDE.md §4 "docs 먼저"):
 - [ ] compose·Dockerfile·`.env` 스키마를 바꾸면 → **같은 커밋에서** 이 매뉴얼의 해당 표/명령을 고친다.
-- [ ] VM 크기·리전·터널 도메인을 바꾸면 → §1·§3 값과 §7 기록장 갱신.
+- [ ] VM 크기·리전·공개 도메인(`SITE_ADDRESS`)을 바꾸면 → §1·§3 값과 §7 기록장 갱신.
 - [ ] Azure→Oracle 이사를 하면 → §0·§1을 Oracle 기준으로 갈아엎고 제목 옆에 "호스트=Oracle" 표기.
 - [ ] 위험대장에서 C3(STORAGE_DIR 볼륨)·백업 cron이 **해결되면** → §5의 ⚠️ 경고를 "완료"로 바꾼다. 해결 전까진 경고 유지.
 - [ ] **변경 이력 표**를 이 문서 맨 아래 두고, 인프라 만지는 날마다 한 줄 추가(날짜·무엇·왜).
@@ -1329,16 +1342,18 @@ docker compose exec -T backend python -m backend.scripts.backup_db --dest /data/
 ### 10-4. 박사님 온보딩 + 자격증명 인수인계 + SLA 고지 (bus factor)
 - **계정 발급**: 박사님 계정 만들어 전달(§10-1).
 - **한계 고지(중요)**: 단일 호스트·단일 프로세스 → **무중단 아님**, 재배포/재부팅 시 진행 중 덱 생성이 실패할 수 있음. "완제품 아니라 파일럿"임을 미리 문서로 공유해 기대치 맞춘다.
-- **인수인계 봉투**(운영자 부재 대비): `.env` 사본 위치, SSH 키, Azure/Cloudflare/Anthropic/Resend 콘솔 계정, 터널 토큰 보관처를 한곳에 정리(암호화). 이걸 잃으면 아무도 못 고친다.
+- **인수인계 봉투**(운영자 부재 대비): `.env` 사본 위치, SSH 키, Azure/Anthropic/Resend 콘솔 계정, Azure 공용 IP·DNS 레이블(`polyinsight`)·리소스 그룹명을 한곳에 정리(암호화). 이걸 잃으면 아무도 못 고친다.
 
 ### 10-5. 로그 로테이션 (디스크풀 방지)
 `run.log`와 docker json 로그가 무한 증식 → 디스크풀 → 렌더/배포 실패. 30GB 디스크에서 실제 위험.
 - docker 로그 상한: compose 각 서비스에 `logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }` 추가.
 - `run.log`는 주기적 truncate 또는 `logrotate` 등록.
 
-### 10-6. Cloudflare 계정 보안 (실제 앞문 컨트롤플레인)
-전체 트래픽이 Cloudflare 계정·`TUNNEL_TOKEN`에 달렸다. VM만 지키고 여기가 뚫리면 무력.
-- Cloudflare 계정 **2FA 필수**. `TUNNEL_TOKEN` 유출 시 Zero Trust서 터널 재생성(§4-C). 도메인 쓰면 **소유·만료 관리**.
+### 10-6. Azure 계정 보안 (실제 앞문·컨트롤플레인)
+앞문이 Cloudflare에서 **Azure(공용 IP·NSG·cloudapp 호스트네임) + Caddy**로 바뀌었다. 이제 컨트롤플레인은 Azure 계정이다. VM만 지키고 Azure 계정이 뚫리면 무력.
+- Azure 계정 **2FA(MFA) 필수**. NSG를 함부로 못 바꾸게 최소 권한.
+- **인증서는 Caddy가 자동 갱신** — 별도 만료 관리 불필요. 단 갱신 실패(NSG 80 닫힘 등) 대비해 §7-3 SSL 모니터로 감시.
+- 나중에 진짜 도메인을 사면 그 **도메인 소유·만료 관리**(레지스트라 2FA)가 추가된다.
 
 ### 10-7. 배포 브랜치·버전 확정
 현재 작업 브랜치 `feat/emerald-redesign`가 `main`보다 **약 143커밋 앞섬**(위험대장). 배포 시 **어느 브랜치/커밋**을 올리고 롤백 시 **어느 커밋**으로 되돌릴지 못 박아라(태그 권장: 배포마다 `git tag deploy-YYYYMMDD`).
@@ -1350,9 +1365,9 @@ docker compose exec -T backend python -m backend.scripts.backup_db --dest /data/
 | # | 결정 | 선택지 · 기본 권장 |
 |---|---|---|
 | D1 | **VM 크기 + 동시성** | B2s(2vCPU/4GB, 약 $33/월) 기본. 4GB라 Chromium OOM 방지로 `.env`에 `MAX_CONCURRENT_JOBS=2~3`. 여유 원하면 B2ms(약 $60, runway↓) |
-| D2 | **켜둠 정책** | 파일럿 기본 = **항상 켜짐**(박사님 아무때나 접속, ~3개월 runway). 크레딧 아끼려 `az vm deallocate`하면 **터널 URL도 죽음** → 박사님과 "데모 창" 합의 필요 |
+| D2 | **켜둠 정책** | 파일럿 기본 = **항상 켜짐**(박사님 아무때나 접속, ~3개월 runway). 크레딧 아끼려 `az vm deallocate`하면 **앞문·공개 URL도 죽음**(VM이 꺼지면 Caddy도 정지) → 박사님과 "데모 창" 합의 필요 |
 | D3 | **비용 상한 금액** | Anthropic 월 캡·Azure 예산 금액. 덱 1건 실측(§5) 후 확정. 예: Anthropic $50, Azure $80 |
-| D4 | **주소** | 임시 trycloudflare(무료·VM 안 꺼지면 안정) vs **고정 도메인**(named 터널, 인증메일 안정 위해 권장). KITECH 도메인 접근권 있나? |
+| D4 | **주소** | **결정됨(2026-07-13)**: Azure 무료 호스트네임 `polyinsight.japaneast.cloudapp.azure.com` + Caddy(Let's Encrypt). 남은 결정 = ⓐ 나중에 KITECH 진짜 도메인(`polyinsight.kitech.re.kr` 등) 붙일지 접근권 확인, ⓑ Oracle 이사 시 앞문 재결정(§5-5) |
 | D5 | **이메일** | 테스트모드+계정 미리인증(소수) vs 도메인 DKIM 검증(제대로) — §10-1 |
 | D6 | **백업 오프사이트** | 목적지(노트북 scp / Azure Blob / Oracle Object) + 주기(일 03:00) + 보존(7~30일) + gpg 암호구절 보관처 |
 | D7 | **.env 보관처** | 비번매니저 / 암호화 USB / Key Vault + 로테이션 책임자 |
@@ -1378,3 +1393,4 @@ docker compose exec -T backend python -m backend.scripts.backup_db --dest /data/
 | 날짜 | 버전 | 요약 |
 |---|---|---|
 | 2026-07-13 | v1.0 | 신규. 6축 운영 진단 워크플로(보안·비용·배포·모니터링·백업DR·인프라생애) → 운영 매뉴얼. 실스택 file:line 근거. §1 우선순위·§2 캘린더·§3 응급런북·§10 보완·§11 열린결정·§12 기준통일. |
+| 2026-07-13 | v1.1 | **앞문 교체: cloudflared 터널 → Caddy 리버스 프록시.** 공개 URL = `https://polyinsight.japaneast.cloudapp.azure.com`(Azure 무료 DNS 호스트네임, 도메인 미구매). Caddy(`caddy:2`)가 인바운드 80·443 직접 수신 + Let's Encrypt 자동 HTTPS → `web:3000` 프록시(`deploy/Caddyfile`). `TUNNEL_TOKEN` 폐기·`SITE_ADDRESS` 신규. **보안 서사 변경**: NSG 22·80·443 개방, VM 공용 IP(20.210.112.15) 직접 노출, Cloudflare IP은닉·DDoS방어 상실. 트러블슈팅(cloudflared→caddy 로그)·비용·NSG·env표·§9-3 앞문관리·Oracle이사(앞문=열린결정) 전면 갱신. 근거: 퀵터널 URL 불안정+named터널 도메인 유료(거부) → Azure 무료 호스트네임+Caddy 무료 TLS로 고정+무료+HTTPS 확보(트레이드오프: 인바운드 80/443 개방 수용). |

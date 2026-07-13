@@ -1,5 +1,5 @@
 # System Architecture — 운영 아키텍처 (North Star)
-> PolyInsight | v1.0 · 2026-07-09
+> PolyInsight | v1.2 · 2026-07-13
 > 이 문서는 **배포·운영 관점**의 시스템 아키텍처다.
 > 파이프라인 stage 계약(S1~S8 입출력)은 `04_architecture.md`가 정본이며 이 문서는 그것을 감싸는 상위 그림이다.
 
@@ -67,7 +67,7 @@ Users ──HTTPS──▶ [ FastAPI 단일 프로세스 ]
 | 파일(BLOB) | **전부 SQLite 안** — card_images.png_bytes·exports.zip_bytes·deck_assets.bytes·photo | `core/db.py` |
 | 인증 | 이메일+비번(Resend 인증)·세션·멀티테넌시·Google OAuth(dormant) | `core/auth.py`,`oauth.py` |
 | 프론트 | Next.js 15 (`web/`) | `web/` |
-| 배포(계획) | Oracle ARM + Cloudflare Tunnel | (미실행) |
+| 배포 | **Azure VM** (B2als_v2·2vCPU/4GB, Japan East) + **Caddy 자동HTTPS** | 라이브 2026-07-13 |
 
 **현재의 약점 (북극성이 푸는 것):**
 1. 웹 재시작/크래시 시 **실행 중 job 증발** (할 일 목록이 프로세스 메모리에만 있음).
@@ -81,15 +81,15 @@ Users ──HTTPS──▶ [ FastAPI 단일 프로세스 ]
 ## 3. 북극성 (To-Be) — Web + Worker 분리 (단일 호스트)
 
 느린 작업을 **별도 워커 프로세스**로 떼고, 할 일 목록을 **프로세스 밖 큐**에 둔다.
-전부 **한 호스트(Oracle ARM)** 안 — production 티는 나되 비싸지 않다.
+전부 **한 호스트** 안(현재 Azure VM, 크레딧 소진 시 Oracle ARM으로 컴퓨트 이사 §7) — production 티는 나되 비싸지 않다.
 
 ```
                        Users (KITECH 연구원)
                           │ HTTPS
                           ▼
-                 [ Cloudflare Tunnel ]  ── 앞문: HTTPS·도메인·IP 은닉·DDoS  💰무료
+                 [ Caddy 앞문 ]  ── HTTPS 종단·Let's Encrypt 자동 인증서·Azure 무료 호스트네임  💰무료
                           │
-        ┌─────────────────┴──────────────────┐   ── 한 호스트 (Oracle Always-Free ARM)
+        ┌─────────────────┴──────────────────┐   ── 한 호스트 (현재 Azure VM · 크레딧 소진 시 Oracle ARM)
         ▼                                     ▼
   [ Next.js 프론트 ]                    [ FastAPI 웹 티어 ]  ── 얇음: 인증·업로드접수·상태폴링·결과서빙
    사용자 화면                                │ enqueue "job #123"
@@ -116,7 +116,7 @@ Users ──HTTPS──▶ [ FastAPI 단일 프로세스 ]
 
 | 박스 | 하는 일 | 대안 | 왜 이거 |
 |---|---|---|---|
-| **Cloudflare Tunnel** | 인터넷→호스트 길목. HTTPS·도메인·**서버 IP 은닉**·DDoS 방어 | Caddy/nginx+Let's Encrypt, 포트 직개방 | IP 은닉+공짜 방어가 얹힘. Caddy도 정답급(양방향 문) |
+| **Caddy (앞문)** | 인터넷→호스트 길목. TLS 종단·HTTPS·Let's Encrypt 자동 인증서. Azure 무료 호스트네임(cloudapp.azure.com)에 발급 | Cloudflare named 터널(+도메인), nginx/traefik+certbot | 도메인 구매 없이 고정 HTTPS+무료. 트레이드오프: 인바운드 80/443·공용 IP 노출(CF의 IP 은닉·DDoS 방어는 없음) |
 | **Next.js 프론트** | 사용자 화면 전부 | React/Vite, Vue | *물려받음.* 이미 구현·React 생태계·유지가 정답 |
 | **FastAPI 웹 티어** | 접수원. 인증·접수·상태응답·결과전달. **무거운 일 안 함** | Django, Node, Go | *물려받음.* 파이썬=LLM 생태계 한 몸(워커와 코드 공유), async 네이티브 |
 | **큐** | 할 일 목록(프로세스 밖) | *§7 열린 결정* | 워커가 죽어도 job이 큐에 살아 재시도 |
@@ -124,7 +124,7 @@ Users ──HTTPS──▶ [ FastAPI 단일 프로세스 ]
 | **SQLite 메타DB** | 유저·잡상태·덱JSON 등 작은 구조화 데이터 | Postgres, MySQL | *물려받음.* 서버 없음·운영 0·백업=파일복사. (트리거 §4) |
 | **오브젝트 스토리지** | 무거운 이진 파일 창고 | *§7 열린 결정* | 메타(작고 자주읽음)와 파일(크고 가끔) 분리 = DB 가볍고 백업 쉬움 |
 | **Anthropic Opus** | 논문 읽고 덱 저작하는 뇌 (외부) | — | *물려받음.* 저작 품질=제품 핵심. 유일 변동비 |
-| **호스트: Oracle ARM** | 위를 다 올리는 컴퓨터 1대 (4코어·24GB) | 유료 VPS, EC2, 집서버 | 이 스펙을 **영구 무료** 제공. Chromium RAM 넉넉 |
+| **호스트: Oracle ARM** (목표) | 위를 다 올리는 컴퓨터 1대 (4코어·24GB). 현재는 Azure VM(2vCPU·4GB, 크레딧) | 유료 VPS, EC2, 집서버 | Oracle이 이 스펙을 **영구 무료** 제공(크레딧 소진 시 이사). Chromium RAM 넉넉 |
 
 ### 3-2. 북극성이 푸는 것 (§2 약점 대응)
 
@@ -178,8 +178,8 @@ Users ─▶ CloudFront ─▶ LB ─▶ 웹 컨테이너(오토스케일)
 
 | 항목 | 소규모 비용 |
 |---|---|
-| 호스트 (Oracle Always-Free ARM 4코어·24GB) | **월 $0** |
-| 앞문 (Cloudflare Tunnel) | $0 |
+| 호스트 (현재 Azure VM 크레딧 · 소진 시 Oracle Always-Free ARM 영구무료) | **월 $0** |
+| 앞문 (Caddy + Azure 무료 호스트네임 + Let's Encrypt) | $0 |
 | 큐·DB·프록시·워커 (Redis·SQLite·Caddy·Python) | $0 (오픈소스) |
 | 파일 창고 (파일볼륨 → R2) | $0 ~ 소액 |
 | 이메일 (Resend 무료티어) | $0 |
@@ -201,6 +201,7 @@ Users ─▶ CloudFront ─▶ LB ─▶ 웹 컨테이너(오토스케일)
 
 - **큐: DB-backed vs Redis** — 소규모 시작은 **DB-backed 권장**(프로세스 하나 덜). 워커 다중화 시 Redis(L3).
 - **파일: 파일시스템 vs R2** — 시작은 **파일시스템 권장**, 내구성·다중호스트 필요 시 R2(L5).
+- **Oracle ARM 이사 시 앞문** — 현행 Caddy+Azure 무료 호스트네임(cloudapp.azure.com)은 **Azure 전용**. Oracle Always-Free엔 동급 무료 DNS 호스트네임 없음 → 이사 시 앞문/도메인 재결정: (a)도메인 구매+Caddy, (b)Cloudflare named 터널+도메인, (c)DuckDNS 등 무료 동적DNS+Caddy. "같은 compose가 Oracle에서 앞문까지 그대로 뜬다"는 아님.
 
 **단방향 문 (여기만 신중):** 데이터 모델·인증 구조·공개 API 계약·SQLite→Postgres(L4).
 
@@ -212,3 +213,4 @@ Users ─▶ CloudFront ─▶ LB ─▶ 웹 컨테이너(오토스케일)
 |---|---|---|
 | 2026-07-09 | v1.0 | 신규. 운영 아키텍처 North Star (현재→북극성B→마이그레이션 사다리→먼미래C) + 비용 모델. 실측 기반 현재 상태 확정. |
 | 2026-07-09 | v1.1 | **L0 실행 완료.** 구 저작 파이프라인(orchestrator·s6_card_json·s6/·s8_packaging·`/api/upload`) 삭제 → 저작 단일 경로(`agents/deck/`). 레거시 카드 에디터(CardEditorData) 서브시스템은 보존. §2·§3 반영. 후속=04·05 계약문서 전면 재작성. |
+| 2026-07-13 | v1.2 | **앞문 교체: Cloudflare Tunnel → Caddy 자동HTTPS.** 배포 라이브(Azure VM B2als_v2, Japan East, 공용IP 20.210.112.15). 공개 URL=https://polyinsight.japaneast.cloudapp.azure.com(Azure 공용 IP의 무료 호스트네임, 도메인 미구매). 근거: 퀵터널 도메인은 재시작마다 바뀌어 OAuth 고정 콜백 불가·named 터널은 도메인 구매 필요(거부) → Azure 무료 호스트네임+Caddy Let's Encrypt=고정+무료+HTTPS. 트레이드오프 수용: 인바운드 80/443 개방·공용 IP 노출(cloudflared의 IP 은닉·DDoS 방어 상실). NSG=22·80·443. Oracle 이사 시 앞문은 열린 결정(§7). §2·§3·§6 반영. |

@@ -17,25 +17,25 @@
 
 ## 절대 원칙
 
-1. **비용은 항상 숫자로** — "비싸다/싸다" 금지. Oracle ARM 월 $X, Cloudflare 무료, LLM $Y/편 형태로
+1. **비용은 항상 숫자로** — "비싸다/싸다" 금지. Azure VM 월 $X(크레딧), 앞문 무료(Caddy+Let's Encrypt HTTPS), LLM $Y/편 형태로
 2. **다운되면 수익이 0** — 가용성이 최우선. 새 기능보다 안정성
 3. **회원 데이터는 최소 수집** — 이메일+해시비번 외 수집 근거 없으면 안 모은다
 4. **배포 전 체크리스트** — 롤백 방법 없는 배포 금지
 5. **모니터링 없는 운영 없음** — 알림 없이 돌아가는 서비스 없음
 
-## 현재 운영 상태 (2026-06-26)
+## 현재 운영 상태 (2026-07-13 · 앞문 cloudflared→Caddy 전환)
 
 **인프라**
-- 서버: Oracle ARM (무료 티어) + Cloudflare Tunnel
+- 서버: Azure VM (Standard B2als_v2, 2 vCPU/4 GiB, Japan East, 공용 IP 20.210.112.15, 크레딧) + Caddy 리버스 프록시(앞문, Let's Encrypt HTTPS 자동발급, `web:3000`으로 프록시)
 - DB: SQLite (영구 저장, 단일 파일)
-- 백엔드: FastAPI uvicorn 포트 8000
-- 프론트: Next.js 포트 3000
-- 배포: 런북 작성 완료, 서버 확보 후 실행 대기
+- 백엔드: FastAPI uvicorn 포트 8000 (compose `expose`만 — 외부 직접 노출 아님)
+- 프론트: Next.js 포트 3000 (compose `expose`만 — 외부는 Caddy 경유)
+- 배포: 라이브 — https://polyinsight.japaneast.cloudapp.azure.com (Azure 무료 DNS 호스트네임, 도메인 미구매)
 
 **비용 구조 (현재)**
-- 서버: $0 (Oracle ARM 무료)
+- 서버: $0 (Azure VM, 크레딧 소진 전까지. 소진 시 Oracle Always-Free ARM 이사 — 컴퓨트 한정, 앞문/도메인은 재결정)
 - LLM: Haiku ~$0.01/편, Sonnet Architect ~$0.03/편 → 편당 약 $0.05
-- 도메인·CDN: Cloudflare 무료
+- 앞문·도메인: $0 (Azure 무료 호스트네임 + Caddy Let's Encrypt 무료 TLS, 도메인 미구매). ⚠️ 인바운드 22·80·443 개방·VM 공용 IP 직접 노출 — Cloudflare DDoS 방어·IP 은닉 없음
 
 **백업 정책 (확정 2026-07-03)**
 - 일 1회 `python -m backend.scripts.backup_db` — `VACUUM INTO` 스냅샷 (WAL 라이브 중 안전)

@@ -3,6 +3,8 @@
 > 🚩 **표류 경고 (2026-07-13).** 이 런북은 **Oracle 대상 원안**이며 L0/L1 이후 갱신 안 됨 —
 > **L1 `STORAGE_DIR=/data/blobstore` 볼륨(C3, 이거 없이 따라가면 재배포 시 유저 자산 전량 증발)**,
 > BLOB 이주 스크립트 순서, 백업 자동화, Azure 파일럿이 **여기엔 없다.**
+> **앞문도 바뀜(2026-07-13): Cloudflare 터널 → Caddy 자동 HTTPS + Azure 무료 호스트네임**
+> (`polyinsight.japaneast.cloudapp.azure.com`). 이 런북의 cloudflared·`TUNNEL_TOKEN` 서술은 구식.
 > **현행 배포·운영 정본 = `coo/OPERATIONS.md`**(특히 §1 지금당장·§6 배포). 이 런북 단독으로 배포 금지.
 >
 > 상위 스펙: `docs/superpowers/specs/2026-06-15-lab-deployment-design.md`
