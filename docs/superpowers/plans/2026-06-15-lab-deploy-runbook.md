@@ -1,5 +1,10 @@
 # 배포 런북 — Oracle Always Free VM + Cloudflare Tunnel (Plan 3)
 
+> 🚩 **표류 경고 (2026-07-13).** 이 런북은 **Oracle 대상 원안**이며 L0/L1 이후 갱신 안 됨 —
+> **L1 `STORAGE_DIR=/data/blobstore` 볼륨(C3, 이거 없이 따라가면 재배포 시 유저 자산 전량 증발)**,
+> BLOB 이주 스크립트 순서, 백업 자동화, Azure 파일럿이 **여기엔 없다.**
+> **현행 배포·운영 정본 = `coo/OPERATIONS.md`**(특히 §1 지금당장·§6 배포). 이 런북 단독으로 배포 금지.
+>
 > 상위 스펙: `docs/superpowers/specs/2026-06-15-lab-deployment-design.md`
 > 코드/아티팩트는 완성됨(Dockerfile·compose·env). 이 문서는 **서버 확보 후** 실행하는 절차다.
 > ⚠️ Docker 빌드는 로컬(Windows/x64)에서 검증 불가 → 서버(ARM64)에서 첫 빌드 시 한두 줄 조정 가능성 있음. 그 지점은 아래에 표시.
