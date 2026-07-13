@@ -179,6 +179,9 @@ def main() -> None:
                     help="저작 없이 아카이브된 PNG로 다양성 저지만 재실행")
     ap.add_argument("--only", default=None,
                     help="이 id의 논문 1편만 실행(조건 실험용 — 유료 최소화)")
+    ap.add_argument("--claim-to", default=os.getenv("EVAL_CLAIM_TO", ""),
+                    help="런이 끝나면 산출 덱을 이 계정으로 이전 — 실 토큰으로 만든 작품은 "
+                         "대시보드에 남아야 한다(실험은 격리하되 산출물은 소유자에게).")
     args = ap.parse_args()
 
     spec = json.loads(_EVAL_SET.read_text(encoding="utf-8"))
@@ -263,6 +266,15 @@ def main() -> None:
     failed = [e["id"] for e in results if e.get("status") != "DONE"]
     if failed:
         print(f"\n⚠ 미완료 {failed} — 베이스라인/재측정 커밋 금지. 원인 해결 후 같은 label로 재실행(resume).")
+
+    # 산출물은 소유자에게 — 실험은 격리하되, 실 토큰으로 만든 덱은 대시보드에 남는다.
+    if args.claim_to:
+        from backend.scripts.claim_decks import main_async as _claim
+        try:
+            asyncio.run(_claim(os.getenv("EVAL_EMAIL", ""), args.claim_to, False, None))
+        except SystemExit as exc:
+            print(f"(덱 이전 실패: {exc})")
+
     print(f"결과: {results_path}")
 
 
