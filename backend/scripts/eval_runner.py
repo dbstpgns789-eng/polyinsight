@@ -177,10 +177,16 @@ def main() -> None:
     ap.add_argument("--label", required=True, help="런 라벨 (baseline, after-0715 등)")
     ap.add_argument("--diversity-only", action="store_true",
                     help="저작 없이 아카이브된 PNG로 다양성 저지만 재실행")
+    ap.add_argument("--only", default=None,
+                    help="이 id의 논문 1편만 실행(조건 실험용 — 유료 최소화)")
     args = ap.parse_args()
 
     spec = json.loads(_EVAL_SET.read_text(encoding="utf-8"))
     papers = spec["papers"]
+    if args.only:
+        papers = [p for p in papers if p["id"] == args.only]
+        if not papers:
+            sys.exit(f"[ERROR] eval_set에 '{args.only}' 없음")
     run_dir = _ROOT / "eval" / "runs" / args.label
     run_dir.mkdir(parents=True, exist_ok=True)
     results_path = run_dir / "results.json"
