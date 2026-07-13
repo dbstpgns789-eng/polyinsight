@@ -14,9 +14,24 @@ def test_system_formats_without_error():
 def test_user_formats_without_error():
     u = P.AUTHORING_USER.format(
         few_shot_refs="R", section_map_text="T", title="t", authors="a", year="2026",
-        publisher="p", card_count=5, art_direction="", history_block="",
+        publisher="p", card_count=5, art_direction="", history_block="", figure_block="",
     )
     assert "5장" in u          # card_count 치환 확인
+
+
+def test_figure_block_is_the_papers_own_anchor():
+    """논문이 곧 레퍼런스 — 앵커를 남의 덱에서 논문 자신으로 뒤집는다."""
+    assert P.figure_block(0) == ""              # 그림 없는 논문은 조용히 생략(소프트)
+    b = P.figure_block(3)
+    assert "이 논문 안에 실제로 실린 그림" in b
+    assert "스스로 입고 있는 옷" in b
+    assert "다시 그려라" in b                    # 그대로 붙이기 금지(저작권·해상도)
+    assert "{" not in b and "}" not in b        # .format() 대상이 아니지만 중괄호 혼입 방지
+
+
+def test_refs_can_be_disabled():
+    """AUTHOR_FEWSHOT_N=0이면 refs 주입이 사라진다 — refs 폐기 실험의 스위치."""
+    assert P.few_shot_refs(0) == ""
 
 
 def test_system_has_layer_markers():

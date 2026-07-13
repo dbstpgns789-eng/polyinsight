@@ -42,6 +42,7 @@ async def author_deck(
     style_direction: str | None = None,
     publisher: str | None = None,
     history_block: str = "",
+    figures: list[bytes] | None = None,
 ) -> str:
     """논문 원문 → standalone HTML 덱. DEV_MOCK_LLM 시 레퍼런스 HTML 반환(무비용).
 
@@ -50,6 +51,8 @@ async def author_deck(
     publisher: 발행 주체(기관명·핸들). 유저가 주면 그대로, 비우면 모델이 논문 본문 소속에서 읽어 채운다.
     history_block: 이 계정의 최근 덱 매니페스트(아크·팔레트·모티프) — 소프트 변주 선호.
     모델은 자기가 지난주에 뭘 만들었는지 모른다. 다양성은 파이프라인만 가진 정보(이력)에서 나온다.
+    figures: 이 논문의 그림(SEM·그래프·도식) PNG — '논문이 곧 레퍼런스'(D안).
+    남의 덱(refs)이 아니라 논문 자신을 시각 앵커로 준다. 논문마다 그림이 다르므로 동질화가 불가능.
     """
     if settings.DEV_MOCK_LLM:
         logger.info("deck author: DEV_MOCK_LLM → mock deck")
@@ -68,6 +71,7 @@ async def author_deck(
         art_direction=P.art_direction_block(style_direction),
         publisher=publisher or "(미지정 — 논문 본문 소속에서 읽어 채워라)",
         history_block=history_block,
+        figure_block=P.figure_block(len(figures or [])),
     )
     raw = await llm_client.call(
         system_prompt=system,
@@ -77,6 +81,7 @@ async def author_deck(
         temperature=0.5,
         timeout_s=settings.AUTHOR_TIMEOUT_S,
         stream=True,                            # 대용량 출력 → streaming(>10분 제한 무관)
+        images=figures or None,                 # 논문의 그림을 모델이 직접 본다
     )
     html = _strip_code_fence(raw)
     logger.info("deck authored: %d chars (model=%s)", len(html), settings.LLM_MODEL_AUTHOR)

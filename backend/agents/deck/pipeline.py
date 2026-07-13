@@ -19,6 +19,7 @@ from ...core.models import JobStatus, S1Input
 from ..s1_extractor import s1_agent
 from .authoring import MAX_SOURCE_CHARS, author_deck
 from .deck_renderer import render_deck
+from .figures import extract_figures
 from .manifest import build_history_block, parse_manifest, selfcheck_failures
 
 logger = logging.getLogger(__name__)
@@ -166,6 +167,10 @@ async def _execute(
         await db.update_job(job_id, status=JobStatus.RUNNING, stage="AUTHOR", progress=40)
         # 이 계정의 최근 덱(아크·팔레트·모티프)을 소프트 변주 선호로 주입 — 동질화 차단.
         recent = await db.get_recent_manifests(user_id)
+        # 논문이 곧 레퍼런스 — 이 논문의 그림을 시각 앵커로 준다(남의 덱이 아니라).
+        figures = extract_figures(pdf_bytes, max_figures=settings.AUTHOR_FIGURES_N)
+        if not figures:
+            warnings.append("논문에서 그림을 찾지 못했습니다 — 텍스트만으로 저작합니다.")
         html = await author_deck(
             raw_text=s1_out.raw_text,
             metadata=s1_out.metadata,
@@ -173,6 +178,7 @@ async def _execute(
             persona=persona,
             style_direction=style_direction,
             history_block=build_history_block(recent),
+            figures=figures,
         )
         if not html or "data-screen-label" not in html:
             raise ValueError("저작 결과에 카드(data-screen-label)가 없습니다")

@@ -26,7 +26,13 @@ class Settings(BaseSettings):
     # output에 포함돼 짧은 JSON이어도 총량이 크다. 천장을 올려도 과금은 실사용분만.
     JUDGE_MAX_TOKENS: int = 8000
     AUTHOR_MAX_CARDS: int = 7            # 카드 max 장수(티어로 확장 예정)
-    AUTHOR_FEWSHOT_N: int = 2            # few-shot 레퍼런스 수(입력 토큰/비용 트레이드오프)
+    # few-shot 레퍼런스(남의 덱 HTML) 수. ★0이면 refs를 주지 않는다.
+    # 2026-07-13 실측: refs의 색 이름·헥스가 산출물에 그대로 복사됨(#36E0CE '전기 시안'
+    # → #3DD6D0 '전기 시안'). refs는 소프트 카탈로그로 작동해 '논문 수만큼의 룩'을 막는다.
+    # 대체 경로 = AUTHOR_FIGURES_N('논문이 곧 레퍼런스' — 논문 자신의 그림을 앵커로).
+    AUTHOR_FEWSHOT_N: int = 2
+    # 저작 시 모델에게 보여줄 '이 논문의 그림' 수(비전 입력). 0이면 끔.
+    AUTHOR_FIGURES_N: int = 3
     PLAYWRIGHT_TIMEOUT_MS: int = 15000
     WEB_BASE_URL: str = "http://localhost:3000"  # S7 render 라우트 호스트 (Next.js)
     EXPORT_TTL_HOURS: int = 24

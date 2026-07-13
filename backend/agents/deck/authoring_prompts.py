@@ -216,7 +216,7 @@ AUTHORING_USER = """## 레퍼런스 덱 (방향이 서로 다른 품질 예시 �
 발행 주체: {publisher}
 
 ---
-{history_block}{art_direction}## 지시
+{figure_block}{history_block}{art_direction}## 지시
 위 논문으로 카드 {card_count}장짜리 발행 가능한 덱을 저작하라.
 - 이 논문에 맞는 한 디자인 방향을 정해 {card_count}장 내내 일관 실행.
 - '형태=내용' 체험형 카드를 1장 이상 발명.
@@ -242,6 +242,26 @@ AUTHORING_USER = """## 레퍼런스 덱 (방향이 서로 다른 품질 예시 �
 
 마지막 카드 뒤 </html> 직전에 자가판정을 주석 한 줄로 보고하라:
 <!-- PI_SELFCHECK {{"placeholder": false, "emoji": false, "unit_anchored": true, "derived_ok": true, "hero_number_ok": true, "visual_matches_text": true, "no_dead_zone": true, "manifest_matches": true}} -->"""
+
+
+def figure_block(n: int) -> str:
+    """논문 그림(비전 입력)을 어떻게 쓸지 — '논문이 곧 레퍼런스'(D안).
+
+    앵커를 밖(남의 덱)에서 안(논문 자신)으로 뒤집는다. 그림이 없는 논문(스캔본·이론)이면 빈 문자열.
+    """
+    if n <= 0:
+        return ""
+    return (
+        f"## 이 논문의 그림 {n}장 (첨부 이미지 — 당신의 유일한 시각 레퍼런스)\n"
+        "위에 첨부된 것은 **이 논문 안에 실제로 실린 그림**이다(현미경 사진·그래프·도식).\n"
+        "**이것이 이 논문이 스스로 입고 있는 옷이다.** 팔레트·질감·형태·구조를 여기서 길어 올려라.\n"
+        "- 색: 이 그림들이 쓰는 색조를 카드뉴스 매체에 맞게 **번역**하라(그대로 복사가 아니라, "
+        "이 논문의 세계에서 자란 팔레트로). 회색조 사진뿐이라면 그 무채색 자체가 이 논문의 톤일 수 있다.\n"
+        "- 형태·모티프: 그림 속 실제 형상(구형 입자·섬유망·블록 흐름·곡선 등)을 덱을 관통하는 "
+        "반복 모티프로 삼아라. 논문이 이미 그 형태를 갖고 있는데 남의 모티프를 빌릴 이유가 없다.\n"
+        "- 금지: 그림을 그대로 카드에 붙이지 마라(저작권·해상도). 보고 **다시 그려라**.\n"
+        "- 이 그림들이 이 논문을 다른 모든 논문과 구별한다. 다른 논문과 같은 옷을 입으면 실패다.\n\n"
+    )
 
 
 def art_direction_block(style_direction: str | None) -> str:
