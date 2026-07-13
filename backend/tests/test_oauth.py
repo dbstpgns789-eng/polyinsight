@@ -21,6 +21,10 @@ async def mem_db(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "WEB_BASE_URL", "http://localhost:3000")
     monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "")
     monkeypatch.setattr(settings, "OAUTH_REDIRECT_BASE", "")
+    # 헤르메틱: 기본은 크레딧 없음(dormant). enabled 테스트가 개별로 override.
+    # (실 .env에 Google 크레딧이 있으면 dormant 테스트가 깨지던 것 수정)
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "")
+    monkeypatch.setattr(settings, "GOOGLE_CLIENT_SECRET", "")
     ratelimit.reset_all()
     await _db.migrate()
     yield
