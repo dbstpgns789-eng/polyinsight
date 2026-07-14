@@ -23,6 +23,32 @@ def test_cuts_references_section():
     assert dropped > 0
 
 
+def test_appendix_after_references_survives():
+    """arXiv 관례: References **뒤에** 부록이 온다. 참고문헌만 도려내고 부록은 살린다.
+
+    실측 사고(2026-07-14, GPT-3 논문 213,835자):
+      ... 본문 ... / References / **Appendix D: GPT-3 175B = 3.64E+03 PF-days**
+      헤딩 경로가 References 이후를 통째로 버려 **88,323자(41%)가 사라졌다**.
+      그 안에 카드가 써야 할 컴퓨트 수치(3,640 petaflop/s-day)가 있었다.
+    """
+    bib = "\n".join(
+        f"[{i}] Kim, S., Lee, J. et al. Some Paper Title. Journal vol. {i}, pp. 1-10, 20{10 + i % 10}. doi:10.1234/abc{i}"
+        for i in range(1, 60)
+    )
+    text = (
+        "## 1. Introduction\n" + "본문이 길어야 30% 안전장치를 넘는다. " * 300 +
+        "\n## 5. Conclusion\n우리는 해냈다.\n"
+        "## References\n" + bib +
+        "\n## Appendix D: Total Compute\nGPT-3 175B  3.64E+03 PF-days  3.14E+23 flops\n"
+    )
+    out, dropped = trim_source(text, limit=1_000_000)
+
+    assert "3.64E+03" in out, "부록이 살아야 한다 (참고문헌 뒤에 있다는 이유로 버려지면 안 된다)"
+    assert "우리는 해냈다" in out
+    assert "doi:10.1234" not in out, "참고문헌은 버려야 한다"
+    assert dropped > 1000
+
+
 def test_cuts_acknowledgements_too():
     text = ("본문\n## Conclusion\n결론이다\n"
             "## Acknowledgements\n연구비 지원...\n## References\n[1] ...")
