@@ -23,6 +23,7 @@ from ...core.config import settings
 from ...core.fidelity import verify_deck
 from ...core.llm_client import LLMClient
 from .card_patch import apply_card_patch
+from .layout_audit import audit_deck
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +113,20 @@ async def apply_vision_fix(
             "수정이 새 결함을 만들었을 수 있다(텍스트를 늘려 다른 요소를 밀어냈다든지).\n"
             "**남은 결함이 없다면 HTML을 그대로 다시 출력하라** — 억지로 더 고치지 마라."
         )
+
+    # ★코드가 픽셀로 잰 결함을 좌표까지 찍어 준다 — '빈 곳이 있나?'를 모델의 눈에 맡기지 않는다.
+    #   실측(2026-07-12): 모델은 5편 전부 "전항 통과" 자가신고, 저지는 4편에서 dead_zone 검출.
+    _, notes = audit_deck(card_pngs)
+    audit_block = ""
+    if notes:
+        audit_block = (
+            "\n\n[코드가 픽셀로 측정한 결함 — 논쟁 대상 아님, 그대로 고쳐라]\n"
+            + "\n".join(f"- {n}" for n in notes)
+            + "\n요소를 키우거나 세로 분배를 다시 하라. 여백으로 때우지 마라.\n"
+        )
+
     user = (
-        f"{lead}\n"
+        f"{lead}{audit_block}\n"
         "아래는 그 HTML이다. 위 결함 목록으로 카드를 하나씩 검사하고, **발견한 결함만** 고쳐라.\n\n"
         f"```\n{html}\n```"
     )
