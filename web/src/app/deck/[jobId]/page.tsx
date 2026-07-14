@@ -25,6 +25,7 @@ import DeckExportModal from '@/components/deck/DeckExportModal'
 import { extractCardLabels } from '@/lib/deckLabels'
 import { failureReason } from '@/lib/failureReason'
 import { type VerifyData } from '@/lib/verifyStatus'
+import { useAutosave } from '@/lib/useAutosave'
 
 interface DeckPayload {
   jobId: string; filename?: string; status: string; warnings?: string[]
@@ -130,13 +131,14 @@ function DeckPageInner() {
   const [deck, setDeck] = useState<DeckPayload | null>(null)
   const [rendering, setRendering] = useState(false)
   const deckLoadedRef = useRef(false)
+  const autosaveRef = useRef<{ markClean: () => void } | null>(null)   // 커밋 경로가 자동저장에 '이미 저장됨'을 알린다
 
   // 편집 상태
   const [mode, setMode] = useState<'view' | 'edit'>('view')
-  const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [selected, setSelected] = useState<SelectedInfo | null>(null)
   const [ver, setVer] = useState(0)            // PNG 캐시 무력화 버전
+  const [pngStale, setPngStale] = useState(false)   // 자동저장으로 html은 바뀌었는데 PNG는 아직 안 받은 상태
   const [editWarnings, setEditWarnings] = useState<string[]>([])
   const [proposing, setProposing] = useState(false)
   const [committing, setCommitting] = useState(false)
@@ -208,7 +210,10 @@ function DeckPageInner() {
     return () => { cancelled = true; clearTimeout(timer) }
   }, [jobId])
 
-  const handleSave = useCallback(async () => {
+  // 저장 코어 — silent=true(자동저장)면 선택을 풀지 않고 PNG ver도 올리지 않는다.
+  //   · 선택을 풀면 3초마다 사용자의 선택이 사라진다(편집 불가능해진다)
+  //   · 편집 캔버스는 iframe이라 PNG가 필요 없다 — ver를 올리면 서버 렌더 7장이 헛돈다
+  const saveCore = useCallback(async (silent: boolean) => {
     if (!editorRef.current) return
     setSaving(true)
     try {
@@ -218,12 +223,31 @@ function DeckPageInner() {
         ...prev, html, verify: r.data.verify, cardCount: r.data.cardCount,
       } : prev)
       setEditWarnings(r.data.warnings ?? [])
-      setVer((x) => x + 1)        // 재렌더된 PNG 다시 받기
-      setDirty(false)
       stampSaved()
-      setSelected(null)
+      if (silent) {
+        setPngStale(true)         // 뷰어로 갈 때 한 번만 PNG를 갱신한다
+      } else {
+        setVer((x) => x + 1)      // 재렌더된 PNG 다시 받기
+        setSelected(null)
+      }
     } finally { setSaving(false) }
   }, [jobId, stampSaved])
+
+  const handleSave = useCallback(() => saveCore(false), [saveCore])
+
+  // 자동저장 — 편집 모드에서만. AI 제안(pending)이 떠 있으면 돌지 않는다(사용자가 수락/버림을 결정 중이다).
+  const autosave = useAutosave({
+    enabled: mode === 'edit',
+    save: () => saveCore(true),
+    isBlocked: () => pending !== null || saving || proposing || committing || reverting,
+  })
+  autosaveRef.current = autosave
+
+  // 직접 편집 — 대기 중 AI 제안은 폐기하고(기존 동작), 자동저장을 예약한다
+  const handleDirty = useCallback(() => {
+    setPending(null)          // 직접 편집은 대기 중 AI 제안을 폐기한다(기존 동작)
+    autosave.markDirty()
+  }, [autosave])
 
   const handlePropose = useCallback(async (instruction: string) => {
     if (!editorRef.current) return
@@ -256,7 +280,8 @@ function DeckPageInner() {
       setEditWarnings(r.data.warnings ?? [])
       setVer((x) => x + 1)
       setPending(null)
-      setDirty(false)
+      setPngStale(false)
+      autosaveRef.current?.markClean()   // 제안 수락이 이미 저장했다 — 같은 html 재저장 방지
       stampSaved()
       setSelected(null)
     } finally { setCommitting(false) }
@@ -281,7 +306,15 @@ function DeckPageInner() {
     } finally { setReverting(false) }
   }, [jobId, snapshots])
 
-  const toggleMode = useCallback(() => {
+  const toggleMode = useCallback(async () => {
+    // 편집 → 뷰: 마지막 편집을 저장하고, 그때 **한 번만** PNG를 새로 받는다.
+    if (mode === 'edit') {
+      await autosave.flush()
+      if (pngStale) {
+        setVer((x) => x + 1)
+        setPngStale(false)
+      }
+    }
     setSelected(null)
     setEditWarnings([])
     setPending(null)
@@ -293,7 +326,7 @@ function DeckPageInner() {
       setViewIdx(page.index)          // 편집→뷰: 편집하던 카드로 뷰어 동기
       setMode('view')
     }
-  }, [mode, page.index])
+  }, [mode, page.index, autosave, pngStale])
 
   const enterEditAt = useCallback((index: number) => {
     setViewIdx(index)   // initialPage로 전달돼 EDITOR_READY 뒤 해당 카드로 이동
@@ -359,7 +392,6 @@ function DeckPageInner() {
 
   const v = deck.verify
   const editing = mode === 'edit'
-  const saveLabel = saving ? '저장 중…' : dirty ? '저장' : '저장됨'
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-deck-canvas" style={{ wordBreak: 'keep-all' }}>
@@ -368,7 +400,6 @@ function DeckPageInner() {
         editing={editing}
         verified={v?.verified}
         unverified={v?.unverified}
-        dirty={dirty}
         onBadgeClick={onBadgeClick}
         factOpen={showFact}
         factInline={!editing}
@@ -378,10 +409,9 @@ function DeckPageInner() {
         canRedo={history.canRedo}
         onUndo={() => editorRef.current?.undo()}
         onRedo={() => editorRef.current?.redo()}
-        saveLabel={saveLabel}
+        saveStatus={autosave.status}
         savedAt={savedAt}
-        onSave={handleSave}
-        saveDisabled={!dirty || saving}
+        onRetrySave={() => void autosave.retry()}
       />
 
       {editWarnings.length > 0 && (
@@ -424,7 +454,7 @@ function DeckPageInner() {
                 onScaleChange={(eff, fit) => setZoomInfo((z) => (z.eff === eff && z.fit === fit ? z : { eff, fit }))}
                 onSelected={setSelected}
                 onDeselected={() => setSelected(null)}
-                onDirty={() => { setDirty(true); setPending(null) }}
+                onDirty={handleDirty}
                 onHistory={setHistory}
                 onPage={setPage}
               />
@@ -494,7 +524,7 @@ function DeckPageInner() {
               }
               inspector={
                 <div className="flex flex-col gap-5">
-                  <DeckMediaPanel jobId={jobId} onInsert={(p) => { editorRef.current?.insertImage(p); setDirty(true) }} />
+                  <DeckMediaPanel jobId={jobId} onInsert={(p) => { editorRef.current?.insertImage(p); handleDirty() }} />
                   <div className="h-px bg-border" />
                   <DeckElementPanel
                     selected={selected}

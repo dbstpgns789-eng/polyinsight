@@ -15,16 +15,14 @@ interface Props {
   factInline?: boolean    // 팩트가 화면에 상시 노출(뷰 3패널) → 배지는 상태만(디스클로저 아님)
   onToggleMode: () => void
   onExport: () => void
-  dirty?: boolean         // 편집 미저장 — 나가기 전 확인용
   // 편집 전용
   canUndo?: boolean
   canRedo?: boolean
   onUndo?: () => void
   onRedo?: () => void
-  saveLabel?: string      // '저장됨' | '저장 중…' | '저장'
+  saveStatus?: 'clean' | 'dirty' | 'saving' | 'error'   // 자동저장 상태(편집 모드에서만 의미)
   savedAt?: string        // 마지막 저장 시각 'hh:mm'
-  onSave?: () => void
-  saveDisabled?: boolean
+  onRetrySave?: () => void   // error 상태에서 재시도
 }
 
 // ③ 상태·해자 진행 링 — 검증/전체 비율
@@ -40,31 +38,57 @@ function MoatRing({ verified, total }: { verified: number; total: number }) {
   )
 }
 
+// ② 저장 상태 — "나가도 안전하다"를 형태로 증명한다(수동 저장 버튼을 대체)
+function SaveState({ status, savedAt, onRetry }: {
+  status?: 'clean' | 'dirty' | 'saving' | 'error'; savedAt?: string; onRetry?: () => void
+}) {
+  if (status === 'error') {
+    return (
+      <button onClick={onRetry}
+        className="flex items-center gap-1.5 shrink-0 text-[12px] font-semibold text-risk-medium hover:underline">
+        <span aria-hidden="true">⚠</span>저장 실패 — 다시 시도
+      </button>
+    )
+  }
+  if (status === 'saving') return <span className="shrink-0 text-[12px] font-semibold text-ink-3">저장 중…</span>
+  if (status === 'dirty') return <span className="shrink-0 text-[12px] font-semibold text-ink-3">변경사항 있음</span>
+  return (
+    <span className="flex items-center gap-1.5 shrink-0 text-[12px] font-semibold text-forest-green-deep">
+      <span className="w-1.5 h-1.5 rounded-full bg-forest-green" aria-hidden="true" />
+      모든 변경 저장됨{savedAt ? ` · ${savedAt}` : ''}
+    </span>
+  )
+}
+
 export default function DeckTopBar({
-  filename, editing, verified, unverified, onBadgeClick, factOpen, factInline, onToggleMode, onExport, dirty,
-  canUndo, canRedo, onUndo, onRedo, saveLabel, savedAt, onSave, saveDisabled,
+  filename, editing, verified, unverified, onBadgeClick, factOpen, factInline, onToggleMode, onExport,
+  canUndo, canRedo, onUndo, onRedo, saveStatus, savedAt, onRetrySave,
 }: Props) {
+  // 자동저장이 도는 한 나가기는 안전한 행동이다 — 저장이 **실패한** 상태에서만 막는다.
   const guardLeave = (e: MouseEvent) => {
-    if (editing && dirty && !window.confirm('저장하지 않은 편집이 있어요. 나가면 사라집니다. 나가시겠어요?')) e.preventDefault()
+    if (editing && saveStatus === 'error' &&
+        !window.confirm('마지막 편집이 저장되지 않았어요. 나가면 사라집니다. 나가시겠어요?')) {
+      e.preventDefault()
+    }
   }
   const showMoat = verified != null && unverified != null
   const total = (verified ?? 0) + (unverified ?? 0)
 
   return (
     <header className="flex items-center gap-2.5 px-4 h-14 bg-surface border-b border-deck-line shrink-0">
-      {/* ① 정체성·탈출 — 브랜드=홈 + ‹대시보드  ·  ② 위치 — 덱 제목 */}
-      <Link href="/dashboard" onClick={guardLeave} title="PolyInsight 홈" className="flex items-center gap-2 shrink-0 rounded-lg">
-        <div className="w-7 h-7 rounded-lg grid place-items-center text-canvas text-[13px] font-bold"
-             style={{ background: 'linear-gradient(150deg, var(--accent-bright), var(--accent))' }}>P</div>
-        <span className="text-[14px] font-bold text-ink hidden md:inline">PolyInsight</span>
+      {/* ① 탈출 — 상단바 **첫 요소**, 버튼 형태(클릭 가능함이 형태로 보이게).
+          로고를 뺀 자리다: 이미 앱 안이라 브랜드 재확인보다 나가는 길이 중요하다. */}
+      <Link href="/dashboard" onClick={guardLeave}
+        className="flex items-center gap-1.5 shrink-0 rounded-lg border border-border bg-surface px-3 py-1.5
+                   text-[13px] font-bold text-ink hover:bg-bg-subtle transition-colors">
+        <span aria-hidden="true" className="text-[15px] leading-none">←</span>대시보드
       </Link>
-      <nav aria-label="위치" className="flex items-center gap-2 min-w-0 flex-1">
-        <Link href="/dashboard" onClick={guardLeave}
-          className="text-[13px] font-semibold text-ink-3 hover:text-ink-2 shrink-0 transition-colors flex items-center gap-1">
-          <span aria-hidden="true">‹</span>대시보드</Link>
-        <span className="text-ink-3/70 shrink-0 text-[13px]" aria-hidden="true">/</span>
+
+      {/* ② 위치 — 덱 제목 + 저장 상태 */}
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <span className="text-[13.5px] font-semibold text-ink truncate min-w-0" title={filename}>{filename}</span>
-      </nav>
+        {editing && <SaveState status={saveStatus} savedAt={savedAt} onRetry={onRetrySave} />}
+      </div>
 
       {/* ③ 상태·해자 — 진행 링 + N/M 검증 · K 검토. 편집=클릭 시 드로어 / 뷰=상태만(팩트 우측 상시) */}
       {showMoat && (
@@ -95,18 +119,13 @@ export default function DeckTopBar({
             editing ? 'bg-surface text-forest-green-deep shadow-card' : 'text-ink-3 hover:text-ink-2'}`}>편집</button>
       </div>
 
-      {/* 편집 전용 — undo/redo + 저장 상태·시각 */}
+      {/* 편집 전용 — undo/redo. (수동 저장 버튼은 자동저장 도입으로 제거됨 — 상태 표시가 대체) */}
       {editing && (
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={onUndo} disabled={!canUndo} title="실행 취소 (Ctrl+Z)" aria-label="실행 취소"
             className="w-8 h-8 rounded-lg border border-deck-line text-ink-2 disabled:opacity-30 hover:text-ink transition-colors">↶</button>
           <button onClick={onRedo} disabled={!canRedo} title="다시 실행 (Ctrl+Shift+Z)" aria-label="다시 실행"
             className="w-8 h-8 rounded-lg border border-deck-line text-ink-2 disabled:opacity-30 hover:text-ink transition-colors">↷</button>
-          <button onClick={onSave} disabled={saveDisabled}
-            className={`text-[12px] font-semibold ml-1 px-2.5 py-1.5 rounded-lg ${
-              saveDisabled ? 'text-ink-3' : 'text-forest-green-deep hover:bg-forest-green-wash'} transition-colors`}>
-            {saveLabel}{saveLabel === '저장됨' && savedAt ? ` · ${savedAt}` : ''}
-          </button>
         </div>
       )}
 

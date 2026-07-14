@@ -15,6 +15,7 @@ export interface AutosaveOptions {
 
 export interface Autosave {
   markDirty: () => void
+  markClean: () => void       // 다른 경로(수동 저장·AI 제안 수락)가 이미 저장했을 때
   flush: () => Promise<void>
   retry: () => Promise<void>
   status: () => AutosaveStatus
@@ -79,6 +80,14 @@ export function createAutosave({
       retried = false
       if (status !== 'saving') set('dirty')
       schedule(delayMs)
+    },
+    markClean() {
+      // 다른 경로가 이미 저장했다 — 예약된 저장을 취소한다(같은 html을 또 PATCH하면 서버 렌더가 헛돈다).
+      if (disposed) return
+      dirty = false
+      retried = false
+      clearTimer()
+      if (status !== 'saving') set('clean')
     },
     async flush() {
       clearTimer()

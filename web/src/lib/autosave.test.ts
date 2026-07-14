@@ -116,6 +116,19 @@ describe('createAutosave', () => {
     expect(a.status()).toBe('clean')
   })
 
+  it('markClean()은 예약된 저장을 취소한다 — 다른 경로가 이미 저장했을 때', async () => {
+    const save = vi.fn().mockResolvedValue(undefined)
+    const a = createAutosave({ save, delayMs: 3000 })
+
+    a.markDirty()
+    a.markClean()                  // AI 제안 수락이 이미 PATCH했다
+    expect(a.status()).toBe('clean')
+    expect(a.isDirty()).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(save).not.toHaveBeenCalled()   // 같은 html을 또 저장하지 않는다
+  })
+
   it('dispose()는 예약된 저장을 취소한다', async () => {
     const save = vi.fn().mockResolvedValue(undefined)
     const a = createAutosave({ save, delayMs: 3000 })
