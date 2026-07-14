@@ -7,6 +7,7 @@ architect/writer 분리·30 카탈로그 선택·필드 스키마 없음. 강한
 from __future__ import annotations
 
 import logging
+import re
 
 from ...core.config import settings
 from ...core.llm_client import llm_client
@@ -37,16 +38,38 @@ logger = logging.getLogger(__name__)
 MAX_SOURCE_CHARS = 180000
 
 
+_DOC_START = re.compile(r"<!DOCTYPE\s+html|<html[\s>]", re.I)
+
+
 def _strip_code_fence(text: str) -> str:
-    """모델이 ```html … ``` 로 감싸 출력해도 HTML 본문만 남긴다."""
-    t = text.strip()
-    if t.startswith("```"):
-        nl = t.find("\n")
+    """모델 출력에서 **HTML만** 남긴다 — 코드펜스도, 수다도 걷어낸다.
+
+    ★실전 버그(2026-07-14): 펜스를 '출력이 ```로 시작할 때만' 벗겼다. 그런데 모델은
+      [검사 산문 → ```html → 문서] 순으로 뱉는다. 그 산문 796자가 덱 HTML 앞에 그대로
+      저장돼 **편집기에서 카드 위에 렌더됐다**(사용자 제보). 저작·편집(nl_patch) 두 경로가
+      이 함수를 공유한다 — 편집은 라이브 경로다.
+
+    카드 조각(비전 국소 패치)은 문서가 아니므로 그대로 통과시킨다.
+    """
+    t = (text or "").strip()
+
+    # 1) 코드펜스 — 어디에 있든 벗긴다(선두 산문 뒤에 오는 경우 포함)
+    if "```" in t:
+        i = t.find("```")
+        nl = t.find("\n", i)
         if nl != -1:
-            t = t[nl + 1:]
-        end = t.rfind("```")
+            body = t[nl + 1:]
+            end = body.rfind("```")
+            t = (body[:end] if end != -1 else body).strip()
+
+    # 2) 문서 서두 앞의 수다 제거 + </html> 뒤 꼬리 제거
+    m = _DOC_START.search(t)
+    if m:
+        t = t[m.start():]
+        end = t.lower().rfind("</html>")
         if end != -1:
-            t = t[:end]
+            t = t[:end + len("</html>")]
+
     return t.strip()
 
 
