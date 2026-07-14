@@ -26,8 +26,16 @@ logger = logging.getLogger(__name__)
 
 INK_TOLERANCE = 24        # 배경색과 이만큼 차이나면 '잉크'(안티에일리어싱 흡수)
 DEAD_THIRD_INK = 0.004    # 한 구획 잉크 비율이 0.4% 미만 = 사실상 빈 구획
-BAND_RATIO = 0.18         # 카드 높이의 18%(=243px) 이상 연속 공백 = 구멍
 EDGE_MARGIN = 0.04        # 상하 4%는 여백으로 인정(크롬 바깥)
+
+# ★공백의 '크기'는 결함이 아니다 — 쏠림이 결함이다 (2026-07-14 재캘리브레이션).
+#   1차 기준(내부 공백 >18% = 구멍)은 **호흡을 결함으로 오인**했다. 실측이 그걸 반증했다:
+#     클로드 디자인 14장: 내부 공백 8~20%로 흩어지지만 **무게중심 0.43~0.57**(전부 균형)
+#     우리 파이프라인   : 무게중심 **0.27~0.70** — 위/아래로 쏠리고 가운데가 비어 미완성으로 읽힘
+#   즉 판정해야 할 것은 "빈 곳이 있나"가 아니라 "잉크가 한쪽으로 쏠렸나"다.
+#   여백이 호흡인지 구멍인지는 **저작자가 판단한다**(§1) — 코드는 쏠림만 신고한다.
+BALANCE_TOLERANCE = 0.12  # |무게중심 - 0.5|가 이보다 크면 쏠림
+GAP_NOTE_RATIO = 0.18     # 참고용으로만 알려주는 내부 공백(결함 아님)
 
 
 @dataclass
@@ -35,25 +43,33 @@ class CardAudit:
     card_num: int
     thirds_ink: tuple[float, float, float]     # 구획별 잉크 비율
     dead_thirds: list[int]                     # 1=상단 2=중단 3=하단
-    largest_gap: float                         # 가장 긴 빈 밴드(높이 비율)
+    center_of_mass: float                      # 잉크 무게중심 (0=맨위, 0.5=균형, 1=맨아래)
+    largest_gap: float                         # 가장 긴 빈 밴드(높이 비율) — 참고용
     gap_at: tuple[int, int] | None             # 그 밴드의 y범위(px)
 
     @property
+    def imbalance(self) -> float:
+        return abs(self.center_of_mass - 0.5)
+
+    @property
     def ok(self) -> bool:
-        return not self.dead_thirds and self.largest_gap < BAND_RATIO
+        """결함 = 빈 구획 또는 쏠림. **공백 크기 자체는 결함이 아니다**(호흡일 수 있다)."""
+        return not self.dead_thirds and self.imbalance <= BALANCE_TOLERANCE
 
     def as_note(self) -> str:
-        """비전 루프에 넘길 **구체적 지시**. 모델의 눈 대신 코드가 짚어준다."""
-        if self.ok:
-            return ""
+        """비전 루프에 넘길 **관찰**. 판정(고칠지 말지)은 저작자가 한다 — 코드는 미감을 규정하지 않는다(§1)."""
         bits = []
         if self.dead_thirds:
             names = {1: "상단", 2: "중단", 3: "하단"}
-            where = "·".join(names[t] for t in self.dead_thirds)
-            bits.append(f"{where} 구획이 비었다")
-        if self.gap_at and self.largest_gap >= BAND_RATIO:
+            bits.append(f"{'·'.join(names[t] for t in self.dead_thirds)} 구획에 내용이 거의 없다")
+        if self.imbalance > BALANCE_TOLERANCE:
+            side = "위쪽" if self.center_of_mass < 0.5 else "아래쪽"
+            bits.append(f"잉크가 {side}으로 쏠렸다(무게중심 {self.center_of_mass:.2f}, 균형=0.50)")
+        if not bits:
+            return ""
+        if self.gap_at and self.largest_gap >= GAP_NOTE_RATIO:
             y0, y1 = self.gap_at
-            bits.append(f"y={y0}~{y1}px({self.largest_gap:.0%} 높이)가 통째로 빈 구멍이다")
+            bits.append(f"가장 큰 빈 구간은 y={y0}~{y1}px({self.largest_gap:.0%})")
         return f"카드 {self.card_num:02d}: " + " / ".join(bits)
 
 
@@ -89,6 +105,9 @@ def audit_card(png: bytes, card_num: int) -> CardAudit:
     )
     dead = [i + 1 for i, v in enumerate(thirds) if v < DEAD_THIRD_INK]
 
+    total = sum(rows)
+    com = (sum(y * v for y, v in enumerate(rows)) / total / h) if total else 0.5
+
     # 가장 긴 빈 밴드 (상하 여백 제외 — 크롬 바깥은 원래 비어 있다)
     lo, hi = int(h * EDGE_MARGIN), int(h * (1 - EDGE_MARGIN))
     best = (0, None)
@@ -101,7 +120,7 @@ def audit_card(png: bytes, card_num: int) -> CardAudit:
         else:
             run = 0
 
-    return CardAudit(card_num, thirds, dead, best[0] / h, best[1])
+    return CardAudit(card_num, thirds, dead, com, best[0] / h, best[1])
 
 
 def audit_deck(pngs: list[bytes]) -> tuple[list[CardAudit], list[str]]:
