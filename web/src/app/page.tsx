@@ -67,7 +67,7 @@ export default function Home() {
 
           <div className="nav__actions">
             <a href="/login" className="btn btn-ghost btn-login">로그인</a>
-            <a href="/dashboard" className="btn btn-primary">바로 테스트</a>
+            <a href="/dashboard" className="btn btn-primary">카드뉴스 만들기</a>
           </div>
 
           <button
@@ -100,7 +100,7 @@ export default function Home() {
             className="btn btn-primary"
             style={{ width: '100%', justifyContent: 'center' }}
           >
-            무료로 시작하기
+            카드뉴스 만들러 가기
           </a>
         </div>
       </header>
@@ -112,7 +112,7 @@ export default function Home() {
           <div className="container hero__grid">
 
             <div className="hero__content">
-              <p className="hero-kicker">✦ 무료 베타 · 논문 원문 기반</p>
+              <p className="hero-kicker">✦ 베타 · 논문 원문 기반</p>
               <h1 id="hero-title" className="hero__title">
                 논문 읽는 시간은 그대로.<br /><span className="hi">알리는 시간은 1/10</span>로.
               </h1>
@@ -121,7 +121,7 @@ export default function Home() {
                 모든 수치는 논문 원문에서 검증되고, 편집 가능한 형태로 제공됩니다.
               </p>
               <div className="hero__actions hero__actions--row">
-                <a href="/dashboard" className="btn btn-primary btn-lg">무료로 시작하기</a>
+                <a href="/dashboard" className="btn btn-primary btn-lg">카드뉴스 만들러 가기</a>
                 <a href="#how-it-works" className="btn btn-ghost btn-lg">작동 방식 보기</a>
               </div>
               <p className="hero__trust">
@@ -331,8 +331,8 @@ export default function Home() {
         <section className="section section--dark cta-section" aria-labelledby="cta-title">
           <div className="container cta__inner">
             <h2 id="cta-title" className="cta__title reveal">지금 논문을 업로드해 보세요.</h2>
-            <p className="cta__sub reveal reveal-delay-1">무료로 시작할 수 있습니다.</p>
-            <a href="/dashboard" className="btn btn-white btn-lg reveal reveal-delay-2">바로 테스트하기</a>
+            <p className="cta__sub reveal reveal-delay-1">PDF 하나면 바로 시작할 수 있습니다.</p>
+            <a href="/dashboard" className="btn btn-white btn-lg reveal reveal-delay-2">카드뉴스 만들기</a>
           </div>
         </section>
 
