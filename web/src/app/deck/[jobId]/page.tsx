@@ -23,6 +23,7 @@ import DeckRightTabs, { type DeckTab } from '@/components/deck/DeckRightTabs'
 import DeckFactPanel from '@/components/deck/DeckFactPanel'
 import DeckExportModal from '@/components/deck/DeckExportModal'
 import { extractCardLabels } from '@/lib/deckLabels'
+import { failureReason } from '@/lib/failureReason'
 import { type VerifyData } from '@/lib/verifyStatus'
 
 interface DeckPayload {
@@ -30,10 +31,7 @@ interface DeckPayload {
   html?: string | null; verify?: VerifyData | null; cardCount: number; canReverify?: boolean
 }
 
-function abortReason(warnings?: string[]): string | null {
-  const w = (warnings ?? []).find((x) => x.startsWith('ABORT-') || x.startsWith('ERR-'))
-  return w ? w.replace(/^(ABORT|ERR)-[A-Z0-9]*:\s*/, '') : null
-}
+// 실패 원인 분류는 lib/failureReason — 어떤 실패든 "스캔본 탓"을 하던 버그를 고쳤다(2026-07-14).
 
 // ── 생성 진행 화면 — 진짜 공정 공개 (Mirra식 극장이되 문구=실제 파이프라인 단계) ──
 // 가짜 남은시간·가짜 취소버튼 금지. progress(10→40→70→85)는 실측, 사이는 완만히 creep.
@@ -337,18 +335,22 @@ function DeckPageInner() {
     return <GenerationTheater stage={stage || 'S1'} progress={progress} />
   }
 
-  // ── 실패 ──
+  // ── 실패 ── 원인별로 다른 안내. 엉뚱한 탓(스캔본)을 하지 않는다.
   if (status === 'ERROR' || !deck?.html) {
-    const reason = abortReason(deck?.warnings)
+    const fail = failureReason(deck?.warnings)
     return (
       <div className="flex items-center justify-center h-screen bg-canvas-subtle">
         <div className="text-center max-w-md px-6">
-          <p className="text-4xl mb-3">⚠️</p>
-          <p className="text-[14px] text-ink-2 font-medium">{reason || '덱을 생성하지 못했습니다.'}</p>
-          <p className="text-[12px] text-ink-3 mt-2">스캔본(이미지) PDF는 텍스트를 못 읽어요 — 텍스트가 살아있는 PDF로 다시 시도해 주세요.</p>
+          <p className="text-4xl mb-3">{fail.kind === 'credit' ? '⏳' : '⚠️'}</p>
+          <p className="text-[14px] text-ink-2 font-medium">{fail.title}</p>
+          <p className="text-[12px] text-ink-3 mt-2 leading-relaxed">{fail.hint}</p>
           <div className="flex items-center justify-center gap-3 mt-6">
-            <Link href="/deck/new" className="btn btn-primary">다시 시도</Link>
-            <Link href="/dashboard" className="btn btn-outline">← 대시보드</Link>
+            {fail.kind !== 'credit' && (
+              <Link href="/deck/new" className="btn btn-primary">다시 시도</Link>
+            )}
+            <Link href="/dashboard" className={`btn ${fail.kind === 'credit' ? 'btn-primary' : 'btn-outline'}`}>
+              ← 대시보드
+            </Link>
           </div>
         </div>
       </div>
