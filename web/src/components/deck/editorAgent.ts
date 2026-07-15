@@ -175,17 +175,32 @@ const AGENT_BODY = `
     for (var j = 0; j < markRects.length; j++) placeBox(markPool[j], markRects[j]);
   }
 
-  function highlight(value) {
-    clearHighlight();
+  function locate(value) {
     // 텍스트가 공백으로 갈라져 있을 수 있다("170% 증가" vs "170 % 증가") — 원문 → 공백제거 순으로 시도
-    markRects = findRects(value);
-    if (!markRects.length) markRects = findRects(value.replace(/\\s+/g, ''));
+    var r = findRects(value);
+    if (!r.length) r = findRects(value.replace(/\\s+/g, ''));
+    return r;
+  }
+  function highlight(value, tries) {
+    clearHighlight();
+    markRects = locate(value);
     positionMarks();
     if (markRects.length) {
       var first = markRects[0];
       window.scrollTo({ top: Math.max(0, first.y - 120), behavior: 'smooth' });
+      post('HIGHLIGHTED', { value: value, found: markRects.length });
+      return;
     }
-    post('HIGHLIGHTED', { value: value, found: markRects.length });
+    // 못 찾음 — 페이지 전환 직후엔 폰트 로드·레이아웃이 아직이라 좌표가 안 나온다.
+    // 폰트 ready와 짧은 rAF 재시도로 정착을 기다린다(최대 6회 ≈ 800ms). 그래도 없으면 '없음' 보고.
+    var n = (tries || 0) + 1;
+    if (n <= 6) {
+      var retry = function () { highlight(value, n); };
+      if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(retry);
+      else setTimeout(retry, 130);
+      return;
+    }
+    post('HIGHLIGHTED', { value: value, found: 0 });
   }
 
   function resizeCursor(dir) {

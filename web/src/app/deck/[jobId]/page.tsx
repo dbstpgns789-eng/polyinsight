@@ -167,6 +167,7 @@ function DeckPageInner() {
   const closeFactRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<Element | null>(null)
   const editorRef = useRef<DeckEditorHandle>(null)
+  const pendingHLRef = useRef<{ value: string; card: number } | null>(null)  // 카드 준비되면 마킹할 수치
 
   // 편집 모드 ←/→ 로 페이지 이동 (입력창·텍스트 편집 중엔 캐럿 우선, 팩트 드로어 열림 중엔 무시)
   useEffect(() => {
@@ -347,14 +348,26 @@ function DeckPageInner() {
     setJump({ item, index })
     setJumpFound(null)
     setShowFact(false)
+    // 벽시계 지연으로 마킹하지 않는다 — 뷰→편집 전환은 iframe을 새로 마운트해서
+    // 리스너가 붙기 전이면 HIGHLIGHT 메시지가 유실된다. 대신 에디터가 그 카드로 페이징을
+    // 마치고 PAGE를 쏘는 순간(handlePage)에 마킹한다 = 확실한 준비 신호.
+    pendingHLRef.current = { value: item.value, card: item.card }
     if (mode === 'view') {
-      enterEditAt(item.card)                 // EDITOR_READY 후 initialPage로 그 카드에 진입
+      enterEditAt(item.card)                 // EDITOR_READY 후 initialPage로 그 카드에 진입 → PAGE 발신
     } else {
-      editorRef.current?.setPage(item.card)
+      editorRef.current?.setPage(item.card)  // 같은 카드여도 setPage는 PAGE를 다시 쏜다
     }
-    // 카드 전환(페이징·폰트 프리즈) 후에 마킹해야 좌표가 맞는다
-    window.setTimeout(() => editorRef.current?.highlight(item.value), 260)
   }, [queue, mode, enterEditAt])
+
+  // 에디터가 카드로 페이징을 마치고 보낸 PAGE 신호 — 대기 중인 하이라이트가 그 카드면 지금 마킹한다.
+  const handlePage = useCallback((pg: PageState) => {
+    setPage(pg)
+    const p = pendingHLRef.current
+    if (p && pg.index === p.card) {
+      pendingHLRef.current = null
+      editorRef.current?.highlight(p.value)
+    }
+  }, [])
 
   const handleJump = useCallback((it: { value: string; card: number }) => {
     const i = queue.findIndex((q) => q.value === it.value && q.card === it.card)
@@ -489,7 +502,7 @@ function DeckPageInner() {
                 onDeselected={() => setSelected(null)}
                 onDirty={handleDirty}
                 onHistory={setHistory}
-                onPage={setPage}
+                onPage={handlePage}
                 onHighlighted={(info) => setJumpFound(info.found > 0)}
               />
               {(proposing || !!pending) && (
