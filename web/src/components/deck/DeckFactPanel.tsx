@@ -1,16 +1,17 @@
 'use client'
 
 // 팩트 체크 패널 (스펙 §4.5) — 무채색 워크스페이스(compC). 검증=의미색 초록만.
-// 출처 위치·정합 주장 금지(헌법). 수치→추적가능성 원장(claim ledger)으로 해자 표면화.
-import { useState } from 'react'
+// 출처 위치·정합 주장 금지(헌법). 수치를 추적가능성 목록으로 표면화해 신뢰의 근거를 드러낸다.
+import { useState, type ReactNode } from 'react'
 import { isAllClear, suspectClaims, type VerifyData } from '@/lib/verifyStatus'
 
 interface Props {
   verify: VerifyData | null | undefined
   canReverify: boolean
+  onJump?: (item: { value: string; card: number }) => void
 }
 
-export default function DeckFactPanel({ verify, canReverify }: Props) {
+export default function DeckFactPanel({ verify, canReverify, onJump }: Props) {
   const [open, setOpen] = useState(true)       // claim ledger 접기/펼치기
   const claims = verify?.claims ?? []
   const flagged = claims.filter((c) => !c.verified)
@@ -24,7 +25,6 @@ export default function DeckFactPanel({ verify, canReverify }: Props) {
     <div className="flex flex-col gap-5">
       {/* head */}
       <div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-3">Fidelity · 해자</div>
         <div className="flex items-center gap-1.5 mt-1.5">
           <h3 className="text-[16px] font-extrabold text-ink">팩트 체크</h3>
           {allClear && (
@@ -70,7 +70,7 @@ export default function DeckFactPanel({ verify, canReverify }: Props) {
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
                 strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"
                 className={`text-ink-3 transition-transform ${open ? 'rotate-90' : ''}`}><path d="m9 18 6-6-6-6" /></svg>
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3 group-hover:text-ink-2 transition-colors">Claim Ledger</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-3 group-hover:text-ink-2 transition-colors">수치 목록</span>
             </span>
             <span className="font-mono text-[10.5px] text-ink-3 tabular-nums">
               {shown.length + suspects.length} / {claims.length + suspects.length}
@@ -80,26 +80,30 @@ export default function DeckFactPanel({ verify, canReverify }: Props) {
           <ul>
             {/* V2 산수 불일치 — 원문에 있어도(VERIFIED) 카드 내부 계산이 어긋난 수치. 최우선 노출 */}
             {suspects.map((d, i) => (
-              <li key={`d${i}`} className="flex items-center gap-2.5 py-2.5 border-t border-deck-line-soft first:border-t-0">
-                <span className="font-mono text-[12.5px] font-bold text-ink shrink-0 max-w-[128px] truncate" title={d.value}>{d.value}</span>
-                <span className="flex-1 text-[11px] text-ink-2 leading-snug line-clamp-2">
-                  카드 안 수치와 계산이 맞지 않아요 — &lsquo;% 증가&rsquo;와 &lsquo;배&rsquo;를 혼동했을 수 있어요. {d.context.trim()}
-                </span>
-                <span className="shrink-0 text-[9.5px] font-bold px-1.5 py-1 rounded-md bg-risk-medium-faint text-risk-medium border border-risk-medium-border">계산 불일치</span>
-              </li>
+              <LedgerRow
+                key={`d${i}`}
+                value={d.value}
+                context={`카드 안 수치와 계산이 맞지 않아요 — ‘% 증가’와 ‘배’를 혼동했을 수 있어요. ${d.context.trim()}`}
+                card={d.card ?? null}
+                onJump={onJump}
+                badge={<span className="shrink-0 text-[9.5px] font-bold px-1.5 py-1 rounded-md bg-risk-medium-faint text-risk-medium border border-risk-medium-border">계산이 안 맞아요</span>}
+              />
             ))}
             {shown.map((c, i) => (
-              <li key={i} className="flex items-center gap-2.5 py-2.5 border-t border-deck-line-soft first:border-t-0">
-                <span className="font-mono text-[12.5px] font-bold text-ink shrink-0 max-w-[128px] truncate" title={c.value}>{c.value}</span>
-                <span className="flex-1 text-[11px] text-ink-2 leading-snug line-clamp-2">{c.context.trim()}</span>
-                {c.verified ? (
+              <LedgerRow
+                key={i}
+                value={c.value}
+                context={c.context.trim()}
+                card={c.card ?? null}
+                onJump={onJump}
+                badge={c.verified ? (
                   <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-bold text-forest-green-deep bg-forest-green-wash border border-forest-green/25 rounded-md px-1.5 py-1">
                     <span className="w-[11px] h-[11px] rounded-full bg-forest-green text-canvas grid place-items-center text-[7px]" aria-hidden="true">✓</span>원문 확인
                   </span>
                 ) : (
                   <span className="shrink-0 text-[9.5px] font-bold px-1.5 py-1 rounded-md bg-risk-medium-faint text-risk-medium border border-risk-medium-border">원문에 없음</span>
                 )}
-              </li>
+              />
             ))}
           </ul>
           )}
@@ -123,5 +127,46 @@ export default function DeckFactPanel({ verify, canReverify }: Props) {
         )}
       </div>
     </div>
+  )
+}
+
+// 원장 한 행 — 점프 가능(card 있음)이면 버튼, 없으면 비활성 li. 두 원장이 공유하는 규칙.
+function LedgerRow({
+  value, context, card, badge, onJump,
+}: {
+  value: string
+  context: string
+  card: number | null
+  badge: ReactNode
+  onJump?: (item: { value: string; card: number }) => void
+}) {
+  const jumpable = card !== null && card !== undefined && !!onJump
+  const body = (
+    <>
+      <span className="font-mono text-[12.5px] font-bold text-ink shrink-0 max-w-[128px] truncate" title={value}>{value}</span>
+      <span className="flex-1 text-[11px] text-ink-2 leading-snug line-clamp-2">{context}</span>
+      {badge}
+    </>
+  )
+  if (!jumpable) {
+    return (
+      <li className="flex items-center gap-2.5 py-2.5 border-t border-deck-line-soft first:border-t-0"
+        title="위치 정보가 없어요 — 다시 만들면 표시됩니다">
+        {body}
+      </li>
+    )
+  }
+  return (
+    <li className="border-t border-deck-line-soft first:border-t-0">
+      <button
+        type="button"
+        onClick={() => onJump!({ value, card: card as number })}
+        title={`카드 ${(card as number) + 1}에서 이 수치 보기`}
+        className="flex w-full items-center gap-2.5 py-2.5 text-left rounded-lg hover:bg-bg-subtle focus:outline-none focus-visible:ring-2 focus-visible:ring-forest-green/40 transition-colors"
+      >
+        {body}
+        <span className="shrink-0 text-[10px] font-mono text-ink-3">카드 {(card as number) + 1} ›</span>
+      </button>
+    </li>
   )
 }
