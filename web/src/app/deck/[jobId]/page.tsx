@@ -168,6 +168,7 @@ function DeckPageInner() {
   const restoreFocusRef = useRef<Element | null>(null)
   const editorRef = useRef<DeckEditorHandle>(null)
   const pendingHLRef = useRef<{ value: string; card: number } | null>(null)  // 카드 준비되면 마킹할 수치
+  const activeHLRef = useRef<string | null>(null)  // 지금 점프 중인 수치 — 늦게 온 HIGHLIGHTED 응답 무시용
 
   // 편집 모드 ←/→ 로 페이지 이동 (입력창·텍스트 편집 중엔 캐럿 우선, 팩트 드로어 열림 중엔 무시)
   useEffect(() => {
@@ -323,6 +324,9 @@ function DeckPageInner() {
     setEditWarnings([])
     setPending(null)
     setShowFact(false)
+    setJump(null)                     // 모드 전환 시 점프 문맥 바 정리(stale 바 재등장 방지)
+    activeHLRef.current = null
+    pendingHLRef.current = null
     // 보던 카드 그대로 이어가기(양방향 동기). 편집 진입 카드는 viewIdx → DeckEditor initialPage로 반영
     if (mode === 'view') {
       setMode('edit')                 // viewIdx=보던 카드 → initialPage로 EDITOR_READY 뒤 이동
@@ -348,6 +352,7 @@ function DeckPageInner() {
     setJump({ item, index })
     setJumpFound(null)
     setShowFact(false)
+    activeHLRef.current = item.value
     // 벽시계 지연으로 마킹하지 않는다 — 뷰→편집 전환은 iframe을 새로 마운트해서
     // 리스너가 붙기 전이면 HIGHLIGHT 메시지가 유실된다. 대신 에디터가 그 카드로 페이징을
     // 마치고 PAGE를 쏘는 순간(handlePage)에 마킹한다 = 확실한 준비 신호.
@@ -376,6 +381,8 @@ function DeckPageInner() {
 
   const closeJump = useCallback(() => {
     setJump(null)
+    activeHLRef.current = null
+    pendingHLRef.current = null
     editorRef.current?.clearHighlight()
   }, [])
 
@@ -503,7 +510,7 @@ function DeckPageInner() {
                 onDirty={handleDirty}
                 onHistory={setHistory}
                 onPage={handlePage}
-                onHighlighted={(info) => setJumpFound(info.found > 0)}
+                onHighlighted={(info) => { if (info.value === activeHLRef.current) setJumpFound(info.found > 0) }}
               />
               {(proposing || !!pending) && (
                 <div className="absolute inset-0 z-10 cursor-not-allowed" aria-hidden="true"

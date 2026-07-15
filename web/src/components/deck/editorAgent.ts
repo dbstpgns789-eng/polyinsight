@@ -19,6 +19,7 @@ const AGENT_BODY = `
   var overlayPool = [];    // 요소별 하이라이트 오버레이 풀(재사용)
   var markPool = [];       // 팩트 점프 하이라이트(수치 위 마커) — 선택 오버레이와 별도 풀
   var markRects = [];      // 현재 마킹된 사각형(스크롤·리사이즈 시 재배치용)
+  var hlGen = 0;           // 하이라이트 세대 — 새 요청/clear 때 증가, 늦은 재시도가 새 카드를 덮지 않게
   var groupBox = null;     // 2개+ 선택 시 집합 바운딩박스(점선)
   var handles = [];        // 8방향 리사이즈 핸들(단일 선택 시만)
   var guides = [];         // 스냅 정렬 가이드선
@@ -136,6 +137,7 @@ const AGENT_BODY = `
   }
 
   function clearHighlight() {
+    hlGen++;   // 진행 중인 재시도 체인 무효화 (아래 highlight 세대 가드)
     markRects = [];
     for (var i = 0; i < markPool.length; i++) markPool[i].style.display = 'none';
   }
@@ -181,8 +183,9 @@ const AGENT_BODY = `
     if (!r.length) r = findRects(value.replace(/\\s+/g, ''));
     return r;
   }
-  function highlight(value, tries) {
-    clearHighlight();
+  function highlight(value, tries, gen) {
+    if (gen === undefined) { clearHighlight(); gen = hlGen; }   // 최초 호출: 이전 것 지우고 새 세대 취득
+    else if (gen !== hlGen) return;                             // 재시도 도중 새 요청이 왔다 — 이 체인 폐기
     markRects = locate(value);
     positionMarks();
     if (markRects.length) {
@@ -195,7 +198,7 @@ const AGENT_BODY = `
     // 폰트 ready와 짧은 rAF 재시도로 정착을 기다린다(최대 6회 ≈ 800ms). 그래도 없으면 '없음' 보고.
     var n = (tries || 0) + 1;
     if (n <= 6) {
-      var retry = function () { highlight(value, n); };
+      var retry = function () { highlight(value, n, gen); };
       if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(retry);
       else setTimeout(retry, 130);
       return;
