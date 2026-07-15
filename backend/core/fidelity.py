@@ -28,6 +28,7 @@ class NumberClaim:
     value: str          # 카드에 쓰인 정량 수치 토큰 (예: "28.4", "19.36 ± 0.96 %", "+49.3 mV")
     context: str        # 그 수치 주변 콘텐츠 한 토막 (사용자 판단용, 단어 경계로 정리)
     verified: bool      # 원문에 존재?
+    card: int | None = None   # 이 수치가 처음 등장한 카드 인덱스(0-기반). 분할 마커 없으면 None
 
 
 _STYLE_BLOCK = re.compile(r"<style[^>]*>.*?</style>", re.S | re.I)
@@ -56,6 +57,7 @@ _NUM = re.compile(
     r"(?:\s?(?:" + _UNIT + r")(?:\s?/\s?[A-Za-zμµ²³]+|[²³])?(?![A-Za-z]))?"
 )
 _CORE = re.compile(r"\d[\d,]*\.?\d*")
+_CARD_SPLIT = re.compile(r'(?=<div[^>]+data-screen-label=)', re.I)
 
 
 def _content_text(html: str) -> str:
@@ -64,6 +66,17 @@ def _content_text(html: str) -> str:
     h = _STYLE_ATTR.sub(" ", h)          # 인라인 style="..." (OKLCH 토큰 등) 제거 — 오탐 차단
     h = _TAG.sub(" ", h)
     return _WS.sub(" ", h).strip()
+
+
+def _card_contents(html: str) -> list[tuple[int | None, str]]:
+    """덱 HTML → [(카드 인덱스, 그 카드의 콘텐츠 텍스트)].
+
+    분할 마커(data-screen-label)가 없으면 [(None, 전체 텍스트)] — 구 저작물/조각에서도 죽지 않는다.
+    """
+    chunks = [c for c in _CARD_SPLIT.split(html) if "data-screen-label" in c]
+    if not chunks:
+        return [(None, _content_text(html))]
+    return [(i, _content_text(c)) for i, c in enumerate(chunks)]
 
 
 def _flat(s: str) -> str:
@@ -91,21 +104,31 @@ def _clean_context(content: str, start: int, end: int) -> str:
 
 
 def verify_deck(html: str, paper_text: str) -> list[NumberClaim]:
-    """덱 HTML의 정량 수치를 원문과 대조해 NumberClaim 리스트 반환."""
-    content = _content_text(html)
+    """덱 HTML의 정량 수치를 원문과 대조해 NumberClaim 리스트 반환.
+
+    카드(data-screen-label) 단위로 순회해 각 claim에 첫 등장 카드 인덱스를 붙인다 —
+    팩트 패널이 '이 수치가 쓰인 카드'로 사용자를 데려갈 수 있게 하는 좌표다.
+    dedup은 덱 전역(seen)으로 유지한다 — 원장 카운트를 바꾸지 않는다(위치만 덧붙이는 작업).
+    """
     paper_flat = _flat(paper_text)
     seen: set[str] = set()
     claims: list[NumberClaim] = []
-    for m in _NUM.finditer(content):
-        tok = m.group().strip()
-        if not _is_meaningful(tok) or tok in seen:
-            continue
-        seen.add(tok)
-        # 주 수치 코어(첫 숫자 런, 콤마 제거)로 원문 대조 — 단위 표기 차이에 견고
-        cm = _CORE.search(tok)
-        core = cm.group().replace(",", "") if cm else ""
-        verified = bool(core) and (core in paper_text or core in paper_flat)
-        claims.append(NumberClaim(value=tok, context=_clean_context(content, m.start(), m.end()), verified=verified))
+
+    for card_idx, content in _card_contents(html):
+        for m in _NUM.finditer(content):
+            tok = m.group().strip()
+            if not _is_meaningful(tok) or tok in seen:
+                continue
+            seen.add(tok)
+            cm = _CORE.search(tok)
+            core = cm.group().replace(",", "") if cm else ""
+            verified = bool(core) and (core in paper_text or core in paper_flat)
+            claims.append(NumberClaim(
+                value=tok,
+                context=_clean_context(content, m.start(), m.end()),
+                verified=verified,
+                card=card_idx,
+            ))
     return claims
 
 
@@ -114,7 +137,6 @@ def verify_deck(html: str, paper_text: str) -> list[NumberClaim]:
 # 못 잡는 내부 모순이다(142·238·170 다 원문에 있으면 V1은 전부 VERIFIED로 통과시킨다).
 # 카드 단위로 파생표현(N% 증가·N배)을 찾아 같은 카드의 수치쌍과 검산한다.
 
-_CARD_SPLIT = re.compile(r'(?=<div[^>]+data-screen-label=)', re.I)
 _PCT_CHANGE = re.compile(r"(\d[\d,]*\.?\d*)\s*%\s*(증가|감소|향상|개선|절감|상승|하락)")
 _FOLD = re.compile(r"(\d[\d,]*\.?\d*)\s*배")
 # 퍼센트 '차이'(%p) — "2.8% 더 정확", "3.5% 낮췄다". 증가율이 아니라 뺄셈이다.
@@ -202,14 +224,13 @@ def _check_pairs(nums: list[float], claimed: float, kind: str) -> tuple[bool, bo
 def derived_claims(html: str, paper_text: str) -> list[dict]:
     """카드별 파생수치(N% 증가·N배)를 같은 카드 수치쌍과 검산.
 
-    반환: [{value, kind, suspect, unresolved, verified, context}]
+    반환: [{value, kind, suspect, unresolved, verified, context, card}]
     suspect=True → 사용자에게 '계산 불일치' 표면화(막지 않음, 헌법 3조).
     """
     results: list[dict] = []
-    for chunk in _CARD_SPLIT.split(html):
-        if "data-screen-label" not in chunk:
-            continue
-        content = _content_text(chunk)
+    for card_idx, content in _card_contents(html):
+        if card_idx is None:
+            continue                       # 카드 경계가 없으면 '같은 카드 수치쌍' 검산이 성립 안 함
         nums = _card_numbers(content)
         for pat, kind in ((_PCT_CHANGE, "pct_change"), (_FOLD, "fold"), (_PCT_POINT, "pct_point")):
             for m in pat.finditer(content):
@@ -223,6 +244,7 @@ def derived_claims(html: str, paper_text: str) -> list[dict]:
                     "unresolved": unresolved,
                     "verified": core in _flat(paper_text),
                     "context": _clean_context(content, m.start(), m.end()),
+                    "card": card_idx,
                 })
     return results
 
