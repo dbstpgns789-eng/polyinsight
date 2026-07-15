@@ -3,6 +3,10 @@
 > v1.0 | 2026-06-15
 > 대상: 박사님 1인 실유저 테스트 배포. 공공기관(KITECH) 환경.
 > 톤: 의사결정 중심. Problem / Decision / Rationale / Risks.
+>
+> ⚠️ **SUPERSEDED (2026-07-13).** 이 설계는 2026-06-15 시점 기록(호스트=Oracle ARM, 앞문=Cloudflare Tunnel).
+> 실제 배포는 **Azure VM + Caddy 자동 HTTPS + Azure 무료 호스트네임**(`polyinsight.japaneast.cloudapp.azure.com`)으로 라이브.
+> 현행 배포·앞문·운영 정본 = `coo/OPERATIONS.md`. 이 문서는 역사 기록으로 보존.
 
 ---
 

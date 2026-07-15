@@ -334,6 +334,87 @@ per_page: integer  (선택, 1~40, 기본 20)
 
 ---
 
+### 1-7. 덱 이미지 자산 API (v3 저작 덱 — 스펙 2026-07-01)
+
+> 저작 덱 HTML(iframe WYSIWYG)에 `<img>` 삽입용 바이트 저장소.
+> **설계 심장**: 바이트는 파일시스템(Storage, L1 — `deck_assets.storage_key`가 주소)에, 저장 HTML엔 짧은 URL만.
+> 렌더(S7 `deck_renderer`) 직전에만 URL을 DB 바이트→data URI로 인라인한다
+> (2MB PATCH 한도 준수 + 쿠키 없는 Playwright 401·set_content base 부재 동시 해소).
+
+#### `POST /api/deck/:jobId/assets`
+사용자 업로드 이미지(① 소유진실/② AI 천장 오버라이드/데이터 도표)를 저장한다. `multipart/form-data`.
+
+**Request** — multipart
+```
+file:        binary  (필수) — 이미지. mime 화이트리스트 = image/png|jpeg|webp|gif (SVG 거부: XSS/SSRF)
+source_type: string  (선택, 기본 upload-owned) — upload-owned | upload-data | paper-figure
+```
+최대 크기 8MB.
+
+**Response** `201 Created`
+```json
+{ "assetId": "a1b2c3d4e5f6a7b8", "url": "/api/deck/<jobId>/assets/a1b2c3d4e5f6a7b8" }
+```
+프론트는 반환 `url`을 `insertImage({url, assetId, sourceType})`로 iframe 에이전트에 넘긴다.
+
+**에러**: 잡 없음 404(ERR-JOB-001) · 미지원 mime 400(ERR-IMG-001) · 8MB 초과 400(ERR-IMG-002) · 빈 파일 400(ERR-IMG-003).
+
+#### `GET /api/deck/:jobId/assets/:assetId`
+자산 바이트를 원본 mime으로 서빙. **인증 없음 — capability URL**(추측 불가능한 job_id UUID + 16-hex asset_id 조합이 접근 권한). **export/렌더 PNG는 이 라우트를 거치지 않는다**(렌더시 인라인이 대체). 만료/부재 시 404(ERR-IMG-004).
+
+> **왜 무인증인가(스펙 §9 결정 "서빙 라우트 auth는 인라인 전제로 무해화")**: 편집 미리보기는 저작 HTML을 **sandboxed iframe**(`sandbox="allow-scripts"`, 신뢰 경계)에 마운트한다. iframe은 null-origin이라 `<img src="/api/deck/...">` 서브리소스 요청에 SameSite 세션 쿠키가 실리지 않아 인증 서빙은 **401→빈칸 렌더**가 된다(2026-07-01 실측 확인). 렌더 PNG는 인라인이 대체하므로 서빙 라우트는 미리보기 전용 — 무인증 capability URL로 열어 iframe 샌드박스를 유지한 채 미리보기를 살린다. 업로드(POST)는 인증 유지. 자산은 사용자 소유 이미지(로고·사진)로 민감도 낮고, 업로드·덱 접근은 인증 필요(로그인 세션).
+
+**동작 규칙**:
+- `data-source-type` 토큰 집합 동결: `stock`(S2 스톡 다운로드-저장) / `upload-owned` / `upload-data` / `paper-figure`. V(충실성)가 읽는 "원문 대조 불가" 신호 = `upload-data` 단일(S3).
+- TTL = 덱 수명 정합(기본 720h). 만료 감지 시 프론트에 "이미지 재업로드 필요" 표시.
+- degrade-not-fail: 업로드 경로는 스톡 키 유무와 독립. 부분 실패 시 삽입 취소(부분 상태 금지).
+
+#### `<img data-*>` 메타 규약 (HTML이 단일 진실)
+이미지 메타는 별도 JSON 스키마가 아니라 삽입된 `<img>`의 속성에 실려 직렬화·DB·export·V까지 보존된다. **`CardSlot` 같은 필드스키마 신설 금지**(헌법 §1 카탈로그 감옥 회피).
+
+| 속성 | 의미 |
+|---|---|
+| `data-asset-id` | deck_assets PK(assetId) |
+| `data-source-type` | stock / upload-owned / upload-data / paper-figure |
+| `data-provider` | (스톡) pexels / unsplash |
+| `data-credit` / `data-credit-url` | (스톡) 저자 표시 |
+
+> **금지**: `data-pi-artifact`/`data-pi-*` 부착 — editorAgent serialize()가 제거해 소실된다. 메타는 반드시 `data-asset-id`/`data-source-type` 등으로.
+
+#### `POST /api/deck/:jobId/nlpatch/propose` — AI 편집 제안 (미커밋)
+
+자연어/원클릭 지시로 덱 HTML을 **최소 변경 수정한 결과를 미리보기용으로 반환**한다. **저장하지 않고 PNG도 렌더하지 않는다**(유료 LLM 1콜). 사용자가 확인 후 `PATCH /api/deck/:jobId`(commit)로만 반영된다.
+
+**Request** — `application/json`
+```json
+{
+  "instruction": "한 줄로 짧게",
+  "html": "<!DOCTYPE html>…",
+  "target": { "eid": "eab12cd3", "cardIndex": 2, "quotedText": "현재 요소 텍스트" }
+}
+```
+- `html`: **캔버스 라이브 `serialize()` 결과**(DB의 `deck.html`이 아님). 선택 시 스탬프된 `data-eid`가 이 html에 존재해야 하고, 미저장 직접편집도 여기에 보존된다.
+- `target`(선택): 편집 대상 요소 앵커. `eid`는 iframe이 선택 시 부여한 불투명 난수. 있으면 프롬프트가 "이 요소만" 수정하도록 앵커하고, LLM은 `data-eid`를 원형 보존한다.
+
+**Response** `200 OK`
+```json
+{ "html": "<!DOCTYPE html>…(수정본)", "verify": { "verified": 12, "unverified": 1, "claims": [ … ] } }
+```
+- `verify`: 수정본을 원문(`paper_text`)과 대조한 결과. 원문 없으면 `{verified:0, unverified:0, claims:[], skipped:true}`.
+- **DB·PNG 불변**(저장/렌더는 commit 전용).
+
+**에러**: 잡/덱 없음 404(ERR-JOB-001) · 수정 결과가 카드 구조 이탈(`data-screen-label` 소실) 422(ERR-EDIT-001, 원본 보존).
+
+#### `PATCH /api/deck/:jobId` (commit — 기재 보강)
+
+직접조작 저장과 **AI 제안 적용(commit)** 공용. 요청 `{ "html": "…" }` 저장 → 재검증 + PNG 재렌더. AI 되돌리기는 클라이언트가 commit 직전 html을 스냅샷해 두었다가 이 엔드포인트로 재저장한다(서버는 무상태).
+
+#### `<element data-eid>` — 편집 앵커 규약
+
+iframe editorAgent가 요소 선택 시 부여하는 **불투명 난수 id**(예: `data-eid="eab12cd3"`). 위치·서수 기반이 아니라 요소에 고정된다(MOVE/DELETE/INSERT로 서수가 밀려도 충돌 없음). `data-pi-*`가 아니므로 `serialize()`에서 생존하며 propose·commit·DB까지 보존된다. LLM 편집 시 원형 유지가 강제된다(EDIT_SYSTEM 규칙).
+
+---
+
 ## 2. 핵심 데이터 모델
 
 ### 2-1. Project (SQLite: `jobs` + `card_data`)
@@ -349,6 +430,40 @@ per_page: integer  (선택, 1~40, 기본 20)
 | `title` | TEXT | 논문 제목 (S2 파싱 결과) |
 | `created_at` | TEXT | ISO 8601 |
 | `updated_at` | TEXT | ISO 8601 |
+
+---
+
+### 2-1a. DeckManifest (SQLite: `deck_manifest`) — v3 저작 지문 (2026-07-11)
+
+저작 콜이 `<!-- PI_MANIFEST {...} -->`로 선언한 편집 결정. 다음 저작 때 최근 3건을 **소프트 변주
+선호**로 주입해 계정 단위 동질화를 막는다(모델은 자기가 지난주에 뭘 만들었는지 모른다 —
+**다양성은 파이프라인만 가진 정보(이력)에서 나온다**). 계약: `05_agent_design.md §4-A-2`.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `job_id` | TEXT PK | 덱 job |
+| `user_id` | INTEGER | 이력 조회 키(계정 단위 변주) |
+| `manifest_json` | TEXT | archetype · killer_asset · palette · motif · rejected_arc |
+| `created_at` | TEXT | ISO 8601 |
+
+미선언(파싱 실패)은 **경고이지 실패가 아니다** — 그 덱이 이력에 안 남을 뿐(소프트).
+
+---
+
+### 2-1b. DeckAsset (SQLite: `deck_assets`) — v3 덱 이미지 삽입
+
+바이트 원장. 저장 HTML엔 URL만, 렌더시 data URI 인라인(§1-7). PK = `(job_id, asset_id)`.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `asset_id` | TEXT | 16-hex. `(job_id, asset_id)` 복합 PK |
+| `job_id` | TEXT | jobs FK |
+| `storage_key` | TEXT | L1: 파일 주소 `jobs/{job_id}/assets/{asset_id}`. 바이트는 파일시스템(Storage). `get_deck_asset`가 `dict['bytes']`로 재조립 |
+| `mime` | TEXT | image/png\|jpeg\|webp\|gif |
+| `source_type` | TEXT | stock\|upload-owned\|upload-data\|paper-figure |
+| `source_url` | TEXT? | (스톡) 원본 CDN URL |
+| `provider`/`credit`/`credit_url` | TEXT? | (스톡) 저자 표시 |
+| `created_at`/`expires_at` | TEXT | ISO 8601. TTL=덱 수명 정합(기본 720h) |
 
 ---
 
@@ -593,6 +708,7 @@ type DegradeCode =
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-07-11 | v2.6 | `deck_manifest` 테이블 추가(§2-1a) — 저작 지문(PI_MANIFEST) 저장·반복이력 소프트 주입. `GET /api/deck/:jobId`의 `verify`에 `derived[]`(V2 파생수치 검산: value·kind·suspect·unresolved·verified·context) 추가 — 구 덱엔 없음(optional). |
 | 2026-06-24 | v2.5 | `CardSlot.visual_kind?`(사진/일러스트, 에디터 전용) 추가. `image_mode`(기존 코드에 있었으나 문서 누락) 문서화. `TemplateType` 14종 전체 반영(8→14, 드리프트 수정). |
 | 2026-06-08 | v2.4 | CardEditorData에 `bg_color?`/`accent_color?` 덱 오버라이드 추가. `--theme-*` 은퇴 명시. 상세: `docs/18_card_design_system.md §3 덱 단위 오버라이드`. |
 | 2026-06-03 | v2.3 | card_count 상한 15→7 (Haiku 출력 한계 안전권). S6 LLM 출력에서 risk_level·verified 제외 (코드 자동 판정). LLMTruncationError 도입 — 출력 천장 도달 시 ERR-S6-002 즉시 반환. |

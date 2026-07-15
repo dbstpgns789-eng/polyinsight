@@ -65,18 +65,62 @@ export function pairsToRaw(pairs: Pair[]): string {
   return pairs.map((p) => (p.b ? `${p.a}:${p.b}` : p.a)).join('|')
 }
 
+const _MYTH_LABELS = new Set(['오해', '통념', '거짓', 'myth', 'fiction'])
+const _TRUTH_LABELS = new Set(['진실', '사실', 'truth', 'fact'])
+
+/** mythbuster pairs 오염 복구(렌더러 강건화).
+ *  S6가 "오해내용:진실내용"(정상) 대신 "오해:내용|진실:내용|..."처럼 라벨을 접두로 뱉으면
+ *  parsePairs는 a="오해"(리터럴 라벨)·b=내용으로 잘못 쪼갠다 → 좌측칸에 "오해" 글자만 박힘.
+ *  a가 리터럴 라벨인 항목이 과반이면 오염으로 보고, 오해항목.b/진실항목.b를 한 쌍으로 재조립. */
+export function repairFaceoffPairs(pairs: Pair[]): Pair[] {
+  const norm = (s: string) => s.trim().toLowerCase()
+  const isLabel = (s: string) => _MYTH_LABELS.has(norm(s)) || _TRUTH_LABELS.has(norm(s))
+  const polluted = pairs.length > 0 && pairs.filter((p) => isLabel(p.a)).length >= Math.ceil(pairs.length / 2)
+  if (!polluted) return pairs
+
+  const out: Pair[] = []
+  let pendingMyth: string | null = null
+  for (const p of pairs) {
+    const label = norm(p.a)
+    if (_MYTH_LABELS.has(label)) {
+      if (pendingMyth !== null) out.push({ a: pendingMyth, b: '' })
+      pendingMyth = p.b
+    } else if (_TRUTH_LABELS.has(label)) {
+      out.push({ a: pendingMyth ?? '', b: p.b })
+      pendingMyth = null
+    } else {
+      if (pendingMyth !== null) { out.push({ a: pendingMyth, b: '' }); pendingMyth = null }
+      out.push(p)
+    }
+  }
+  if (pendingMyth !== null) out.push({ a: pendingMyth, b: '' })
+  return out
+}
+
 export interface StatItem {
   label: string
   value: string
   unit: string
 }
 
-/** "라벨:값:단위|..." → StatItem[] (multistat 뼈대). 라벨 비면 버림. */
+/** 단위 정규화(데이터 클렌징): S6가 "percent"/"percent_point" 영문을 뱉어도 기호로.
+ *  카드뉴스 타이포에서 칙칙한 영문 단위를 %·%p 기호로 통일. 매칭 안 되면 원본 유지. */
+export function normalizeUnit(unit: string): string {
+  const u = unit.trim()
+  const key = u.toLowerCase().replace(/[\s_-]/g, '')
+  const MAP: Record<string, string> = {
+    percent: '%', percentage: '%', pct: '%', 퍼센트: '%',
+    percentpoint: '%p', percentagepoint: '%p', pp: '%p', 퍼센트포인트: '%p', 'percentpoints': '%p',
+  }
+  return MAP[key] ?? u
+}
+
+/** "라벨:값:단위|..." → StatItem[] (multistat 뼈대). 라벨 비면 버림. 단위는 정규화. */
 export function parseStats(raw: string | undefined): StatItem[] {
   if (!raw) return []
   return raw.split('|').map((seg) => {
     const [label = '', value = '', unit = ''] = seg.split(':')
-    return { label: label.trim(), value: value.trim(), unit: unit.trim() }
+    return { label: label.trim(), value: value.trim(), unit: normalizeUnit(unit) }
   }).filter((s) => s.label.length > 0)
 }
 

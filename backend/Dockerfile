@@ -17,4 +17,5 @@ ENV DATABASE_URL=sqlite:////data/polyinsight.db
 VOLUME ["/data"]
 
 EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --proxy-headers: CF터널→web→backend 체인의 X-Forwarded-* 신뢰(실 IP·scheme). backend는 compose 내부에서만 접근.
+CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

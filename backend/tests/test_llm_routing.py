@@ -51,3 +51,29 @@ async def test_haiku_ceiling_caps_at_8192(patched_create):
 async def test_sonnet_ceiling_allows_above_8192(patched_create):
     await llm_mod.llm_client.call("sys", "user", max_tokens=20000, model="claude-sonnet-4-6")
     assert patched_create.call_args.kwargs["max_tokens"] == 20000
+
+
+# ── 비전 입력 (폴리시 루프 비평자용) ──────────────────────────────────────────
+_PNG = b"\x89PNG\r\n\x1a\n\x00\x00fakepngbytes"
+
+
+@pytest.mark.asyncio
+async def test_no_images_keeps_string_content(patched_create):
+    """이미지 없으면 기존처럼 content=문자열 (하위호환)."""
+    await llm_mod.llm_client.call("sys", "user")
+    content = patched_create.call_args.kwargs["messages"][0]["content"]
+    assert content == "user"
+
+
+@pytest.mark.asyncio
+async def test_images_build_vision_blocks(patched_create):
+    """이미지 주면 content=[image블록…, text블록]; base64·media_type 정확."""
+    import base64
+    await llm_mod.llm_client.call("sys", "user", images=[_PNG, _PNG])
+    content = patched_create.call_args.kwargs["messages"][0]["content"]
+    assert isinstance(content, list) and len(content) == 3  # 2 image + 1 text
+    for blk in content[:2]:
+        assert blk["type"] == "image"
+        assert blk["source"]["media_type"] == "image/png"
+        assert blk["source"]["data"] == base64.b64encode(_PNG).decode()
+    assert content[-1] == {"type": "text", "text": "user"}

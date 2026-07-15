@@ -4,11 +4,12 @@ import asyncio
 import re
 from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
 from ..agents.s7_renderer import _playwright_pool, _playwright_render_via_url_sync
 from ..core import db
+from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
 
 router = APIRouter(prefix="/api", tags=["export"])
@@ -21,11 +22,12 @@ def _safe_filename(name: str | None) -> str:
 
 
 @router.get("/export/{export_job_id}/download")
-async def download_zip(export_job_id: str):
+async def download_zip(export_job_id: str, user: dict = Depends(get_current_user)):
     """완료된 ZIP 다운로드."""
     row = await db.get_export(export_job_id)
     if row is None:
         raise HTTPException(410, detail={"code": "ERR-EXP-004", "message": "파일이 만료되었습니다. 다시 내보내기를 실행해 주세요."})
+    await require_owned_job(row["job_id"], user)
 
     return Response(
         content=row["zip_bytes"],
@@ -35,8 +37,9 @@ async def download_zip(export_job_id: str):
 
 
 @router.get("/cards/{job_id}/image/{card_num}")
-async def get_card_image(job_id: str, card_num: int):
+async def get_card_image(job_id: str, card_num: int, user: dict = Depends(get_current_user)):
     """개별 카드 PNG 반환."""
+    await require_owned_job(job_id, user)
     images = await db.get_card_images(job_id)
     png = images.get(card_num)
     if png is None:
@@ -50,11 +53,9 @@ async def get_card_image(job_id: str, card_num: int):
 
 
 @router.get("/cards/{job_id}/download/{card_num}")
-async def download_card_png(job_id: str, card_num: int):
+async def download_card_png(job_id: str, card_num: int, user: dict = Depends(get_current_user)):
     """단일 카드를 즉석 렌더(S7 React goto)해서 PNG 첨부 다운로드. 항상 현재 저장 상태 반영."""
-    job = await db.get_job(job_id)
-    if job is None:
-        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."})
+    job = await require_owned_job(job_id, user)
     if await db.get_card_data(job_id) is None:
         raise HTTPException(404, detail={"code": "ERR-JOB-002", "message": "카드 데이터가 없습니다."})
 

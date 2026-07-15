@@ -110,19 +110,20 @@ PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
 
 ## 3. 컴포넌트 구조
 
+> ⚠️ **L0 은퇴 배너 (2026-07-09).** 이 문서가 서술하는 **저작 파이프라인**(`orchestrator.run_pipeline` → `s6_card_json`/`s6/` → `s8_packaging`, 진입 `POST /api/upload`)은 헌법 v3.0(2026-06-28) 저작 역전으로 폐기되었고 **L0에서 코드 삭제**되었다. 현행 저작은 `agents/deck/`(단일 저작 파이프라인) — 진입 `POST /api/deck/upload`. 카드 JSON 에디터(`CardEditorData`·`GET/PATCH /api/cards/:id`·`/editor` 라우트)는 **레거시 잡 뷰**로만 유지한다(저작 아님). 아래 §3-3·§5의 s6 서술은 **역사 참조**이며, 현행 파이프라인 정본은 루트 `CLAUDE.md §2` + `24_system_architecture.md`다. (후속: 이 문서 deck 저작 전면 반영 예정.)
+
 ### 3-1. Backend
 
 ```
 backend/
 ├── main.py                  FastAPI 앱 진입점, 라우터 등록, CORS
 ├── agents/
-│   ├── orchestrator.py      파이프라인 실행 제어 (유일한 컨트롤러)
-│   │                          run_pipeline(job_id, pdf_bytes, theme, card_count)
 │   ├── base.py              BaseAgent[InputT, OutputT] 추상 클래스
-│   ├── s1_extractor.py      pdfplumber / PyMuPDF 텍스트 추출
-│   ├── s6_card_json.py      카드뉴스 JSON 생성 (Gemini, 가변 카드)
-│   ├── s7_renderer.py       Playwright PNG 렌더링 (React render 라우트 goto)
-│   └── s8_packaging.py      SQLite 저장 + ZIP 생성
+│   ├── s1_extractor.py      pdfplumber / PyMuPDF 텍스트 추출 (deck 저작도 재사용)
+│   ├── deck/                ★현행 저작 — authoring.py(S6 단일 저작)·deck_renderer.py·
+│   │                          pipeline.py(run_authoring_pipeline)·nl_patch.py(자연어 편집)
+│   └── s7_renderer.py       Playwright PNG 렌더링 — 레거시 카드 즉석 다운로드/export가 재사용
+#   [L0 삭제됨] orchestrator.py · s6_card_json.py · s6/ · s8_packaging.py — 구 저작 경로(은퇴)
 ├── routers/
 │   ├── jobs.py              POST /api/upload
 │   │                        GET  /api/status/:jobId
@@ -176,7 +177,11 @@ web/src/                        Next.js 15 App Router + TypeScript (포트 3000)
 - 업로드 모달 / 내보내기 모달 → `createPortal(…, document.body)` 로 렌더링
 - 별도 라우트 없음. 어느 페이지에서도 오버레이로 동작.
 
-### 3-3. Orchestrator 설계
+### 3-3. Orchestrator 설계 (🗑️ L0 은퇴 — 역사 참조)
+
+> 아래 `run_pipeline`(구 저작 파이프라인)은 L0(2026-07-09)에서 삭제됨. 현행 저작 오케스트레이션은
+> `agents/deck/pipeline.py::run_authoring_pipeline`(S1 재사용 → `author_deck` 단일 저작 → `verify_deck` →
+> `render_deck`). 이 절은 구조 이해용 역사 기록으로만 남긴다.
 
 Orchestrator는 파이프라인의 **유일한 진입점**이다.
 에이전트는 Orchestrator를 통해서만 호출된다.
@@ -259,10 +264,27 @@ async def run_pipeline(job_id: str, pdf_bytes: bytes, theme: CardTheme, card_cou
 | 스테이지 | 실패 유형 | 파이프라인 영향 |
 |---|---|---|
 | S1 Text Extraction | **블로킹** | 즉시 중단. S8만 실행 (상태 기록). |
+| S1 입력 가드레일 (thin input) | **블로킹** | 추출은 성공했으나 `word_count < ABORT_WORD_FLOOR`(80) → S6 호출 전 즉시 중단. ERROR + 사용자 사유 메시지. |
 | S2 Section Parsing | **논블로킹** | degraded_mode=True 플래그. 빈 section_map으로 계속. |
 | S6 Card News JSON | **논블로킹** | 필드별 CRITICAL 마킹. 빈 카드로 에디터 진입 허용. |
 | S7 PNG Rendering | **논블로킹** | 카드별 독립. 일부 실패 시 나머지 계속. 부분 ZIP 허용. |
 | S8 Output Packaging | **항상 실행** | 실패해도 상태만 ERROR 기록. 파이프라인 종료. |
+
+#### 5-1-1. 입력 가드레일 (thin input → 조기 차단)
+
+**배경**: 논문이 아닌 PDF(문서 발췌 31단어), 스캔본(텍스트 레이어 없음)이
+degraded 플래그만 달고 S6까지 통과 → 모든 필드가 빈 카드 7장을 생성.
+사용자는 "빈 껍데기"를 보고 파이프라인 장애로 오인(서비스 신뢰 훼손).
+
+**규칙**: Orchestrator는 S1 직후 `word_count`를 검사한다.
+- `word_count < ABORT_WORD_FLOOR`(80) → **S6 호출 없이** 즉시 ERROR 종료.
+  - 근거: 정상 논문은 최소 800단어 이상, 초록만 있어도 ~150단어. 80 미만은
+    스캔본·비논문으로 카드 생성 불가. (실측: 0096-0098.pdf = 31단어 → 빈 카드)
+  - S6 LLM을 호출하지 않으므로 **비용 0**으로 차단.
+- `ABORT_WORD_FLOOR ≤ word_count < 100` → 기존대로 degraded 플래그 후 진행
+  (살릴 여지가 있는 경계 구간은 차단하지 않음 — 과차단 방지).
+- 차단 시 `warnings`에 `ABORT-S1:` 프리픽스로 사용자용 사유 문자열을 적재 →
+  프론트 에디터가 generic "불러올 수 없습니다" 대신 구체 사유를 표면화.
 
 ### 5-2. 재시도 정책
 
@@ -299,27 +321,28 @@ CREATE TABLE card_data (
     updated_at   TEXT NOT NULL
 );
 
--- S7 출력 (PNG bytes) 저장
+-- S7 출력 (PNG) — L1(2026-07-09): 바이트는 파일시스템(Storage), DB엔 storage_key만
 CREATE TABLE card_images (
     job_id       TEXT NOT NULL REFERENCES jobs(job_id),
     card_num     INTEGER NOT NULL,     -- 1~5
-    png_bytes    BLOB,
+    storage_key  TEXT,                 -- 파일: jobs/{job_id}/cards/{card_num}.png
     size_kb      INTEGER,
     rendered_at  TEXT,
     PRIMARY KEY (job_id, card_num)
 );
 
--- ZIP 패키지
+-- ZIP 패키지 — L1: 바이트는 파일시스템
 CREATE TABLE exports (
     job_id       TEXT PRIMARY KEY REFERENCES jobs(job_id),
-    zip_bytes    BLOB,
+    storage_key  TEXT,                 -- 파일: jobs/{job_id}/exports/{id}.zip
     zip_size_kb  INTEGER,
     file_name    TEXT,                 -- kitech_{slug}_{YYYYMM}.zip
     expires_at   TEXT,                 -- created_at + 24h
     created_at   TEXT NOT NULL
 );
 
--- 기관 프로필 (1회 등록, 전체 적용)
+-- 기관 프로필 (1회 등록, 전체 적용) — profile.logo/character_bytes·researchers.photo_bytes는
+-- 현재 접근 함수 없는 dormant BLOB(L1 범위 밖. 기능 도입 시 그때 storage_key로 신설).
 CREATE TABLE profile (
     id           INTEGER PRIMARY KEY DEFAULT 1,
     org_name     TEXT,
@@ -338,7 +361,7 @@ CREATE TABLE researchers (
 ```
 
 **TTL 정책**:
-- `card_images.png_bytes`, `exports.zip_bytes` → 24시간 후 NULL 처리 (메타데이터 row는 유지)
+- `card_images`·`exports` → 24시간 후 행+파일 삭제 (L1: `cleanup_expired_blobs`가 storage_key 파일도 삭제). `deck_assets`는 30일 TTL(만료 시 행+파일 정리).
 - `jobs`, `card_data` → 영구 보존
 
 ---

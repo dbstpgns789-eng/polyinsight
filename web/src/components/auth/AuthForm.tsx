@@ -1,25 +1,37 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 type Mode = 'login' | 'signup';
+
+// OAuth 콜백/dormant가 /login?error=<code>로 바운스 — 조용한 실패를 사람 말로 표면화
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  oauth_disabled: '구글 로그인이 아직 준비 중이에요. 이메일로 로그인해 주세요.',
+  oauth_state: '인증이 만료됐어요. 다시 시도해 주세요.',
+  oauth_failed: '구글 인증에 실패했어요. 다시 시도해 주세요.',
+  oauth_no_email: '구글 계정에서 이메일 정보를 가져오지 못했어요.',
+};
 
 interface Errors {
   email?: string;
   password?: string;
   confirm?: string;
-  invite?: string;
+  agree?: string;
   form?: string;
 }
 
 export default function AuthForm({ mode }: { mode: Mode }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [oauthError, setOauthError] = useState<string | undefined>(
+    () => OAUTH_ERROR_MESSAGES[searchParams.get('error') ?? ''],
+  );
   const [email, setEmail]     = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm]   = useState('');
-  const [invite, setInvite]     = useState('');
+  const [agreed, setAgreed]     = useState(false);
   const [errors, setErrors]   = useState<Errors>({});
   const [loading, setLoading] = useState(false);
 
@@ -40,26 +52,25 @@ export default function AuthForm({ mode }: { mode: Mode }) {
     if (!isLogin && password !== confirm) {
       e.confirm = '비밀번호가 일치하지 않습니다.';
     }
+    if (!isLogin && !agreed) {
+      e.agree = '약관 및 개인정보 처리방침에 동의해 주세요.';
+    }
     return e;
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const errs = validate();
-    if (!isLogin && !invite.trim()) {
-      errs.invite = '초대코드를 입력해 주세요.';
-    }
     if (Object.keys(errs).length > 0) {
       setErrors(errs);
       return;
     }
     setErrors({});
+    setOauthError(undefined);
     setLoading(true);
     try {
       const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
-      const payload = isLogin
-        ? { email, password }
-        : { email, password, invite };
+      const payload = { email, password };
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -88,8 +99,8 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         <h1 className="auth-form__title">{isLogin ? '로그인' : '회원가입'}</h1>
       </div>
 
-      {errors.form && (
-        <div className="auth-error-banner" role="alert">{errors.form}</div>
+      {(errors.form || oauthError) && (
+        <div className="auth-error-banner" role="alert">{errors.form ?? oauthError}</div>
       )}
 
       <div className="auth-fields">
@@ -127,6 +138,11 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           {errors.password && (
             <p className="auth-field__error" id="err-password" role="alert">{errors.password}</p>
           )}
+          {isLogin && (
+            <div style={{ textAlign: 'right', marginTop: 6 }}>
+              <Link href="/forgot-password" className="auth-link">비밀번호를 잊으셨나요?</Link>
+            </div>
+          )}
         </div>
 
         {!isLogin && (
@@ -149,26 +165,30 @@ export default function AuthForm({ mode }: { mode: Mode }) {
           </div>
         )}
 
-        {!isLogin && (
-          <div className="auth-field">
-            <label htmlFor="auth-invite" className="auth-field__label">초대코드</label>
-            <input
-              id="auth-invite"
-              type="text"
-              className="auth-input"
-              placeholder="발급받은 초대코드"
-              value={invite}
-              onChange={e => { setInvite(e.target.value); clearFieldError('invite'); }}
-              aria-invalid={!!errors.invite || undefined}
-              aria-describedby={errors.invite ? 'err-invite' : undefined}
-            />
-            {errors.invite && (
-              <p className="auth-field__error" id="err-invite" role="alert">{errors.invite}</p>
-            )}
-          </div>
-        )}
-
       </div>
+
+      {!isLogin && (
+        <div className="auth-agree-row">
+          <label className="auth-agree">
+            <input
+              type="checkbox"
+              className="auth-agree__box"
+              checked={agreed}
+              onChange={e => { setAgreed(e.target.checked); clearFieldError('agree'); }}
+              aria-invalid={!!errors.agree || undefined}
+              aria-describedby={errors.agree ? 'err-agree' : undefined}
+            />
+            <span>
+              <strong>[필수]</strong>{' '}
+              <Link href="/terms" target="_blank" className="auth-link auth-link--strong">이용약관</Link> 및{' '}
+              <Link href="/privacy" target="_blank" className="auth-link auth-link--strong">개인정보 처리방침</Link>에 동의합니다.
+            </span>
+          </label>
+          {errors.agree && (
+            <p className="auth-field__error" id="err-agree" role="alert">{errors.agree}</p>
+          )}
+        </div>
+      )}
 
       <button
         type="submit"
@@ -185,9 +205,13 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         ) : (isLogin ? '로그인' : '회원가입')}
       </button>
 
-      <div className="auth-divider" aria-hidden="true"><span>또는</span></div>
+      <div className="auth-divider" aria-hidden="true"><span>또는 다음으로 계속</span></div>
 
-      <button type="button" className="btn btn-outline btn-lg auth-social">
+      <button
+        type="button"
+        className="btn btn-outline btn-lg auth-social"
+        onClick={() => { window.location.href = '/api/auth/oauth/google/start'; }}
+      >
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
           <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908C16.658 14.38 17.64 12.07 17.64 9.205Z" fill="#4285F4"/>
           <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" fill="#34A853"/>
@@ -197,13 +221,18 @@ export default function AuthForm({ mode }: { mode: Mode }) {
         Google로 계속하기
       </button>
 
-      {!isLogin && (
-        <p className="auth-terms">
-          회원가입 시{' '}
-          <a href="#" className="auth-link">이용약관</a>과{' '}
-          <a href="#" className="auth-link">개인정보 처리방침</a>에 동의합니다.
-        </p>
-      )}
+      <button
+        type="button"
+        className="btn btn-outline btn-lg auth-social"
+        disabled
+        aria-disabled="true"
+        title="카카오 로그인 준비 중입니다"
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+          <path d="M9 2.4C4.86 2.4 1.5 5.03 1.5 8.27c0 2.09 1.4 3.92 3.51 4.96-.16.56-.57 2.06-.65 2.38-.1.4.14.4.3.29.13-.09 2.02-1.37 2.84-1.93.48.07.98.1 1.5.1 4.14 0 7.5-2.62 7.5-5.86S13.14 2.4 9 2.4Z" fill="#3C1E1E"/>
+        </svg>
+        Kakao <span style={{ opacity: 0.6, fontSize: '0.85em' }}>(준비 중)</span>
+      </button>
 
       <p className="auth-switch">
         {isLogin

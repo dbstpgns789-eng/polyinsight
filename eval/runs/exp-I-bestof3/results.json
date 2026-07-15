@@ -1,0 +1,140 @@
+[
+  {
+    "id": "microbead-cof",
+    "genre": "재료(셀룰로오스+COF 나노시트 전기분무) — 블랙박스 심사 논문",
+    "status": "DONE",
+    "job_id": "094fe1e2-5bf9-4df2-93ef-b75d79f1af71",
+    "warnings": [
+      "비전 수정 실패 — 원본을 유지합니다 (LLMAPIError)."
+    ],
+    "degraded": false,
+    "cards": 7,
+    "verify": {
+      "verified": 17,
+      "unverified": 5,
+      "claims": [
+        {
+          "value": "0.1μm",
+          "context": "비접근성·렌더 검사를 진행한다. **1단계 (용어)** - 02: `0.1μm~5mm(머리카락 굵기 안팎)` — 이미 앵커 있음. OK. - 04:",
+          "verified": true
+        },
+        {
+          "value": "5mm",
+          "context": "검사를 진행한다. **1단계 (용어)** - 02: `0.1μm~5mm(머리카락 굵기 안팎)` — 이미 앵커 있음. OK. - 04:",
+          "verified": true
+        },
+        {
+          "value": "4개",
+          "context": "`수소결합`, `나노 시트(CON)` — 한 문장에 어려운 용어 4개 연속. 독자가 지친다. 핵심(수소결합으로 손잡음)만 남기고",
+          "verified": true
+        },
+        {
+          "value": "0.60",
+          "context": "238→340px. 값 비율(142:199:238 = 0.60:0.84:1.0)과 픽셀 비율(203:284:340 =",
+          "verified": false
+        },
+        {
+          "value": "0.84",
+          "context": "238→340px. 값 비율(142:199:238 = 0.60:0.84:1.0)과 픽셀 비율(203:284:340 =",
+          "verified": false
+        },
+        {
+          "value": "1.0",
+          "context": "값 비율(142:199:238 = 0.60:0.84:1.0)과 픽셀 비율(203:284:340 = 0.60:0.84:1.0)",
+          "verified": true
+        },
+        {
+          "value": "142 ±22 MPa",
+          "context": "대신하려면 먼저 이 강도의 벽 을 넘어야 했다. 순수 셀룰로오스 142 ±22 MPa 먼저 부서진다 폴리프로필렌(플라스틱) 199 ±6 MPa 기준선 천연",
+          "verified": true
+        },
+        {
+          "value": "199 ±6 MPa",
+          "context": "셀룰로오스 142 ±22 MPa 먼저 부서진다 폴리프로필렌(플라스틱) 199 ±6 MPa 기준선 천연 구슬은 플라스틱보다 57 MPa 약했다. 이 차이를",
+          "verified": true
+        },
+        {
+          "value": "57 MPa",
+          "context": "199 ±6 MPa 기준선 천연 구슬은 플라스틱보다 57 MPa 약했다. 이 차이를 어떻게 뒤집을까? Ryu · Kim et al.",
+          "verified": true
+        },
+        {
+          "value": "12.5kV",
+          "context": "그래서 잘 녹는 아세테이트 형태 로 먼저 뿌린 뒤, 되돌린다. 12.5kV STEP 1 고전압으로 용액을 미세 물방울로 분사 → STEP 2",
+          "verified": true
+        },
+        {
+          "value": "2.5μm",
+          "context": "용액을 미세 물방울로 분사 → STEP 2 아세테이트 구슬 (약 2.5μm) 완성 → STEP 3 강한 알칼리로 되돌려 순수 셀룰로오스로 최적",
+          "verified": true
+        },
+        {
+          "value": "80 %",
+          "context": "된다. 그 사이 구슬이 생기는 지점(끈적임 100~2000cP) 습도 80 % 공기 중 물이 용매를 빼내며 표면을 쪼글쪼글하게, 둥근 구슬이 완성됨",
+          "verified": true
+        },
+        {
+          "value": "0.32",
+          "context": "손을 잡아 , 구슬 안을 촘촘히 엮는 그물이 된다. 섞은 양은 겨우 0.32 wt% 구슬의 99.7%는 여전히 셀룰로오스. 친환경 성질은 그대로",
+          "verified": true
+        },
+        {
+          "value": "99.7%",
+          "context": "촘촘히 엮는 그물이 된다. 섞은 양은 겨우 0.32 wt% 구슬의 99.7%는 여전히 셀룰로오스. 친환경 성질은 그대로 지킨다. Ryu · Kim",
+          "verified": false
+        },
+        {
+          "value": "1.7배",
+          "context": "RESULT 강도 시험 — 하나씩 눌러봤다 142에서 238 로, 약 1.7배 단단해졌다 h=203 --> 142 순수 셀룰로오스 ±22 MPa",
+          "verified": false
+        },
+        {
+          "value": "22 MPa",
+          "context": "약 1.7배 단단해졌다 h=203 --> 142 순수 셀룰로오스 ±22 MPa h=284 --> 199 플라스틱(PP) ±6 MPa h=340",
+          "verified": true
+        },
+        {
+          "value": "6 MPa",
+          "context": "셀룰로오스 ±22 MPa h=284 --> 199 플라스틱(PP) ±6 MPa h=340 --> 238 셀룰로오스+나노시트 ±18 MPa 나노시트를",
+          "verified": true
+        },
+        {
+          "value": "18 MPa",
+          "context": "±6 MPa h=340 --> 238 셀룰로오스+나노시트 ±18 MPa 나노시트를 넣은 구슬은 238 MPa — 플라스틱(199)마저",
+          "verified": true
+        },
+        {
+          "value": "238 MPa",
+          "context": "238 셀룰로오스+나노시트 ±18 MPa 나노시트를 넣은 구슬은 238 MPa — 플라스틱(199)마저 넘어섰다. (단위 MPa: 넓이당 견디는",
+          "verified": true
+        },
+        {
+          "value": "1.7",
+          "context": "SUMMARY 천연이 약하다는 통념을, 아주 조금의 나노시트로 깼다 1.7× 강도 상승 142→238 MPa 0.32 wt% 넣은 나노시트",
+          "verified": false
+        },
+        {
+          "value": "2.5 μm",
+          "context": "142→238 MPa 0.32 wt% 넣은 나노시트 친환경성 유지 2.5 μm 구슬 지름 머리카락보다 얇다 전기분사와 간단한 화학처리만으로, 석유",
+          "verified": true
+        },
+        {
+          "value": "10.1007",
+          "context": "· 인하대학교 화학화공학부 Cellulose (2024) · DOI 10.1007/s10570-024-05757-4 KITECH · 한국생산기술연구원",
+          "verified": true
+        }
+      ],
+      "derived": [
+        {
+          "value": "1.7배",
+          "kind": "fold",
+          "suspect": false,
+          "unresolved": false,
+          "verified": false,
+          "context": "RESULT 강도 시험 — 하나씩 눌러봤다 142에서 238 로, 약 1.7배 단단해졌다 h=203 --> 142 순수 셀룰로오스 ±22 MPa"
+        }
+      ]
+    },
+    "judge": null
+  }
+]

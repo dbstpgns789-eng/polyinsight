@@ -1,6 +1,6 @@
 """API 라우터 단위 테스트.
 
-- run_pipeline은 mock (LLM/Playwright 없이 실행)
+- 레거시 카드 엔드포인트는 DB에 잡 직접 생성(_new_job)해 준비 (구 /api/upload 삭제)
 - SQLite는 :memory: 사용
 - httpx AsyncClient로 엔드포인트 직접 호출
 """
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import json
+import uuid
 import zipfile
 from unittest.mock import AsyncMock, patch
 
@@ -28,6 +29,10 @@ async def use_memory_db(tmp_path, monkeypatch):
     from backend.core.auth import get_current_user
     db_file = str(tmp_path / "test.db")
     monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{db_file}")
+    monkeypatch.setattr(settings, "STORAGE_DIR", str(tmp_path / "blobstore"))
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
+    from backend.core import ratelimit
+    ratelimit.reset_all()
     await _db.migrate()
     app.dependency_overrides[get_current_user] = lambda: {"id": 1, "email": "test@test", "role": "user"}
     yield
@@ -40,63 +45,15 @@ async def client():
         yield c
 
 
-@pytest.fixture
-def dummy_pdf() -> bytes:
-    """최소 PDF 바이너리 (S1이 처리하지 않도록 pipeline을 mock함)."""
-    return b"%PDF-1.4 dummy"
+# ── 잡 생성 헬퍼 ─────────────────────────────────────────────────────────
+# 구 POST /api/upload(→run_pipeline)는 L0(2026-07-09)에서 삭제. 저작 진입은
+# /api/deck/upload(routers/deck.py)뿐. 아래 레거시 카드 엔드포인트 테스트는
+# DB에 잡을 직접 생성해 준비한다.
 
-
-# ── 업로드 ────────────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_upload_returns_job_id(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        resp = await client.post(
-            "/api/upload",
-            files={"file": ("paper.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    assert resp.status_code == 202
-    body = resp.json()
-    assert "jobId" in body
-    assert body["status"] == "PENDING"
-
-
-@pytest.mark.asyncio
-async def test_upload_rejects_non_pdf(client):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        resp = await client.post(
-            "/api/upload",
-            files={"file": ("report.txt", b"hello", "text/plain")},
-            data={"card_count": "5"},
-        )
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "ERR-INP-001"
-
-
-@pytest.mark.asyncio
-async def test_upload_rejects_oversized(client):
-    big = b"x" * (51 * 1024 * 1024)
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        resp = await client.post(
-            "/api/upload",
-            files={"file": ("big.pdf", big, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    assert resp.status_code == 400
-    assert resp.json()["detail"]["code"] == "ERR-INP-002"
-
-
-@pytest.mark.asyncio
-async def test_upload_card_count_validation(client, dummy_pdf):
-    """card_count 범위 벗어나면 422."""
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        resp = await client.post(
-            "/api/upload",
-            files={"file": ("paper.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "20"},  # max 15
-        )
-    assert resp.status_code == 422
+async def _new_job(title: str = "p.pdf") -> str:
+    jid = str(uuid.uuid4())
+    await _db.create_job(jid, title, user_id=1)
+    return jid
 
 
 # ── 상태 폴링 ─────────────────────────────────────────────────────────────
@@ -109,14 +66,8 @@ async def test_status_unknown_job(client):
 
 
 @pytest.mark.asyncio
-async def test_status_returns_pending(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_status_returns_pending(client):
+    job_id = await _new_job()
 
     resp = await client.get(f"/api/status/{job_id}")
     assert resp.status_code == 200
@@ -135,14 +86,8 @@ async def test_get_cards_not_found(client):
 
 
 @pytest.mark.asyncio
-async def test_get_cards_returns_data(client, dummy_pdf, mock_card_data):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_get_cards_returns_data(client, mock_card_data):
+    job_id = await _new_job()
 
     # DB에 card_data 수동 주입
     await _db.save_card_data(job_id, mock_card_data.model_dump_json())
@@ -158,14 +103,8 @@ async def test_get_cards_returns_data(client, dummy_pdf, mock_card_data):
 # ── 자동저장 ──────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_patch_cards_saves(client, dummy_pdf, mock_card_data):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_patch_cards_saves(client, mock_card_data):
+    job_id = await _new_job()
 
     resp = await client.patch(
         f"/api/cards/{job_id}/data",
@@ -176,14 +115,8 @@ async def test_patch_cards_saves(client, dummy_pdf, mock_card_data):
 
 
 @pytest.mark.asyncio
-async def test_patch_cards_invalid_schema(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_patch_cards_invalid_schema(client):
+    job_id = await _new_job()
 
     resp = await client.patch(
         f"/api/cards/{job_id}/data",
@@ -211,13 +144,8 @@ async def test_projects_stats_empty(client):
 
 
 @pytest.mark.asyncio
-async def test_projects_lists_uploaded(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
+async def test_projects_lists_uploaded(client):
+    await _new_job()
 
     resp = await client.get("/api/projects")
     assert resp.status_code == 200
@@ -225,14 +153,23 @@ async def test_projects_lists_uploaded(client, dummy_pdf):
 
 
 @pytest.mark.asyncio
-async def test_projects_stats_counts(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        for _ in range(3):
-            await client.post(
-                "/api/upload",
-                files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-                data={"card_count": "5"},
-            )
+async def test_projects_kind_distinguishes_legacy_and_deck(client):
+    """card_data 보유 잡=legacy(/editor행), 미보유=deck(/deck행) — 앞문 재배선 분기 근거."""
+    await _new_job()
+
+    resp = await client.get("/api/projects")
+    project = resp.json()["projects"][0]
+    assert project["kind"] == "deck"  # card_data 없음 = 덱 취급
+
+    await _db.save_card_data(project["jobId"], json.dumps({"cards": []}))
+    resp = await client.get("/api/projects")
+    assert resp.json()["projects"][0]["kind"] == "legacy"
+
+
+@pytest.mark.asyncio
+async def test_projects_stats_counts(client):
+    for _ in range(3):
+        await _new_job()
 
     resp = await client.get("/api/projects/stats")
     body = resp.json()
@@ -250,14 +187,8 @@ async def test_export_download_expired(client):
 
 
 @pytest.mark.asyncio
-async def test_export_download_returns_zip(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_export_download_returns_zip(client):
+    job_id = await _new_job()
 
     # ZIP 수동 저장
     buf = io.BytesIO()
@@ -265,7 +196,6 @@ async def test_export_download_returns_zip(client, dummy_pdf):
         zf.writestr("card_01.png", b"fakepng")
     zip_bytes = buf.getvalue()
 
-    import uuid
     export_id = str(uuid.uuid4())
     await _db.save_export(export_id, job_id, zip_bytes, "test.zip")
 
@@ -273,6 +203,16 @@ async def test_export_download_returns_zip(client, dummy_pdf):
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/zip"
     assert zipfile.is_zipfile(io.BytesIO(resp.content))
+
+
+@pytest.mark.asyncio
+async def test_export_stored_on_disk_and_key_preserved():
+    """L1: save_export는 파일로, get_export는 여전히 dict['zip_bytes']로 바이트 반환."""
+    job_id = await _new_job()
+    await _db.save_export("exp1", job_id, b"PK-zipdata", "out.zip")
+    row = await _db.get_export("exp1")
+    assert row["zip_bytes"] == b"PK-zipdata"   # export.py download_zip이 쓰는 키
+    assert row["filename"] == "out.zip"
 
 
 # ── 카드 이미지 ────────────────────────────────────────────────────────────
@@ -284,14 +224,8 @@ async def test_card_image_not_found(client):
 
 
 @pytest.mark.asyncio
-async def test_card_image_returns_png(client, dummy_pdf):
-    with patch("backend.routers.jobs.run_pipeline", new_callable=AsyncMock):
-        upload = await client.post(
-            "/api/upload",
-            files={"file": ("p.pdf", dummy_pdf, "application/pdf")},
-            data={"card_count": "5"},
-        )
-    job_id = upload.json()["jobId"]
+async def test_card_image_returns_png(client):
+    job_id = await _new_job()
 
     fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
     await _db.save_card_image(job_id, card_num=1, png_bytes=fake_png)
@@ -299,6 +233,19 @@ async def test_card_image_returns_png(client, dummy_pdf):
     resp = await client.get(f"/api/cards/{job_id}/image/1")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_card_image_stored_on_disk_not_blob():
+    """L1: save_card_image는 파일로 쓰고 DB엔 storage_key만 — png_bytes 컬럼 미사용."""
+    from backend.core import storage as _storage
+    job_id = await _new_job()
+    await _db.save_card_image(job_id, card_num=1, png_bytes=b"\x89PNG-disk")
+    # 파일이 결정적 키에 존재
+    assert await _storage.get_storage().get(f"jobs/{job_id}/cards/1.png") == b"\x89PNG-disk"
+    # get_card_images는 여전히 {card_num: bytes} 반환
+    imgs = await _db.get_card_images(job_id)
+    assert imgs == {1: b"\x89PNG-disk"}
 
 
 # ── CardEditorData bg_color 필드 ──────────────────────────────────────────
@@ -334,7 +281,7 @@ def test_card_editor_data_bg_color_custom():
 
 @pytest.mark.asyncio
 async def test_get_cards_includes_filename(client):
-    await _db.create_job("j1", "paper.pdf")
+    await _db.create_job("j1", "paper.pdf", user_id=1)
     await _db.save_card_data("j1", json.dumps({"cards": []}))
     resp = await client.get("/api/cards/j1")
     assert resp.status_code == 200
@@ -343,7 +290,7 @@ async def test_get_cards_includes_filename(client):
 
 @pytest.mark.asyncio
 async def test_rename_job(client):
-    await _db.create_job("j1", "old.pdf")
+    await _db.create_job("j1", "old.pdf", user_id=1)
     resp = await client.patch("/api/jobs/j1", json={"title": "새 이름.pdf"})
     assert resp.status_code == 200
     assert resp.json()["title"] == "새 이름.pdf"
@@ -353,7 +300,7 @@ async def test_rename_job(client):
 
 @pytest.mark.asyncio
 async def test_rename_empty_rejected(client):
-    await _db.create_job("j1", "old.pdf")
+    await _db.create_job("j1", "old.pdf", user_id=1)
     resp = await client.patch("/api/jobs/j1", json={"title": "   "})
     assert resp.status_code == 400
 
@@ -366,7 +313,7 @@ async def test_rename_missing_job_404(client):
 
 @pytest.mark.asyncio
 async def test_delete_job_cascade(client):
-    await _db.create_job("j1", "p.pdf")
+    await _db.create_job("j1", "p.pdf", user_id=1)
     await _db.save_card_data("j1", json.dumps({"cards": []}))
     resp = await client.delete("/api/jobs/j1")
     assert resp.status_code == 204
@@ -377,8 +324,35 @@ async def test_delete_job_cascade(client):
 
 
 @pytest.mark.asyncio
+async def test_delete_job_removes_files():
+    """L1: delete_job은 job 하위 파일(cards·assets)을 delete_prefix로 통삭제."""
+    from backend.core import storage as _storage
+    job_id = await _new_job()
+    await _db.save_card_image(job_id, 1, b"\x89PNG")
+    await _db.save_deck_asset(job_id, "a1", b"asset", "image/png")
+    s = _storage.get_storage()
+    assert await s.get(f"jobs/{job_id}/cards/1.png") is not None
+    await _db.delete_job(job_id)
+    assert await s.get(f"jobs/{job_id}/cards/1.png") is None
+    assert await s.get(f"jobs/{job_id}/assets/a1") is None
+
+
+@pytest.mark.asyncio
+async def test_cleanup_expired_deletes_card_and_asset_files():
+    """L1: cleanup_expired_blobs는 만료 card·export·deck_asset 행과 파일을 함께 제거."""
+    from backend.core import storage as _storage
+    job_id = await _new_job()
+    await _db.save_card_image(job_id, 1, b"\x89PNG", ttl_hours=-1)
+    await _db.save_deck_asset(job_id, "a1", b"asset", "image/png", ttl_hours=-1)
+    s = _storage.get_storage()
+    await _db.cleanup_expired_blobs()
+    assert await s.get(f"jobs/{job_id}/cards/1.png") is None
+    assert await s.get(f"jobs/{job_id}/assets/a1") is None
+
+
+@pytest.mark.asyncio
 async def test_download_card_fresh_render(client):
-    await _db.create_job("j1", "paper.pdf")
+    await _db.create_job("j1", "paper.pdf", user_id=1)
     await _db.save_card_data("j1", json.dumps({"cards": []}))
     fake_png = b"\x89PNG fake-bytes"
     with patch(
@@ -395,6 +369,232 @@ async def test_download_card_fresh_render(client):
 
 @pytest.mark.asyncio
 async def test_download_missing_carddata_404(client):
-    await _db.create_job("j1", "p.pdf")
+    await _db.create_job("j1", "p.pdf", user_id=1)
     resp = await client.get("/api/cards/j1/download/1")
     assert resp.status_code == 404
+
+
+# ── 자연어 편집 (Phase 3c) ──────────────────────────────────────────────────
+
+_DECK_HTML = (
+    '<!DOCTYPE html><html><head></head><body>'
+    '<div data-screen-label="01" style="width:1080px;height:1350px;">BLEU 28.4</div>'
+    '</body></html>'
+)
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_mock_applies_and_rerenders(client, monkeypatch):
+    """DEV_MOCK_LLM nlpatch — 마커 주입(계약 보존) → 재검증/재렌더 → html·verify 반환."""
+    monkeypatch.setattr(settings, "DEV_MOCK_LLM", True)
+    monkeypatch.setattr(
+        "backend.agents.deck.pipeline.render_deck",
+        AsyncMock(return_value=([b"\x89PNG-1"], [])),
+    )
+    await _db.create_job("jnl", "paper.pdf", user_id=1)
+    await _db.save_authored_deck("jnl", _DECK_HTML, json.dumps({"verified": 1, "unverified": 0}),
+                                 1, paper_text="The model scored 28.4 BLEU.")
+    resp = await client.post("/api/deck/jnl/nlpatch", json={"instruction": "표지를 차분하게"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "data-screen-label" in body["html"]          # 계약 보존
+    assert "nlpatch-mock" in body["html"]                # mock 경로 실행 증명
+    assert "verify" in body and "cardCount" in body
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_404_when_no_deck(client):
+    resp = await client.post("/api/deck/nope/nlpatch", json={"instruction": "x"})
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_partial_render_does_not_delete_valid_higher_card(client, monkeypatch):
+    """중간 카드 렌더 실패로 성공 수 < 총 카드 수여도, 유효하게 저장된 상위 카드가 삭제되지 않는다."""
+    # 7-card html, but render returns only 6 images (card 3 failed) — cards saved by render_deck itself in real path;
+    # here we mock render_deck to (a) save cards 1,2,4,5,6,7 to DB, (b) return 6 images.
+    seven = '<!DOCTYPE html><html><body>' + ''.join(
+        f'<div data-screen-label="{i:02d}" style="width:1080px;height:1350px;">c{i}</div>' for i in range(1, 8)
+    ) + '</body></html>'
+    async def fake_render(html, **kw):
+        for n in [1, 2, 4, 5, 6, 7]:
+            await _db.save_card_image('jpr', n, b'\x89PNG' + bytes([n]))
+        return ([b'\x89PNG'] * 6, [])   # 6 successes
+    monkeypatch.setattr('backend.agents.deck.pipeline.render_deck', fake_render)
+    await _db.create_job('jpr', 'p.pdf', user_id=1)
+    await _db.save_authored_deck('jpr', seven, json.dumps({'verified': 0, 'unverified': 0}), 7, paper_text=None)
+    from backend.agents.deck.pipeline import persist_edited_deck
+    await persist_edited_deck('jpr', seven)
+    imgs = await _db.get_card_images('jpr')
+    assert 7 in imgs, 'valid card 7 must survive (threshold must be html card count, not len(images))'
+    assert set(imgs.keys()) == {1, 2, 4, 5, 6, 7}
+
+
+# ── 덱 이미지 자산 업로드/서빙 (S1) ──────────────────────────────────────────
+
+def _png_bytes() -> bytes:
+    from PIL import Image
+    import io as _io
+    buf = _io.BytesIO()
+    Image.new("RGB", (40, 30), (12, 200, 90)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@pytest.mark.asyncio
+async def test_upload_deck_asset_and_serve(client):
+    await _db.create_job("jasset", "p.pdf", user_id=1)
+    png = _png_bytes()
+    resp = await client.post(
+        "/api/deck/jasset/assets",
+        files={"file": ("logo.png", png, "image/png")},
+        data={"source_type": "upload-owned"},
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert "assetId" in body
+    assert body["url"] == f"/api/deck/jasset/assets/{body['assetId']}"
+    # 서빙 라운드트립
+    got = await client.get(body["url"])
+    assert got.status_code == 200
+    assert got.headers["content-type"] == "image/png"
+    assert got.content == png
+    # DB 소스타입 보존
+    asset = await _db.get_deck_asset("jasset", body["assetId"])
+    assert asset["source_type"] == "upload-owned"
+
+
+@pytest.mark.asyncio
+async def test_deck_asset_stored_on_disk_and_keys_preserved():
+    """L1: save_deck_asset는 파일로, get_deck_asset는 dict['bytes']/['mime'] 보존."""
+    job_id = await _new_job()
+    await _db.save_deck_asset(job_id, "a1", b"\x89PNG-asset", "image/png")
+    row = await _db.get_deck_asset(job_id, "a1")
+    assert row["bytes"] == b"\x89PNG-asset"   # deck.py·deck_renderer가 쓰는 키
+    assert row["mime"] == "image/png"
+
+
+@pytest.mark.asyncio
+async def test_upload_deck_asset_rejects_svg(client):
+    await _db.create_job("jsvg", "p.pdf", user_id=1)
+    resp = await client.post(
+        "/api/deck/jsvg/assets",
+        files={"file": ("x.svg", b"<svg></svg>", "image/svg+xml")},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "ERR-IMG-001"
+
+
+@pytest.mark.asyncio
+async def test_upload_deck_asset_rejects_oversized(client):
+    await _db.create_job("jbig", "p.pdf", user_id=1)
+    big = b"\x89PNG\r\n\x1a\n" + b"x" * (9 * 1024 * 1024)
+    resp = await client.post(
+        "/api/deck/jbig/assets",
+        files={"file": ("big.png", big, "image/png")},
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "ERR-IMG-002"
+
+
+@pytest.mark.asyncio
+async def test_upload_deck_asset_missing_job_404(client):
+    resp = await client.post(
+        "/api/deck/nope/assets",
+        files={"file": ("x.png", _png_bytes(), "image/png")},
+    )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_deck_asset_missing_404(client):
+    await _db.create_job("jempty", "p.pdf", user_id=1)
+    resp = await client.get("/api/deck/jempty/assets/doesnotexist")
+    assert resp.status_code == 404
+    assert resp.json()["detail"]["code"] == "ERR-IMG-004"
+
+
+@pytest.mark.asyncio
+async def test_get_deck_asset_public_no_auth(client):
+    """서빙은 무인증 capability URL — sandboxed iframe(null-origin) 미리보기가
+    세션 쿠키를 못 실어도 200. 추측 불가 job_id+asset_id가 접근 권한(스펙 §9)."""
+    from backend.core.auth import get_current_user
+    await _db.create_job("jpub", "p.pdf", user_id=1)
+    up = await client.post(
+        "/api/deck/jpub/assets",
+        files={"file": ("x.png", _png_bytes(), "image/png")},
+    )
+    url = up.json()["url"]
+    # auth 의존성 override 제거 → 진짜 무인증 요청 재현
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        resp = await client.get(url)   # 쿠키/인증 없음
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "image/png"
+    finally:
+        app.dependency_overrides[get_current_user] = lambda: {"id": 1, "email": "test@test", "role": "user"}
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_rejects_broken_contract(client, monkeypatch):
+    """모델이 계약을 깨면(카드 라벨 소실) 422로 거부하고 원본 보존."""
+    monkeypatch.setattr(
+        "backend.routers.deck.apply_nl_patch",
+        AsyncMock(return_value="<html><body>카드 라벨 없는 깨진 출력</body></html>"),
+    )
+    await _db.create_job("jbad", "p.pdf", user_id=1)
+    await _db.save_authored_deck("jbad", _DECK_HTML, json.dumps({"verified": 1}), 1,
+                                 paper_text="x")
+    resp = await client.post("/api/deck/jbad/nlpatch", json={"instruction": "전부 지워"})
+    assert resp.status_code == 422
+    # 원본은 그대로(거부 후 보존)
+    deck = await _db.get_authored_deck("jbad")
+    assert deck["html"] == _DECK_HTML
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_propose_returns_html_verify_without_persist(client, monkeypatch):
+    """propose는 수정본 html+verify를 반환하되 DB 저장·PNG 렌더를 하지 않는다."""
+    monkeypatch.setattr(settings, "DEV_MOCK_LLM", True)
+    render_mock = AsyncMock(return_value=([b"\x89PNG"], []))
+    monkeypatch.setattr("backend.agents.deck.pipeline.render_deck", render_mock)
+    await _db.create_job("jprop", "p.pdf", user_id=1)
+    await _db.save_authored_deck("jprop", _DECK_HTML, json.dumps({"verified": 1, "unverified": 0}),
+                                 1, paper_text="The model scored 28.4 BLEU.")
+    live_html = _DECK_HTML.replace("BLEU 28.4", 'BLEU 28.4 <span data-eid="e1">최고</span>')
+    resp = await client.post(
+        "/api/deck/jprop/nlpatch/propose",
+        json={"instruction": "한 줄로", "html": live_html,
+              "target": {"eid": "e1", "cardIndex": 0, "quotedText": "최고"}},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "html" in body and "verify" in body
+    assert "data-screen-label" in body["html"]
+    assert "nlpatch-mock" in body["html"]
+    assert "verified" in body["verify"]
+    render_mock.assert_not_called()
+    deck = await _db.get_authored_deck("jprop")
+    assert deck["html"] == _DECK_HTML
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_propose_404_when_no_deck(client):
+    resp = await client.post("/api/deck/nope/nlpatch/propose",
+                             json={"instruction": "x", "html": "<html></html>"})
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_nlpatch_propose_422_on_broken_contract(client, monkeypatch):
+    """수정 결과가 카드 구조를 벗어나면 422(원본 보존, 저장 안 함)."""
+    monkeypatch.setattr(
+        "backend.routers.deck.apply_nl_patch",
+        AsyncMock(return_value="<html><body>카드 라벨 없는 깨진 출력</body></html>"),
+    )
+    await _db.create_job("jpbad", "p.pdf", user_id=1)
+    await _db.save_authored_deck("jpbad", _DECK_HTML, json.dumps({"verified": 1}), 1, paper_text="x")
+    resp = await client.post("/api/deck/jpbad/nlpatch/propose",
+                             json={"instruction": "전부 지워", "html": _DECK_HTML})
+    assert resp.status_code == 422
+    deck = await _db.get_authored_deck("jpbad")
+    assert deck["html"] == _DECK_HTML

@@ -25,6 +25,14 @@ const headlineBase = {
   wordBreak: 'keep-all' as const,
 }
 
+function renderEm(value: string) {
+  return parseEmphasis(value).map((seg, i) =>
+    seg.em
+      ? <em key={i} style={{ color: 'var(--set-accent)', fontStyle: 'normal' }}>{seg.text}</em>
+      : <span key={i}>{seg.text}</span>
+  )
+}
+
 export default function Headline({ value, fieldKey, mode, onFieldChange, onFieldFocus, focused }: HeadlineProps) {
   const style = applyFieldStyle(headlineBase, useFieldStyle(fieldKey))
   if (mode === 'edit') {
@@ -33,16 +41,9 @@ export default function Headline({ value, fieldKey, mode, onFieldChange, onField
         fieldKey={fieldKey} value={value} mode={mode} multiline
         onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focused}
         style={style}
+        renderDisplay={renderEm}
       />
     )
   }
-  return (
-    <div style={style}>
-      {parseEmphasis(value).map((seg, i) =>
-        seg.em
-          ? <em key={i} style={{ color: 'var(--set-accent)', fontStyle: 'normal' }}>{seg.text}</em>
-          : <span key={i}>{seg.text}</span>
-      )}
-    </div>
-  )
+  return <div style={style}>{renderEm(value)}</div>
 }

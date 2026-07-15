@@ -11,13 +11,22 @@ interface Props {
 }
 
 export default function NodeFlow({ nodes, mode, onNodeChange, onFieldFocus, focusedField }: Props) {
+  // 공중부양 화살표 방지: wrap 금지. ≤3개=가로 1행(→), ≥4개=세로 스택(↓).
+  // 화살표는 항상 연속 노드 사이에만 — 행 경계에서 홀로 떨어지지 않는다. 높이 넘침은 CardSurface fit이 처리.
+  const vertical = nodes.length >= 4
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 16, fontFamily: 'var(--set-font)' }}>
+    <div style={{
+      display: 'flex', flexDirection: vertical ? 'column' : 'row',
+      alignItems: 'center', justifyContent: 'center',
+      gap: vertical ? 10 : 14, fontFamily: 'var(--set-font)',
+    }}>
       {nodes.map((node, i) => (
         <div key={i} style={{ display: 'contents' }}>
           <div style={{
             background: 'var(--set-surface)', border: '1.5px solid var(--set-surface-border)',
-            borderRadius: 'var(--set-radius-box)', padding: '20px 26px', maxWidth: 280,
+            borderRadius: 'var(--set-radius-box)', padding: '18px 24px',
+            width: vertical ? '76%' : undefined,
+            flex: vertical ? undefined : '1 1 0', minWidth: 0, boxSizing: 'border-box',
           }}>
             <EditableText
               fieldKey={`node_${i}`} value={node} mode={mode} multiline
@@ -27,7 +36,9 @@ export default function NodeFlow({ nodes, mode, onNodeChange, onFieldFocus, focu
             />
           </div>
           {i < nodes.length - 1 && (
-            <span aria-hidden style={{ fontSize: 'var(--set-subhead)', fontWeight: 900, color: 'var(--set-accent)', flexShrink: 0 }}>→</span>
+            <span aria-hidden style={{ fontSize: 'var(--set-subhead)', fontWeight: 900, color: 'var(--set-accent)', flexShrink: 0, lineHeight: 1 }}>
+              {vertical ? '↓' : '→'}
+            </span>
           )}
         </div>
       ))}

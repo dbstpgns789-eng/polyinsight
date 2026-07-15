@@ -1,0 +1,99 @@
+[
+  {
+    "id": "microbead-cof",
+    "genre": "재료(셀룰로오스+COF 나노시트 전기분무) — 블랙박스 심사 논문",
+    "status": "DONE",
+    "job_id": "00f7944e-d6e0-4809-896e-b778c6522efe",
+    "warnings": [],
+    "degraded": false,
+    "cards": 7,
+    "verify": {
+      "verified": 7,
+      "unverified": 1,
+      "claims": [
+        {
+          "value": "0.32%",
+          "context": "플라스틱 알갱이를 대신할, 자연으로 돌아가는 구슬 나노시트 0.32% 가 플라스틱을 이겼다 전기분사로 빚은 셀룰로오스 마이크로구슬.",
+          "verified": true
+        },
+        {
+          "value": "30%",
+          "context": "20wt% 다이얼 ② 습도 (공기 중 수분이 방울에서 용매를 빼낸다) 30% · 매끈·불규칙 60% · 구형화 시작 80% · 주름진 완성 구슬",
+          "verified": true
+        },
+        {
+          "value": "60%",
+          "context": "(공기 중 수분이 방울에서 용매를 빼낸다) 30% · 매끈·불규칙 60% · 구형화 시작 80% · 주름진 완성 구슬 METHOD 04 /",
+          "verified": true
+        },
+        {
+          "value": "80%",
+          "context": "용매를 빼낸다) 30% · 매끈·불규칙 60% · 구형화 시작 80% · 주름진 완성 구슬 METHOD 04 / 07 한국생산기술연구원 ·",
+          "verified": true
+        },
+        {
+          "value": "238 MPa",
+          "context": "· 융합기술연구소 KITECH THE RESULT 부서지는 압력, 238 MPa 구슬 하나를 눌러 부순 압축강도. MPa = 강도 단위(높을수록",
+          "verified": true
+        },
+        {
+          "value": "1.7배",
+          "context": "MPa · 막대 길이는 0–238 실측 비율 CON 첨가로 강도가 약 1.7배 142 → 238 MPa (원문 표현: 약 170% 증가)",
+          "verified": false
+        },
+        {
+          "value": "170%",
+          "context": "첨가로 강도가 약 1.7배 142 → 238 MPa (원문 표현: 약 170% 증가) COMPRESSIVE STRENGTH 06 / 07",
+          "verified": true
+        },
+        {
+          "value": "10.1007",
+          "context": "한국생산기술연구원 융합기술연구소 · 인하대학교 화학·화학공학과 DOI 10.1007/s10570-024-05757-4 ※ SJR·SK 공동 제1저자.",
+          "verified": true
+        }
+      ],
+      "derived": [
+        {
+          "value": "170% 증가",
+          "kind": "pct_change",
+          "suspect": true,
+          "unresolved": false,
+          "verified": true,
+          "context": "첨가로 강도가 약 1.7배 142 → 238 MPa (원문 표현: 약 170% 증가) COMPRESSIVE STRENGTH 06 / 07"
+        },
+        {
+          "value": "1.7배",
+          "kind": "fold",
+          "suspect": false,
+          "unresolved": false,
+          "verified": false,
+          "context": "MPa · 막대 길이는 0–238 실측 비율 CON 첨가로 강도가 약 1.7배 142 → 238 MPa (원문 표현: 약 170% 증가)"
+        }
+      ]
+    },
+    "judge": {
+      "scores": {
+        "hook": 4,
+        "narrative": 4,
+        "accessibility": 3,
+        "integrity": 2,
+        "finish": 4
+      },
+      "defects": {
+        "emoji": false,
+        "placeholder": false,
+        "untranslated_unit": false,
+        "derived_number_suspect": true,
+        "dead_zone": false,
+        "text_visual_mismatch": false
+      },
+      "verdict": "pause",
+      "top_problems": [
+        "카드6: '약 1.7배'와 '원문 표현: 약 170% 증가'가 산수상 모순(142→238은 68% 증가, 170% 증가면 383 MPa여야 함)",
+        "카드4: 10/110/1960/8160 cP 값이 막대 높이에 비례하지 않아 실제 격차(약 4배)가 시각적으로 왜곡됨",
+        "카드5: '아민기·수산기·수소결합' 등 화학 전공 용어가 앵커 설명 없이 나열되어 비전공자 이탈 우려"
+      ],
+      "one_line": "스토리와 디자인은 매끈하지만 카드6 수치 모순과 카드4 차트 비례 오류가 신뢰도를 깎아먹는다—고치고 올려라."
+    }
+  }
+]

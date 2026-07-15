@@ -19,27 +19,6 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             </p>
           </div>
 
-          <div className="auth-brand__proof">
-            <div className="auth-proof-card">
-              <div className="auth-proof-card__label">
-                <span>연구 결과</span>
-                <span>4 / 5 — 예시</span>
-              </div>
-              <p className="auth-proof-card__finding">
-                전체 샘플에서{' '}
-                <strong className="auth-proof-card__num">73.2%</strong>
-                {' '}통계적 유의성 확인
-              </p>
-              <div className="auth-proof-card__cite">
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
-                  <rect x="1" y="1" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.1"/>
-                  <line x1="3" y1="4" x2="8" y2="4" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round"/>
-                  <line x1="3" y1="6" x2="6.5" y2="6" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round"/>
-                </svg>
-                Table 2, p.8
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

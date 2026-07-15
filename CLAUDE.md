@@ -28,31 +28,40 @@ Core principle — **fidelity over style**:
 - Do not introduce claims not supported by the source
 - Numbers and statistics must be quoted directly from the original text
 
-Design philosophy:
-- **창작은 AI가** — 스토리 기획, 템플릿 선택, 레이아웃 결정은 AI의 책임이다
-- **검증은 코드가** — 수치와 팩트의 원문 대조는 코드가 전담한다
-- **최종 판단은 사용자가** — 사용자는 검토·수정·승인 권한을 가진다
+Design philosophy (v3.0 — Authoring Inversion):
+- **창작은 AI가** — 스토리·**형태(레이아웃) 발명**·표현을 AI가 **한 마음에서 동시에 저작**한다.
+  코드는 형태를 미리 규정하지 않는다 (고정 카탈로그·필드 스키마로 가두지 않는다).
+- **검증은 코드가** — 수치·팩트의 원문 대조는 코드가 전담한다 (**이것이 해자**).
+- **최종 판단은 사용자가** — 사용자는 검토·수정·승인 권한을 가진다.
+
+> 2026-06-28 교훈: 이전 구현은 창작을 **코드가**(30 카탈로그·architect/writer 분리·경직 필드포맷)
+> 했다 — §1 위반. 형태와 내용을 가르면 '형태=내용'인 카드([MASK] 빈칸 체험형)는 구조적으로
+> 불가능하다. Opus를 넣어도 "넌 형태 정하지 마/넌 글 쓰지 마" 프롬프트에선 안 빛난다.
+> 레퍼런스(output/cardnews_*)가 빛난 건 한 마음이 이해→형태→표현을 한 번에 저작했기 때문.
 
 ---
 
-## 2. Pipeline Structure (v2.0)
+## 2. Pipeline Structure (v3.0 — Authoring Inversion)
 
 ```
-S1  Text Extraction     pdfplumber / PyMuPDF
-S2  Section Parsing     regex + LLM fallback
+S1  Text Extraction   pdfplumber / PyMuPDF
   ↓
-S6  Card News JSON      원문 direct read + chain-of-thought으로 기여/요약 추출
-S7  PNG Rendering       Playwright (NOT Pillow)
-S8  Output Packaging    SQLite persistence
+S6  Deck Authoring     강한 모델이 덱 전체를 한 번에 저작 — 스토리+형태+표현.
+                       형태를 카탈로그에서 고르지 않고 내용에 맞게 발명. 출력=렌더 가능 구조.
+  ↓
+V   Fidelity Verify    코드가 저작물의 모든 수치를 원문과 대조 (해자). 미확인은 사용자에 표면화.
+  ↓
+S7  Render             Playwright — 저작된 구조를 렌더 (NOT Pillow)
+S8  Output Packaging   SQLite persistence
 ```
 
-**Breaking changes from v1.0:**
-- S3/S4 **removed** — absorbed into S6 chain-of-thought
-- S5 **removed** — Promotional Sentences 단계 폐기
-- S7 uses **Playwright** screenshot (NOT Pillow)
-- Storage is **SQLite** (permanent), not in-memory dict (TTL 30min)
+**Breaking changes from v2.0:**
+- S6 **architect/writer 분리 폐기** — 이해와 표현을 가르는 칙령이 '형태=내용' 카드를 불가능하게 함.
+- 30 레이아웃 카탈로그 = **선택 강제(감옥) → 선택적 팔레트로 강등.** 모델이 형태를 발명 가능.
+- **V(검증) 단계 명시** — 자유 저작 + 코드 사후 검증 = 헌법 1조의 정확한 구현.
+- 편집 = 저작된 구조 위 **WYSIWYG** (고정 필드 스키마 편집 폐기 방향).
 
-> S6 세부 규칙 → `backend/CLAUDE.md`
+> 가설 증명 후 backend/ 구현. S6 세부 규칙 → `backend/CLAUDE.md`
 
 ---
 
@@ -140,15 +149,17 @@ docs/contracts/18_card_design_system.md  Card skin/skeleton, tokens, focal/image
 ## 7. NEVER
 
 ```
-NEVER  invent fields not in the defined schema
+NEVER  cage AI authoring in a fixed schema/catalog when the content needs a new form (§1)
+NEVER  sever comprehension from expression — the mind that decides form must also write content
 NEVER  change stage contracts without updating docs/ first
-NEVER  merge multiple stages to take a shortcut
-NEVER  add cross-stage dependencies outside the Orchestrator
 NEVER  treat derived summaries as more authoritative than source text
-NEVER  emit numeric statements in S6 without source reference
-NEVER  label output as verified unless the code actually proves it
+NEVER  emit numeric statements without source reference
+NEVER  label output as verified unless the code actually proves it (이것이 해자)
 NEVER  skip docs/ update before code change
 ```
+
+> 폐기된 NEVER (v2.0 → v3.0): "invent fields not in schema", "merge multiple stages"
+> — §1 창작 권한과 모순돼 폐기. 형태 발명·창작 통합은 이제 권장.
 
 ---
 
@@ -156,6 +167,7 @@ NEVER  skip docs/ update before code change
 
 | Date | Version | Summary |
 |------|---------|---------|
+| 2026-06-28 | v3.0 | **Authoring Inversion** — 창작을 AI에 환원(형태 발명 권한), architect/writer 분리·카탈로그 감옥·필드스키마 폐기, V(검증) 단계 명시. 레퍼런스 벤치마크가 노출한 §1 위반 시정. 해자=수치검증·편집·브랜드 |
 | 2026-06-26 | v2.4 | CLAUDE.md 부서별 분리 (root=CEO only, backend/web 전용 파일 신설) |
 | 2026-06-06 | v2.3 | risk 분류 정직화 + export 경고-후-진행(하드블록 폐기) |
 | 2026-05-19 | v2.2 | web/ 단독 프론트엔드 확정, PRODUCT.md/DESIGN.md 루트 이동 |
@@ -175,3 +187,8 @@ NEVER  skip docs/ update before code change
 | 2026-06-11 | 성능 최적화 | ROI 검증 없이 프롬프트 캐싱 구조 선설계 → 프리픽스 제약으로 폐기 | 비용 최적화는 실측 후. 선제 구조 변경 금지 |
 | 2026-06-26 | 다중 문서 동시 작성 | 병렬 작성 시 문서 간 cross-check 없이 commit → 역할 충돌·누락 다수 | 다중 문서 작성 후 반드시 상호 일관성 검증. 뼈대 ≠ 완성 |
 | 2026-06-26 | CMO 문서 작성 | docs/19·20·PRODUCT.md 읽기 전에 "인용수/H-index" 프레임 발명 → 확립된 컨텍스트 덮어씀 | 부서 문서 작성 전 해당 도메인의 기존 docs/ 전부 읽기. 발명 금지 |
+| 2026-06-28 | 레퍼런스 벤치마크 | 우리 파이프라인이 창작을 코드(카탈로그·architect/writer분리)가 하게 만듦 → §1 위반. 단일 에이전트가 논문만으로 발행급 뽑아 압도 | 창작은 AI가 한 마음에 저작. 코드는 형태 안 가둠. 모델 탓 전에 "프롬프트가 빛나는 행위를 금지했나" 먼저 본다 |
+| 2026-07-09 | 저작 역전 후 문서 방치 | 헌법 v3.0(6-28)이 architect/writer 폐기·코드는 `agents/deck/`로 감. 근데 계약문서 04·05를 안 고침 → **11일간 문서가 삭제 예정 코드를 정본 S6로 서술**. L0 착수 때 발굴. 애자일하게 코드만 나가고 문서 앵커·전환 기록 안 남김 | **"docs 먼저"는 신기능뿐 아니라 폐기/전환에도 적용.** 경로 갈아탈 때 구 경로 계약문서 즉시 은퇴 표시. 애자일해도 전환 기록(배너·changelog)은 그 자리에 남긴다. 코드↔docs 표류 = 되돌아볼 때 꼬임의 뿌리 |
+| 2026-07-13 | **의존성이 끊긴 상수** | `MAX_SOURCE_CHARS=60000`은 **refs 2개(40KB)가 입력에 함께 들어가서** 정한 값이었다(주석에 이유가 명시돼 있었다). 그런데 ①모델이 Sonnet→Opus로 격상되고 ②refs를 은퇴(12k 토큰이 비었)시키고도 **상한을 재검토하지 않았다.** 결과: chitosan 논문의 **결론이 175자 차이로 잘림**. 게다가 나는 그 주석을 읽고도 연결 못 하고 "참고문헌 제거"로 **우회**했다 — 증상을 치료하고 병인을 놔뒀다. Opus 컨텍스트는 200k 토큰이라 20만 자 논문도 68%밖에 안 쓴다 | **결정 A 때문에 정한 값 B는, A를 폐기할 때 함께 재검토한다.** 상수의 주석에 "왜"가 적혀 있으면 그 "왜"가 아직 유효한지 먼저 확인하라. 그리고 **물려받은 가정을 의심하라** — 오늘만 3번 당했다(refs가 마감을 담보한다 / 중첩 div는 못 자른다 / 60k가 상한이다 — 전부 근거 없었다) |
+| 2026-07-14 | **교훈이 폴백에만 반영되고 주 경로엔 안 감** | `source_trim`이 GPT-3 부록 64,339자를 통째로 버렸다(감사말을 참고문헌으로 오인 → 그 뒤 전부 삭제, 3,640 PF-days 유실). 그런데 파일 주석엔 이미 **"참고문헌 뒤에 부록이 있다"**가 적혀 있었다 — 다만 **밀도 폴백에만 반영되고, 주 경로(헤딩 정규식)는 그 교훈을 못 받았다.** 클로드디자인(백지 프롬프트)이 같은 논문에서 그 수치로 카드를 만든 걸 보고서야 발견 | **한 경로에서 배운 교훈은 같은 함수의 모든 경로에 적용됐는지 확인한다.** 폴백만 똑똑하고 본선이 그대로면 본선이 더 자주 탄다. 그리고 **적대적 레퍼런스(경쟁 산출물)가 3개월 자기확신보다 하루에 더 많은 진실을 준다** — "왜 저쪽은 이 수치를 아는데 우리는 모르지?"가 버그의 입구였다 |
+| 2026-07-14 | **코드가 미감을 규정 (§1 위반 재발)** | 죽은 공간 감사기(`layout_audit`)를 만들며 "내부 공백 >18% = 구멍, 논쟁 대상 아님, 고쳐라"로 못 박았다. 사용자 반문 — **"구멍이 인지 설계라면?"**. 맞았다. 실측하니 발행급 덱도 내부공백 8~20%인데 **무게중심은 0.43~0.57(균형)**이었다 — 공백 크기는 호흡과 구멍을 못 가른다. 진짜 신호는 **쏠림**(우리 덱 0.27~0.70). 2026-07-12에 이미 겪은 실수(`flex:1` 레시피 지시)를 그대로 반복 | **코드는 객관적으로 잴 수 있는 것만 신고하고, 미감 판정은 저작자에게 남긴다.** "이게 결함이다"가 아니라 "이게 관찰이다, 고칠지는 네가 정해라". 여백이 호흡인지 구멍인지는 코드가 판정할 자격이 없다(헌법 §1) |

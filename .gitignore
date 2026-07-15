@@ -42,6 +42,9 @@ s1_output_raw.txt
 # DB (local dev)
 polyinsight.db
 
+# L1 파일 스토리지 (유저 업로드·렌더 산출물 — git 대상 아님)
+backend/var/
+
 # Landing (Astro)
 landing/node_modules/
 landing/dist/
@@ -87,3 +90,4 @@ render_test_v2.py
 run.py
 prompt.md
 gemini-code-*.html
+backups/

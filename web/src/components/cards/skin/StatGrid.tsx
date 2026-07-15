@@ -11,11 +11,16 @@ interface Props {
 }
 
 export default function StatGrid({ items, mode, onItemChange, onFieldFocus, focusedField }: Props) {
-  const cols = items.length <= 2 ? Math.max(1, items.length) : 2
+  const n = items.length
+  // 행당 목표 개수: 1~3→그대로 한 줄, 4→2x2, 5+→3/행.
+  // flex-grow로 마지막 행이 폭을 꽉 채워 '데드 스페이스(고아 박스)'를 없앤다.
+  const perRow = n <= 3 ? Math.max(1, n) : n === 4 ? 2 : 3
+  const basis = `calc(${100 / perRow}% - var(--set-gap) * ${(perRow - 1) / perRow})`
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 'var(--set-gap)', fontFamily: 'var(--set-font)' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--set-gap)', fontFamily: 'var(--set-font)' }}>
       {items.map((it, i) => (
         <div key={i} style={{
+          flex: `1 1 ${basis}`, minWidth: 0,
           background: 'var(--set-surface)', border: '1px solid var(--set-surface-border)',
           borderRadius: 'var(--set-radius-box)', padding: '30px 32px',
         }}>

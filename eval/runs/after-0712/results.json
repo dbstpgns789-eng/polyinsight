@@ -1,0 +1,514 @@
+[
+  {
+    "id": "chitosan-membrane",
+    "genre": "재료·고분자(키토산/셀룰로오스 입자)",
+    "status": "DONE",
+    "job_id": "ba575882-09fa-4467-8d8d-e5247bd08b38",
+    "warnings": [
+      "SOURCE_TRUNCATED: 원문 81,518자 중 60,000자만 저작에 사용 (26% 미전달) — 후반부 내용이 덱에 반영되지 않았을 수 있습니다."
+    ],
+    "degraded": false,
+    "cards": 7,
+    "verify": {
+      "verified": 13,
+      "unverified": 3,
+      "claims": [
+        {
+          "value": "4.0",
+          "context": "그 전하가 풀리며 그물이 헐거워져 비타민C가 새어 나온다. pH 4.0 · 강산성 껍질이 촘촘 → 거의 안 나옴 8.44 % pH 5.5 ·",
+          "verified": true
+        },
+        {
+          "value": "8.44 %",
+          "context": "새어 나온다. pH 4.0 · 강산성 껍질이 촘촘 → 거의 안 나옴 8.44 % pH 5.5 · 건강한 피부 그물이 헐거워짐 → 잘 나옴 20.78",
+          "verified": true
+        },
+        {
+          "value": "5.5",
+          "context": "4.0 · 강산성 껍질이 촘촘 → 거의 안 나옴 8.44 % pH 5.5 · 건강한 피부 그물이 헐거워짐 → 잘 나옴 20.78 % ※",
+          "verified": true
+        },
+        {
+          "value": "20.78 %",
+          "context": "8.44 % pH 5.5 · 건강한 피부 그물이 헐거워짐 → 잘 나옴 20.78 % ※ 24시간 누적 방출량. pH는 피부 산성도(숫자가 낮을수록",
+          "verified": true
+        },
+        {
+          "value": "24시간",
+          "context": "5.5 · 건강한 피부 그물이 헐거워짐 → 잘 나옴 20.78 % ※ 24시간 누적 방출량. pH는 피부 산성도(숫자가 낮을수록 산성).",
+          "verified": true
+        },
+        {
+          "value": "32.7 배",
+          "context": "피부(pH 5.5)에서 껍질 없는 구슬 대비 큰 폭으로 늘었다. 32.7 배 pH 5.5에서 껍질 있는 구슬이 껍질 없는 구슬보다 많이 흡수",
+          "verified": true
+        },
+        {
+          "value": "1.63",
+          "context": "배 pH 5.5에서 껍질 있는 구슬이 껍질 없는 구슬보다 많이 흡수 (1.63 → 63.66 μg/cm²) 1.63 껍질 없는 구슬 63.66",
+          "verified": false
+        },
+        {
+          "value": "63.66 μg/cm²",
+          "context": "껍질 있는 구슬이 껍질 없는 구슬보다 많이 흡수 (1.63 → 63.66 μg/cm²) 1.63 껍질 없는 구슬 63.66 키토산 껍질 구슬 μg/cm²",
+          "verified": false
+        },
+        {
+          "value": "63.66",
+          "context": "흡수 (1.63 → 63.66 μg/cm²) 1.63 껍질 없는 구슬 63.66 키토산 껍질 구슬 μg/cm² = 피부 1cm²당 스며든 비타민C",
+          "verified": false
+        },
+        {
+          "value": "1cm²",
+          "context": "껍질 없는 구슬 63.66 키토산 껍질 구슬 μg/cm² = 피부 1cm²당 스며든 비타민C 무게. 막대 높이는 실제 수치 비율.",
+          "verified": true
+        },
+        {
+          "value": "7.4",
+          "context": "건강할 땐 듬뿍, 염증 땐 덜 준다 염증·손상 피부는 pH가 높아진다(7.4). 이때는 방출을 스스로 낮춰 자극을 줄이는 방향으로 작동한다.",
+          "verified": true
+        },
+        {
+          "value": "20.78%",
+          "context": "낮춰 자극을 줄이는 방향으로 작동한다. 건강한 피부 pH 5.5 20.78% 염증 피부 pH 7.4 12.73% 11.1% 덤으로, 키토산 껍질이",
+          "verified": true
+        },
+        {
+          "value": "12.73%",
+          "context": "건강한 피부 pH 5.5 20.78% 염증 피부 pH 7.4 12.73% 11.1% 덤으로, 키토산 껍질이 여드름 관련 황색포도상구균 증식을",
+          "verified": true
+        },
+        {
+          "value": "11.1%",
+          "context": "피부 pH 5.5 20.78% 염증 피부 pH 7.4 12.73% 11.1% 덤으로, 키토산 껍질이 여드름 관련 황색포도상구균 증식을 11.1%",
+          "verified": true
+        },
+        {
+          "value": "10.1016",
+          "context": "Polymers 372 (2026) 124526 doi.org/10.1016/j.carbpol.2025.124526",
+          "verified": true
+        },
+        {
+          "value": "2025.124526",
+          "context": "124526 doi.org/10.1016/j.carbpol.2025.124526 한국생산기술연구원(KITECH) · 한양대학교 07 / 07",
+          "verified": true
+        }
+      ],
+      "derived": [
+        {
+          "value": "32.7 배",
+          "kind": "fold",
+          "suspect": false,
+          "unresolved": true,
+          "verified": true,
+          "context": "피부(pH 5.5)에서 껍질 없는 구슬 대비 큰 폭으로 늘었다. 32.7 배 pH 5.5에서 껍질 있는 구슬이 껍질 없는 구슬보다 많이 흡수"
+        }
+      ]
+    },
+    "judge": {
+      "scores": {
+        "hook": 3,
+        "narrative": 3,
+        "accessibility": 4,
+        "integrity": 2,
+        "finish": 2
+      },
+      "defects": {
+        "emoji": false,
+        "placeholder": false,
+        "untranslated_unit": false,
+        "derived_number_suspect": true,
+        "dead_zone": true,
+        "text_visual_mismatch": false
+      },
+      "verdict": "pause",
+      "top_problems": [
+        "카드5: '32.7배' 표기가 본문 수치(1.63→63.66, 실제 비율 약 39배)와 산수가 안 맞음",
+        "카드2·3·4·6·7: 본문과 하단 박스 사이에 세로 1/3 이상 통짜 여백이 반복돼 미완성처럼 보임",
+        "카드1: 표제 글자('노랗게 사라지던')가 배경 원과 겹쳐 일부 획이 뭉개짐"
+      ],
+      "one_line": "서사 구조는 살아있지만 핵심 배율 수치가 틀렸고 카드 절반이 빈 여백으로 방치돼 있어 그대로 올리기엔 위험하다."
+    }
+  },
+  {
+    "id": "cellulose-emulsification",
+    "genre": "재료·고분자(막유화 마이크로비드, KITECH)",
+    "status": "DONE",
+    "job_id": "0d50c082-9564-49d1-a3eb-15a48bc127f2",
+    "warnings": [],
+    "degraded": false,
+    "cards": 7,
+    "verify": {
+      "verified": 7,
+      "unverified": 0,
+      "claims": [
+        {
+          "value": "0.45μm",
+          "context": "촘촘한 막 에 밀어 통과시키면 기름과 섞은 셀룰로오스 아세테이트 액을 0.45μm (머리카락 두께의 약 150분의 1) 구멍이 뚫린 막에 밀어",
+          "verified": true
+        },
+        {
+          "value": "4개",
+          "context": "나옵니다. KITECH · 지속가능 소재 04 / 07 단서 · 4개의 손잡이를 맞추다 동그란 구슬은 조건이 만든다 네 개의 손잡이를",
+          "verified": true
+        },
+        {
+          "value": "8.97μm",
+          "context": "아세테이트 농도 16 wt% ✓ 진할수록 작고 고르게. 지름 D50 8.97μm 까지. 밀어내는 속도(유량) 낮게 ✓ 너무 빠르면 방울이 찢겨",
+          "verified": true
+        },
+        {
+          "value": "24시간",
+          "context": "아세틸기를 떼어내니 완전한 셀룰로오스 로 약한 수산화나트륨 용액에 24시간 — 붙여뒀던 아세틸기가 떨어져 나가고, 순수 셀룰로오스 구슬로",
+          "verified": true
+        },
+        {
+          "value": "1228 cm",
+          "context": "구슬 적외선 분석(FT-IR)에서 아세틸기 신호( 1743·1368·1228 cm⁻¹ )가 사라짐 → 완전한 탈아세틸화 확인. KITECH · 지속가능",
+          "verified": true
+        },
+        {
+          "value": "10.1016",
+          "context": "and Applications 8 (2024) 100545 doi:10.1016/j.carpta.2024.100545 제작 —",
+          "verified": true
+        },
+        {
+          "value": "2024.100545",
+          "context": "8 (2024) 100545 doi:10.1016/j.carpta.2024.100545 제작 — 한국생산기술연구원(KITECH) · 부경대학교 07 / 07",
+          "verified": true
+        }
+      ],
+      "derived": []
+    },
+    "judge": {
+      "scores": {
+        "hook": 3,
+        "narrative": 4,
+        "accessibility": 3,
+        "integrity": 3,
+        "finish": 2
+      },
+      "defects": {
+        "emoji": false,
+        "placeholder": false,
+        "untranslated_unit": true,
+        "derived_number_suspect": false,
+        "dead_zone": true,
+        "text_visual_mismatch": false
+      },
+      "verdict": "pause",
+      "top_problems": [
+        "카드2~5 본문과 하단 박스 사이 중앙 여백이 카드 높이의 1/3 이상 비어 시각적으로 미완성처럼 보임",
+        "카드5 '16wt%' 등 전문 단위가 처음 등장할 때 설명 없이 사용됨(D50만 부연, wt%는 무설명)",
+        "카드1 표지가 정보량은 있으나 시각적 임팩트가 약해 스크롤 저지력이 낮음"
+      ],
+      "one_line": "스토리라인과 정보 구성은 탄탄하지만 거의 모든 카드 중앙에 큰 죽은 공간이 반복되고 일부 단위 설명이 빠져 있어 그대로 발행하기보다 레이아웃 밀도와 단위 표기부터 다듬어야 한다."
+    }
+  },
+  {
+    "id": "microbead-cof",
+    "genre": "재료(셀룰로오스+COF 나노시트 전기분무) — 블랙박스 심사 논문",
+    "status": "DONE",
+    "job_id": "f6501fcf-1887-4442-959f-480fc217e1ae",
+    "warnings": [],
+    "degraded": false,
+    "cards": 7,
+    "verify": {
+      "verified": 12,
+      "unverified": 0,
+      "claims": [
+        {
+          "value": "100nm",
+          "context": "사라지는 게 아니었다 치약·세안제·화장품 속 미세플라스틱 구슬 (굵기 100nm~5mm)은 하수 처리로 걸러지지 않아 바다로 흘러갑니다. 물고기 몸에",
+          "verified": true
+        },
+        {
+          "value": "5mm",
+          "context": "아니었다 치약·세안제·화장품 속 미세플라스틱 구슬 (굵기 100nm~5mm)은 하수 처리로 걸러지지 않아 바다로 흘러갑니다. 물고기 몸에",
+          "verified": true
+        },
+        {
+          "value": "2.5μm",
+          "context": "바늘 끝 용액에 고전압 을 걸면 튄 방울들이 서로 밀어내며 흩어져 2.5μm (머리카락 굵기의 약 30분의 1) 크기 구슬로 굳습니다. 고전압",
+          "verified": true
+        },
+        {
+          "value": "12.5 kV",
+          "context": "굵기의 약 30분의 1) 크기 구슬로 굳습니다. 고전압 분사 12.5 kV → 미세 방울 서로 밀어냄 → 구형 구슬 2.5 μm 비결은 농도",
+          "verified": true
+        },
+        {
+          "value": "2.5 μm",
+          "context": "고전압 분사 12.5 kV → 미세 방울 서로 밀어냄 → 구형 구슬 2.5 μm 비결은 농도 10~15wt% (용액 100g당 성분 10~15g)와",
+          "verified": true
+        },
+        {
+          "value": "100g",
+          "context": "밀어냄 → 구형 구슬 2.5 μm 비결은 농도 10~15wt% (용액 100g당 성분 10~15g)와 습도 80% — 이 조건이 어긋나면 구슬 대신",
+          "verified": true
+        },
+        {
+          "value": "15g",
+          "context": "2.5 μm 비결은 농도 10~15wt% (용액 100g당 성분 10~15g)와 습도 80% — 이 조건이 어긋나면 구슬 대신 실 가닥이 됩니다.",
+          "verified": true
+        },
+        {
+          "value": "80%",
+          "context": "농도 10~15wt% (용액 100g당 성분 10~15g)와 습도 80% — 이 조건이 어긋나면 구슬 대신 실 가닥이 됩니다.",
+          "verified": true
+        },
+        {
+          "value": "0.32%",
+          "context": "· KITECH 04 / 07 비밀 재료 · THE FILLER 단 0.32% , 거의 티끌만큼 구슬 무게의 0.32wt% (1000분의 3)만",
+          "verified": true
+        },
+        {
+          "value": "0.32",
+          "context": "· THE FILLER 단 0.32% , 거의 티끌만큼 구슬 무게의 0.32wt% (1000분의 3)만 넣은 공유결합 유기 나노시트(CON) .",
+          "verified": true
+        },
+        {
+          "value": "68%",
+          "context": "순간의 힘(압축강도). 나노시트를 넣자 순수 셀룰로오스보다 약 68% 세졌고(142→238) , 플라스틱 구슬마저 넘어섰습니다. 142",
+          "verified": true
+        },
+        {
+          "value": "10.1007",
+          "context": "· Hoik Lee Cellulose (2024) · doi.org/10.1007/s10570-024-05757-4 한국생산기술연구원 · 인하대학교",
+          "verified": true
+        }
+      ],
+      "derived": []
+    },
+    "judge": {
+      "scores": {
+        "hook": 4,
+        "narrative": 4,
+        "accessibility": 4,
+        "integrity": 3,
+        "finish": 2
+      },
+      "defects": {
+        "emoji": false,
+        "placeholder": false,
+        "untranslated_unit": false,
+        "derived_number_suspect": true,
+        "dead_zone": true,
+        "text_visual_mismatch": false
+      },
+      "verdict": "pause",
+      "top_problems": [
+        "카드5: '0.32wt%'를 '1000분의 3'으로 표기 — 실제론 3.2/1000이라 근사치 오차 존재",
+        "카드2·3·4·5·7: 본문 아래 화이트박스/푸터 사이 세로 1/3 이상 공백이 통째로 남아 완성도 저하",
+        "카드1: 거대한 황금 구체 이미지가 '미세구슬' 콘셉트와 스케일상 안 맞아 첫인상에서 주제 파악이 늦어짐"
+      ],
+      "one_line": "서사와 수치 논리는 탄탄하지만 반복되는 빈 여백과 사소한 수치 근사 오류가 발행 전 마감을 가로막는다."
+    }
+  },
+  {
+    "id": "attention",
+    "genre": "CS·ML(Transformer)",
+    "status": "DONE",
+    "job_id": "9d460c75-01e7-434d-9a91-c336a48c96ed",
+    "warnings": [
+      "S1: metadata title not found"
+    ],
+    "degraded": false,
+    "cards": 7,
+    "verify": {
+      "verified": 6,
+      "unverified": 0,
+      "claims": [
+        {
+          "value": "8개",
+          "context": "동시에 Multi-Head Attention · h = 8 어텐션을 8개 병렬로 돌립니다. 한 시선은 문법 구조 , 다른 시선은 대명사가",
+          "verified": true
+        },
+        {
+          "value": "28.4",
+          "context": "세웠습니다. BLEU 는 번역 품질 점수 — 높을수록 좋습니다. 28.4 영어→독일어 BLEU 기존 최고를 2점 이상 경신 41.8",
+          "verified": true
+        },
+        {
+          "value": "2점",
+          "context": "— 높을수록 좋습니다. 28.4 영어→독일어 BLEU 기존 최고를 2점 이상 경신 41.8 영어→프랑스어 BLEU 단일 모델 신기록 3.5",
+          "verified": true
+        },
+        {
+          "value": "41.8",
+          "context": "좋습니다. 28.4 영어→독일어 BLEU 기존 최고를 2점 이상 경신 41.8 영어→프랑스어 BLEU 단일 모델 신기록 3.5 일 학습 시간",
+          "verified": true
+        },
+        {
+          "value": "3.5 일",
+          "context": "2점 이상 경신 41.8 영어→프랑스어 BLEU 단일 모델 신기록 3.5 일 학습 시간 (P100 GPU 8장) 경쟁 모델 비용의 일부 만으로",
+          "verified": true
+        },
+        {
+          "value": "2017년",
+          "context": ". ChatGPT·번역·이미지 생성까지, 오늘의 AI 대부분이 이 2017년 아이디어 위에서 자랐습니다. ⤓ 저장해두고, AI의 시작점이 궁금할",
+          "verified": true
+        }
+      ],
+      "derived": []
+    },
+    "judge": {
+      "scores": {
+        "hook": 4,
+        "narrative": 3,
+        "accessibility": 3,
+        "integrity": 3,
+        "finish": 2
+      },
+      "defects": {
+        "emoji": false,
+        "placeholder": false,
+        "untranslated_unit": true,
+        "derived_number_suspect": false,
+        "dead_zone": true,
+        "text_visual_mismatch": true
+      },
+      "verdict": "pause",
+      "top_problems": [
+        "카드4: 8개 헤드를 나타내는 격자 중 5칸이 아무 설명도 라벨도 없이 비어있어 '서로 다른 관계를 포착'한다는 본문과 시각이 안 맞음",
+        "카드5·6·7: 상단 텍스트 이후 카드 세로 1/3 이상이 통째로 비어 시선이 끊기고 미완성처럼 보임",
+        "카드5의 O(n)/O(1) 표기가 비전공자에게 설명 없이 등장해 접근성 저해"
+      ],
+      "one_line": "핵심 스토리와 수치는 탄탄하지만, 4번 카드의 미완성 그리드와 후반부 카드들의 과도한 여백 때문에 이대로는 발행 완성도 미달이다."
+    }
+  },
+  {
+    "id": "resnet",
+    "genre": "CS·ML(잔차학습, CVPR)",
+    "status": "DONE",
+    "job_id": "6c17a86d-d20e-408c-aeb1-b6f26b7798d7",
+    "warnings": [],
+    "degraded": false,
+    "cards": 7,
+    "verify": {
+      "verified": 17,
+      "unverified": 0,
+      "claims": [
+        {
+          "value": "56층",
+          "context": "2015 01 / 07 미스터리 · THE DEGRADATION 56층이 20층보다 더 많이 틀렸다 과적합 때문이 아니었습니다. 놀랍게도",
+          "verified": true
+        },
+        {
+          "value": "20층",
+          "context": "01 / 07 미스터리 · THE DEGRADATION 56층이 20층보다 더 많이 틀렸다 과적합 때문이 아니었습니다. 놀랍게도 깊은 망은",
+          "verified": true
+        },
+        {
+          "value": "34층",
+          "context": "이제 깊을수록 더 잘 맞힌다 지름길을 넣자 상황이 뒤집혔습니다. 34층 잔차망은 18층보다 2.8% 더 정확 했고, 같은 34층 ‘그냥 쌓은",
+          "verified": true
+        },
+        {
+          "value": "18층",
+          "context": "더 잘 맞힌다 지름길을 넣자 상황이 뒤집혔습니다. 34층 잔차망은 18층보다 2.8% 더 정확 했고, 같은 34층 ‘그냥 쌓은 망’보다",
+          "verified": true
+        },
+        {
+          "value": "2.8%",
+          "context": "맞힌다 지름길을 넣자 상황이 뒤집혔습니다. 34층 잔차망은 18층보다 2.8% 더 정확 했고, 같은 34층 ‘그냥 쌓은 망’보다 상위-1 오차를",
+          "verified": true
+        },
+        {
+          "value": "3.5%",
+          "context": "더 정확 했고, 같은 34층 ‘그냥 쌓은 망’보다 상위-1 오차를 3.5% 낮췄습니다. ImageNet 상위-1 오차 (%, 낮을수록 좋음)",
+          "verified": true
+        },
+        {
+          "value": "27.9",
+          "context": "낮췄습니다. ImageNet 상위-1 오차 (%, 낮을수록 좋음) 27.9 그냥 쌓기 18층 28.5 그냥 쌓기 34층 ↑더 나빠짐 27.9",
+          "verified": true
+        },
+        {
+          "value": "28.5",
+          "context": "상위-1 오차 (%, 낮을수록 좋음) 27.9 그냥 쌓기 18층 28.5 그냥 쌓기 34층 ↑더 나빠짐 27.9 잔차망 18층 25.0 잔차망",
+          "verified": true
+        },
+        {
+          "value": "25.0",
+          "context": "18층 28.5 그냥 쌓기 34층 ↑더 나빠짐 27.9 잔차망 18층 25.0 잔차망 34층 ↓더 좋아짐 Microsoft Research ·",
+          "verified": true
+        },
+        {
+          "value": "8배",
+          "context": "· ResNet 05 / 07 정점 · THE RESULT VGG보다 8배 깊은 152층, 그래도 더 가볍고 더 정확 3.57 %",
+          "verified": true
+        },
+        {
+          "value": "152층",
+          "context": "05 / 07 정점 · THE RESULT VGG보다 8배 깊은 152층, 그래도 더 가볍고 더 정확 3.57 % ImageNet 테스트",
+          "verified": true
+        },
+        {
+          "value": "3.57 %",
+          "context": "VGG보다 8배 깊은 152층, 그래도 더 가볍고 더 정확 3.57 % ImageNet 테스트 상위-5 오차 · ILSVRC 2015 분류",
+          "verified": true
+        },
+        {
+          "value": "152 층",
+          "context": "테스트 상위-5 오차 · ILSVRC 2015 분류 부문 1위 152 층 지금껏 ImageNet에서 가장 깊은 망 연산량 11.3G —",
+          "verified": true
+        },
+        {
+          "value": "11.3",
+          "context": "부문 1위 152 층 지금껏 ImageNet에서 가장 깊은 망 연산량 11.3G — VGG-19(19.6G)보다 낮음 28 % ↑ COCO 물체",
+          "verified": true
+        },
+        {
+          "value": "19.6",
+          "context": "ImageNet에서 가장 깊은 망 연산량 11.3G — VGG-19(19.6G)보다 낮음 28 % ↑ COCO 물체 검출 상대 성능 향상",
+          "verified": true
+        },
+        {
+          "value": "28 %",
+          "context": "가장 깊은 망 연산량 11.3G — VGG-19(19.6G)보다 낮음 28 % ↑ COCO 물체 검출 상대 성능 향상 탐지·위치추정·분할까지 그해",
+          "verified": true
+        },
+        {
+          "value": "1000층",
+          "context": "연결이, 이후 거의 모든 딥러닝 모델의 기본 부품이 되었습니다. 1000층 넘는 망도 문제없이 학습됐죠. 저장해두고, AI의 뼈대가 궁금할",
+          "verified": true
+        }
+      ],
+      "derived": [
+        {
+          "value": "8배",
+          "kind": "fold",
+          "suspect": false,
+          "unresolved": false,
+          "verified": true,
+          "context": "정점 · THE RESULT VGG보다 8배 깊은 152층, 그래도 더 가볍고 더 정확 3.57 %"
+        }
+      ]
+    },
+    "judge": {
+      "scores": {
+        "hook": 4,
+        "narrative": 5,
+        "accessibility": 4,
+        "integrity": 3,
+        "finish": 3
+      },
+      "defects": {
+        "emoji": false,
+        "placeholder": false,
+        "untranslated_unit": true,
+        "derived_number_suspect": true,
+        "dead_zone": false,
+        "text_visual_mismatch": false
+      },
+      "verdict": "pause",
+      "top_problems": [
+        "카드5: 본문 '2.8%'가 차트 표시값(27.9→25.0=2.9)과 산수가 안 맞음",
+        "카드3·6: 'SGD', '연산량 11.3G' 등 첫 등장 시 앵커 없는 전문용어가 비전공자에게 걸림",
+        "카드1·2·3: 본문과 그래픽 사이 여백이 지나치게 커서 완성도가 성긴 인상"
+      ],
+      "one_line": "훅과 서사 구조는 발행급이지만, 카드5 수치 반올림 불일치와 설명 없는 전문용어(SGD·G)를 손보지 않으면 신뢰도에 흠집이 남는다."
+    }
+  }
+]

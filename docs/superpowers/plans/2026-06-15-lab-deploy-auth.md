@@ -1,5 +1,9 @@
 # 인증(Auth) Implementation Plan — 연구실 배포 Plan 1/3
 
+> 📌 **주의 (2026-07-13).** 이 인증 플랜은 구현·라이브됨(로그인·세션·가입). 단 본문의 **배포 인프라 참조는 구식** —
+> 63행 주석의 "터널", 1163행 "Plan 3: Oracle VM + Cloudflare Tunnel"은 현행과 다르다.
+> 실제 앞문 = **Caddy 자동 HTTPS + Azure 무료 호스트네임**, 배포 정본 = `coo/OPERATIONS.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 공개 URL 배포 전에 백엔드에 실제 로그인(이메일/비밀번호 세션) + 초대코드 가입 + 시드 계정을 구현하고, 기존 API를 보호한다.

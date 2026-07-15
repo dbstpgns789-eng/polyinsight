@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextvars
 import logging
 
@@ -9,6 +10,12 @@ import anthropic
 from .config import settings
 
 logger = logging.getLogger(__name__)
+
+# sampling 파라미터(temperature/top_p/top_k)를 거부하는 모델 — 전송 시 400.
+_NO_SAMPLING_PREFIXES = (
+    "claude-fable-5", "claude-mythos-5",
+    "claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-5",
+)
 
 
 # ── per-job LLM 사용량 집계 (행동/비용 로깅용) ──────────────────────────────
@@ -52,6 +59,35 @@ class LLMAPIError(Exception):
         self.status_code = status_code
 
 
+class LLMCreditError(LLMAPIError):
+    """API 크레딧 소진 — **유저 잘못이 아니라 운영자가 고칠 문제**다.
+
+    실전(2026-07-13): 크레딧이 떨어지자 유저 화면에 이게 떴다 —
+      "Error code: 400 - {'type': 'invalid_request_error', 'message': 'Your credit balance
+       is too low to access the Anthropic API. Please go to Plans & Billing...'}"
+    박사님이 첫 논문을 올렸는데 이걸 보면 안 된다. 운영자가 고칠 문제를 유저 탓처럼 보이게 하는 건
+    최악의 에러 메시지다.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "지금은 카드뉴스를 만들 수 없습니다 — AI 사용량이 한도에 도달했습니다. "
+            "운영자가 곧 복구합니다. 잠시 후 다시 시도해 주세요.",
+            status_code=402,
+        )
+
+
+_CREDIT_MARKERS = ("credit balance is too low", "insufficient credit", "billing")
+
+
+def classify_api_error(msg: str, status_code: int | None = None) -> LLMAPIError:
+    """API 에러 문자열 → 적절한 예외. 크레딧 소진은 유저에게 사람 말로 전한다."""
+    low = (msg or "").lower()
+    if any(m in low for m in _CREDIT_MARKERS):
+        return LLMCreditError()
+    return LLMAPIError(msg, status_code)
+
+
 class LLMTruncationError(Exception):
     """출력이 max_tokens 천장에서 잘림. 동일 입력·저온이면 재시도해도 같은 결과이므로
     호출자는 재시도하지 말고 입력(예: 카드 수)을 줄여야 한다."""
@@ -70,6 +106,12 @@ class LLMClient:
         self.model = model or settings.LLM_MODEL
         self._client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
 
+    async def _stream_final(self, kwargs: dict):
+        """streaming으로 받아 최종 Message(usage·stop_reason·content 포함) 반환.
+        SDK는 max_tokens가 커서 >10분 가능하면 비스트리밍을 거부 → 대용량 저작은 stream=True."""
+        async with self._client.messages.stream(**kwargs) as s:
+            return await s.get_final_message()
+
     async def call(
         self,
         system_prompt: str,
@@ -79,6 +121,8 @@ class LLMClient:
         timeout_s: int = 120,
         stop_sequences: list[str] | None = None,
         model: str | None = None,
+        stream: bool = False,
+        images: list[bytes] | None = None,
     ) -> str:
         # per-call 모델 오버라이드 (없으면 인스턴스 기본). 팀별 라우팅용.
         resolved = model or self.model
@@ -89,21 +133,41 @@ class LLMClient:
         logger.info("LLM call | model=%s | prompt_len=%d | max_tokens=%d",
                     resolved, len(user_prompt), capped_tokens)
 
+        # 비전 입력(폴리시 비평자용): 이미지가 있으면 [image블록…, text블록] 리스트로,
+        # 없으면 기존처럼 문자열 content (하위호환).
+        if images:
+            content: list | str = [
+                {"type": "image", "source": {
+                    "type": "base64", "media_type": "image/png",
+                    "data": base64.b64encode(png).decode(),
+                }}
+                for png in images
+            ]
+            content.append({"type": "text", "text": user_prompt})
+        else:
+            content = user_prompt
+
         kwargs: dict = dict(
             model=resolved,
             max_tokens=capped_tokens,
-            temperature=temperature,
             system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+            messages=[{"role": "user", "content": content}],
         )
+        # Fable 5·Opus 4.7+·Sonnet 5는 sampling 파라미터를 거부한다(temperature 전송 시 400).
+        # 지원 모델(Sonnet 4.6·Opus 4.6·Haiku 등)에만 temperature를 붙인다.
+        if not resolved.startswith(_NO_SAMPLING_PREFIXES):
+            kwargs["temperature"] = temperature
         if stop_sequences:
             kwargs["stop_sequences"] = stop_sequences
 
         try:
-            message = await asyncio.wait_for(
-                self._client.messages.create(**kwargs),
-                timeout=timeout_s,
-            )
+            if stream:
+                message = await asyncio.wait_for(self._stream_final(kwargs), timeout=timeout_s)
+            else:
+                message = await asyncio.wait_for(
+                    self._client.messages.create(**kwargs),
+                    timeout=timeout_s,
+                )
         except anthropic.AuthenticationError as exc:
             raise LLMAuthError(str(exc)) from exc
         except anthropic.RateLimitError as exc:
@@ -111,9 +175,11 @@ class LLMClient:
         except asyncio.TimeoutError as exc:
             raise LLMAPIError("timeout") from exc
         except anthropic.APIError as exc:
-            raise LLMAPIError(str(exc), status_code=getattr(exc, "status_code", None)) from exc
+            # 크레딧 소진은 유저 잘못이 아니다 — 영문 원문 대신 사람 말로 전한다.
+            raise classify_api_error(str(exc), getattr(exc, "status_code", None)) from exc
 
-        text = message.content[0].text if message.content else ""
+        # Fable 5 등 thinking-on 모델은 thinking 블록이 앞에 올 수 있어 content[0]이 text가 아닐 수 있다.
+        text = next((b.text for b in message.content if getattr(b, "type", None) == "text"), "")
         logger.info("LLM call done | input_tokens=%d | output_tokens=%d | stop_reason=%s",
                     message.usage.input_tokens, message.usage.output_tokens, message.stop_reason)
         # 잘림 여부와 무관하게 실제 발생한 토큰을 집계 (비용 가시화).

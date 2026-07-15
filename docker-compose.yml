@@ -1,6 +1,7 @@
-# PolyInsight 단일 호스트 배포 (Oracle Always Free VM)
+# PolyInsight 단일 호스트 배포 (Azure B2als v2 VM, Japan East)
 # web ↔ backend는 compose 네트워크에서 service명으로 통신(= 기존 localhost 결합 대체).
-# 외부 노출은 cloudflared 터널이 web:3000 한 곳만.
+# 앞문 = Caddy(자동 HTTPS)가 Azure 무료 호스트네임(SITE_ADDRESS)으로 web:3000을 노출.
+# 도메인 구매 0원 — Azure DNS 라벨 + Let's Encrypt 자동 인증서. NSG/ufw에 80·443 개방 필요.
 services:
   backend:
     build:
@@ -10,11 +11,13 @@ services:
     environment:
       - WEB_BASE_URL=http://web:3000          # S7 Playwright가 방문할 렌더 라우트
       - DATABASE_URL=sqlite:////data/polyinsight.db
+      - STORAGE_DIR=/data/blobstore           # L1(C3): 파일저장(카드PNG·export·유저자산)을 영속 볼륨에. 안 걸면 재배포 시 증발
     volumes:
       - polyinsight-data:/data
     expose:
       - "8000"
     restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }   # 로그 무한증식→디스크풀 방지
 
   web:
     build:
@@ -29,15 +32,25 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
 
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run
+  caddy:
+    image: caddy:2
     environment:
-      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+      - SITE_ADDRESS=${SITE_ADDRESS}          # .env의 공개 FQDN — Caddy가 이 도메인으로 자동 HTTPS
+    ports:
+      - "80:80"                                # HTTP-01 챌린지 + HTTPS 리다이렉트
+      - "443:443"                              # TLS
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data                       # 발급된 인증서 영속(재시작마다 재발급 방지 — LE 레이트리밋)
+      - caddy-config:/config
     depends_on:
       - web
     restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
 
 volumes:
   polyinsight-data:
+  caddy-data:
+  caddy-config:

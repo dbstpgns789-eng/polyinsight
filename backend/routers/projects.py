@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from ..core import db
+from ..core.auth import get_current_user
 
 router = APIRouter(prefix="/api", tags=["projects"])
 
@@ -12,19 +13,24 @@ async def list_projects(
     status: str | None = Query(None),
     page: int = Query(1, ge=1),
     limit: int = Query(12, ge=1, le=100),
+    user: dict = Depends(get_current_user),
 ):
-    """프로젝트 목록."""
+    """프로젝트 목록 — 본인 소유만."""
     offset = (page - 1) * limit
-    rows = await db.list_jobs(limit=limit, offset=offset)
+    rows = await db.list_jobs(limit=limit, offset=offset, user_id=user["id"])
 
     if status:
         rows = [r for r in rows if r["status"] == status.upper()]
+
+    # card_data 보유 = 옛 파이프라인 잡 → /editor, 나머지 = v3 덱 → /deck
+    legacy_ids = await db.card_data_job_ids([r["job_id"] for r in rows])
 
     projects = [
         {
             "jobId": r["job_id"],
             "title": r["title"],
             "status": r["status"],
+            "kind": "legacy" if r["job_id"] in legacy_ids else "deck",
             "createdAt": r["created_at"],
             "updatedAt": r["updated_at"],
         }
@@ -34,9 +40,9 @@ async def list_projects(
 
 
 @router.get("/projects/stats")
-async def get_stats():
-    """대시보드 통계."""
-    rows = await db.list_jobs(limit=1000, offset=0)
+async def get_stats(user: dict = Depends(get_current_user)):
+    """대시보드 통계 — 본인 소유만."""
+    rows = await db.list_jobs(limit=1000, offset=0, user_id=user["id"])
     counts: dict[str, int] = {"PENDING": 0, "RUNNING": 0, "DONE": 0, "ERROR": 0}
     for r in rows:
         s = r["status"]
@@ -53,9 +59,9 @@ async def get_stats():
 
 
 @router.get("/activities")
-async def get_activities():
-    """최근 활동 피드 (최신 20건)."""
-    rows = await db.list_jobs(limit=20, offset=0)
+async def get_activities(user: dict = Depends(get_current_user)):
+    """최근 활동 피드 (최신 20건) — 본인 소유만."""
+    rows = await db.list_jobs(limit=20, offset=0, user_id=user["id"])
     activities = [
         {
             "type": r["status"],

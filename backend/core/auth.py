@@ -9,9 +9,20 @@ from .config import settings
 
 _ph = PasswordHasher()
 
+# 로그인 타이밍/열거 오라클 방지 — 유저 부재 시에도 argon2 1회 실행해 응답시간 균등화.
+_DUMMY_HASH = _ph.hash("timing-equalization-dummy")
+
 
 def hash_password(password: str) -> str:
     return _ph.hash(password)
+
+
+def verify_dummy() -> None:
+    """존재하지 않는 유저 로그인 경로에서 호출 — 실제 verify와 동일한 argon2 비용 발생."""
+    try:
+        _ph.verify(_DUMMY_HASH, "x")
+    except Exception:
+        pass
 
 
 def verify_password(password_hash: str, password: str) -> bool:
@@ -22,10 +33,35 @@ def verify_password(password_hash: str, password: str) -> bool:
         return False
 
 
+def needs_rehash(password_hash: str) -> bool:
+    """argon2 파라미터 상향 시 기존 해시 갱신 필요 여부. 로그인 성공 시 점진 재해싱용."""
+    try:
+        return _ph.check_needs_rehash(password_hash)
+    except Exception:
+        return False
+
+
 _UNAUTH = HTTPException(
     status_code=401,
     detail={"code": "ERR-AUTH-001", "message": "인증이 필요합니다."},
 )
+
+
+async def require_owned_job(job_id: str, user: dict) -> dict:
+    """job 로드 + 소유권 검사. 내부 렌더 서비스(role=service)는 우회.
+    소유자 아니면 404(존재 자체를 은닉 — IDOR 방어). 반환=job dict(재사용)."""
+    job = await db.get_job(job_id)
+    _NOT_FOUND = HTTPException(
+        status_code=404,
+        detail={"code": "ERR-JOB-001", "message": "프로젝트를 찾을 수 없습니다."},
+    )
+    if job is None:
+        raise _NOT_FOUND
+    if user.get("role") == "service":
+        return job
+    if job.get("user_id") != user.get("id"):
+        raise _NOT_FOUND
+    return job
 
 
 async def get_current_user(request: Request) -> dict:

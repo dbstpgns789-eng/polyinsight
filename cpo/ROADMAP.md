@@ -52,9 +52,15 @@
 - [ ] 완성 작업물 로컬 스토리지 저장 (비회원 세션 유지)
 
 **인프라**:
-- [ ] Oracle ARM 배포 (런북 실행)
-- [ ] Cloudflare Tunnel 연결
+- [x] Azure VM 배포 라이브 (Standard B2als_v2, Japan East, 공용 IP 20.210.112.15)
+- [x] Caddy 앞문 (인바운드 80/443, Let's Encrypt 자동 HTTPS, https://polyinsight.japaneast.cloudapp.azure.com)
 - [ ] 기본 모니터링
+
+> **배포 결정 (2026-07-13)**: 앞문을 Cloudflare Tunnel(계획) 대신 Azure VM + Caddy로 라이브.
+> 퀵터널 도메인은 재시작마다 바뀌어 OAuth 고정 콜백 불가, named 터널은 도메인 구매 비용 발생.
+> Azure 무료 호스트네임 + Caddy 무료 Let's Encrypt = 고정+무료+HTTPS.
+> 트레이드오프: 인바운드 80/443 개방(터널의 포트 0개·IP 은닉 이점 상실).
+> 크레딧 소진 시 Oracle ARM 이사는 **컴퓨트 한정** 유효 — 앞문/도메인은 Oracle에 무료 호스트네임 없어 열린 결정.
 
 **제외** (Phase 2):
 - 회원가입/로그인 ← Auth 없이 MVP 검증 가능

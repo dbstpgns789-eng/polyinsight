@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import useCardData from '@/hooks/useCardData'
 import useUiStore from '@/store/uiStore'
 import Topbar from '@/components/editor/Topbar'
@@ -12,7 +12,7 @@ import FactDrawer from '@/components/editor/FactDrawer'
 import ExportModal from '@/components/export/ExportModal'
 import type { CardDataPayload, ApiResponse, FieldStyle, Card } from '@/types/editor'
 import { MOCK_EDITOR_DATA } from '@/lib/mockData'
-import { renameJob, downloadCard } from '@/lib/api'
+import { renameJob, downloadCard, getStatus, getDeck } from '@/lib/api'
 import AuthGuard from '@/components/auth/AuthGuard'
 
 function EditorPageInner() {
@@ -279,14 +279,7 @@ function EditorPageInner() {
     </div>
   )
 
-  if (!isDemo && isError) return (
-    <div className="flex items-center justify-center h-screen bg-canvas-subtle">
-      <div className="text-center">
-        <p className="text-4xl mb-3">⚠️</p>
-        <p className="text-[14px] text-ink-2 font-medium">카드 데이터를 불러올 수 없습니다.</p>
-      </div>
-    </div>
-  )
+  if (!isDemo && isError) return <EditorError jobId={jobId} />
 
   return (
     // h-screen + overflow-hidden → 뷰포트 핏 (DESIGN_3.md §1)
@@ -370,6 +363,50 @@ function EditorPageInner() {
       />
 
       {exportModalOpen && <ExportModal />}
+    </div>
+  )
+}
+
+// 카드 로드 실패 화면. job status를 조회해, 파이프라인이 입력 가드레일/에러로
+// 조기 종료된 경우(warnings에 ABORT-S1:/ERR- 사유) generic 대신 구체 사유를 표면화.
+function EditorError({ jobId }: { jobId: string }) {
+  const router = useRouter()
+  const [reason, setReason] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    // 단일 저작(덱) 잡을 레거시 에디터로 연 경우 → /deck 뷰로 안내(레거시는 덱을 못 읽음)
+    getDeck(jobId)
+      .then((r) => { if (!cancelled && r.data?.html) router.replace(`/deck/${jobId}`) })
+      .catch(() => {})
+    getStatus(jobId)
+      .then((r) => {
+        if (cancelled) return
+        const raw = r.data?.warnings
+        let list: string[] = []
+        try { list = typeof raw === 'string' ? JSON.parse(raw) : (raw ?? []) } catch { list = [] }
+        // 사용자용 사유: ABORT-S1(thin input) 우선, 없으면 ERR- 사유.
+        const abort = list.find((w) => w.startsWith('ABORT-'))
+        const err = list.find((w) => w.startsWith('ERR-'))
+        const pick = abort ?? err
+        if (pick) setReason(pick.replace(/^(ABORT|ERR)-S?\d*:\s*/, '').replace(/^[A-Z-]+:\s*/, ''))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [jobId, router])
+
+  return (
+    <div className="flex items-center justify-center h-screen bg-canvas-subtle">
+      <div className="text-center max-w-md px-6">
+        <p className="text-4xl mb-3">⚠️</p>
+        <p className="text-[14px] text-ink-2 font-medium">
+          {reason ?? '카드 데이터를 불러올 수 없습니다.'}
+        </p>
+        {reason && (
+          <p className="text-[12px] text-ink-3 mt-2">
+            다른 논문 PDF로 다시 시도해 주세요.
+          </p>
+        )}
+      </div>
     </div>
   )
 }

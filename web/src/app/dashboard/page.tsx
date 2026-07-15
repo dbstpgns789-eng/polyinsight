@@ -2,14 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import useUiStore from '@/store/uiStore';
-import { getProjects, deleteJob } from '@/lib/api';
+import { getProjects, deleteJob, getDeckCardUrl, getCardImageUrl } from '@/lib/api';
 import {
   IconEdit, IconDownload, IconRefresh, IconWarning,
   IconTrash, IconSearch,
 } from '@/components/ui/Icons';
 import AuthGuard from '@/components/auth/AuthGuard';
-import LogoutButton from '@/components/auth/LogoutButton';
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true';
 
@@ -21,6 +19,7 @@ interface Project {
   id: string;
   title: string;
   status: Status;
+  kind: 'deck' | 'legacy';
   date: string;
   cardCount?: number;
 }
@@ -37,11 +36,11 @@ function mapStatus(s: string): Status {
 
 // ── Mock 데이터 (NEXT_PUBLIC_USE_MOCK=true 일 때만 사용) ──────────────────
 const MOCK_PROJECTS: Project[] = [
-  { id: 'job-001', title: '스마트팜 기반 식물 생장 최적화 연구', status: 'done',       date: '2026.05.18', cardCount: 5 },
-  { id: 'job-002', title: '탄소 포집 기술의 경제성 분석 및 상용화 전망',    status: 'done',       date: '2026.05.17', cardCount: 5 },
-  { id: 'job-003', title: '수소 연료전지 내구성 실증 연구',         status: 'draft',      date: '2026.05.16', cardCount: 5 },
-  { id: 'job-004', title: '초고강도 강재 레이저 용접 특성 평가',     status: 'processing', date: '2026.05.20', cardCount: 5 },
-  { id: 'job-005', title: '세라믹 소재 고온 기계적 특성 분석',       status: 'failed',     date: '2026.05.15', cardCount: 5 },
+  { id: 'job-001', title: '스마트팜 기반 식물 생장 최적화 연구', status: 'done',       kind: 'legacy', date: '2026.05.18', cardCount: 5 },
+  { id: 'job-002', title: '탄소 포집 기술의 경제성 분석 및 상용화 전망',    status: 'done',       kind: 'deck',   date: '2026.05.17', cardCount: 5 },
+  { id: 'job-003', title: '수소 연료전지 내구성 실증 연구',         status: 'draft',      kind: 'deck',   date: '2026.05.16', cardCount: 5 },
+  { id: 'job-004', title: '초고강도 강재 레이저 용접 특성 평가',     status: 'processing', kind: 'deck',   date: '2026.05.20', cardCount: 5 },
+  { id: 'job-005', title: '세라믹 소재 고온 기계적 특성 분석',       status: 'failed',     kind: 'deck',   date: '2026.05.15', cardCount: 5 },
 ];
 
 const FILTER_LABELS: Record<FilterTab, string> = {
@@ -72,17 +71,17 @@ function DashboardPageInner() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading]  = useState(!USE_MOCK);
   const [error, setError]      = useState('');
-  const { openUploadModal }    = useUiStore();
 
   const fetchProjects = useCallback(async () => {
     try {
       const { data } = await getProjects({ limit: 100 });
       const mapped: Project[] = (data.projects as Array<{
-        jobId: string; title: string | null; status: string; updatedAt: string;
+        jobId: string; title: string | null; status: string; kind?: string; updatedAt: string;
       }>).map(r => ({
         id:     r.jobId,
         title:  r.title || '(제목 없음)',
         status: mapStatus(r.status),
+        kind:   r.kind === 'deck' ? 'deck' : 'legacy',
         date:   r.updatedAt
           ? new Date(r.updatedAt).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/ /g, '').replace(/\.$/, '')
           : '',
@@ -137,14 +136,11 @@ function DashboardPageInner() {
     <div className="dash">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
         <h1 className="dash__title" style={{ margin: 0 }}>내 카드뉴스</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {USE_MOCK && (
-            <span style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--border)', padding: '2px 8px', borderRadius: 4 }}>
-              DEV (mock)
-            </span>
-          )}
-          <LogoutButton />
-        </div>
+        {USE_MOCK && (
+          <span style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--border)', padding: '2px 8px', borderRadius: 4 }}>
+            DEV (mock)
+          </span>
+        )}
       </div>
 
       {loading && (
@@ -173,9 +169,9 @@ function DashboardPageInner() {
           </svg>
           <h2 className="dash-empty__title">첫 논문을 업로드하세요</h2>
           <p className="dash-empty__desc">PDF를 올리면 카드뉴스를 자동으로 만들어 드립니다.</p>
-          <button className="btn btn-primary" onClick={openUploadModal}>
+          <Link href="/deck/new" className="btn btn-primary">
             새 카드뉴스 만들기
-          </button>
+          </Link>
         </div>
       )}
 
@@ -246,8 +242,71 @@ function DashboardPageInner() {
   );
 }
 
+// 기약분수 비율 라벨 (1080×1350 → 4:5, 1080×1080 → 1:1)
+function simplifyRatio(w: number, h: number): string {
+  const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+  const d = gcd(w, h) || 1;
+  return `${Math.round(w / d)}:${Math.round(h / d)}`;
+}
+
+// 대시보드 썸네일 = 첫 카드 1장. 비율은 실제 이미지 크기에서 유도(하드코딩 1:1 폐기).
+function ProjThumb({ project }: { project: Project }) {
+  const [dim, setDim] = useState<{ w: number; h: number } | null>(null);
+  const [failedImg, setFailedImg] = useState(false);
+  const showImg = project.status === 'done' && !failedImg;
+  const src = project.kind === 'deck'
+    ? getDeckCardUrl(project.id, 1)
+    : getCardImageUrl(project.id, 1);
+  const blurred = project.status === 'processing' || project.status === 'failed';
+
+  return (
+    <div
+      className={`proj-strip${blurred ? ' is-blurred' : ''}`}
+      style={{ aspectRatio: dim ? `${dim.w} / ${dim.h}` : '4 / 5' }}
+      aria-hidden="true"
+    >
+      {showImg
+        ? <img
+            className="proj-strip__cover"
+            src={src}
+            alt=""
+            loading="lazy"
+            onLoad={e => setDim({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+            onError={() => setFailedImg(true)}
+          />
+        : <div className="proj-strip__placeholder" />}
+
+      {project.status === 'processing' && (
+        <div className="proj-strip__overlay">
+          <div className="proj-strip__progress-track">
+            <div className="proj-strip__progress-fill" style={{ transform: 'scaleX(0.5)' }} />
+          </div>
+          <span className="proj-strip__stage">처리 중…</span>
+        </div>
+      )}
+      {project.status === 'failed' && (
+        <div className="proj-strip__overlay">
+          <span className="proj-strip__badge">
+            <IconWarning size={10} />
+            분석 실패
+          </span>
+        </div>
+      )}
+
+      {(dim || project.cardCount) && (
+        <div className="proj-strip__badges">
+          {dim ? <span className="proj-strip__badge-item">{simplifyRatio(dim.w, dim.h)}</span> : <span />}
+          {project.cardCount && <span className="proj-strip__badge-item">{project.cardCount}장</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProjectCard({ project, onDeleted }: { project: Project; onDeleted: () => void }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // v3 덱 잡은 /deck, 옛 파이프라인 잡(card_data 보유)은 기존 /editor 유지
+  const base = project.kind === 'deck' ? '/deck' : '/editor';
 
   async function handleDelete() {
     try {
@@ -266,37 +325,7 @@ function ProjectCard({ project, onDeleted }: { project: Project; onDeleted: () =
       aria-disabled={project.status === 'processing' ? 'true' : undefined}
       aria-busy={project.status === 'processing' ? 'true' : undefined}
     >
-      <div
-        className={`proj-strip${project.status === 'processing' || project.status === 'failed' ? ' is-blurred' : ''}`}
-        aria-hidden="true"
-      >
-        {[1, 2, 3, 4, 5].map(n => (
-          <div key={n} className="proj-strip__thumb" />
-        ))}
-
-        {project.status === 'processing' && (
-          <div className="proj-strip__overlay">
-            <div className="proj-strip__progress-track">
-              <div className="proj-strip__progress-fill" style={{ transform: 'scaleX(0.5)' }} />
-            </div>
-            <span className="proj-strip__stage">처리 중…</span>
-          </div>
-        )}
-
-        {project.status === 'failed' && (
-          <div className="proj-strip__overlay">
-            <span className="proj-strip__badge">
-              <IconWarning size={10} />
-              분석 실패
-            </span>
-          </div>
-        )}
-
-        <div className="proj-strip__badges" aria-hidden="true">
-          <span className="proj-strip__badge-item">1:1</span>
-          {project.cardCount && <span className="proj-strip__badge-item">{project.cardCount}장</span>}
-        </div>
-      </div>
+      <ProjThumb project={project} />
 
       <div className="proj-card__body">
         <h2 className="proj-card__title">{project.title}</h2>
@@ -321,16 +350,19 @@ function ProjectCard({ project, onDeleted }: { project: Project; onDeleted: () =
             <>
               {project.status === 'done' && (
                 <>
-                  <Link href={`/editor/${project.id}`} className="proj-action proj-action--primary">
+                  <Link href={`${base}/${project.id}`} className="proj-action proj-action--primary">
                     <IconEdit size={12} />수정하기
                   </Link>
-                  <Link href={`/editor/${project.id}?export=1`} className="proj-action">
+                  <Link
+                    href={project.kind === 'deck' ? `/deck/${project.id}` : `/editor/${project.id}?export=1`}
+                    className="proj-action"
+                  >
                     <IconDownload size={12} />다운로드
                   </Link>
                 </>
               )}
               {project.status === 'draft' && (
-                <Link href={`/editor/${project.id}`} className="proj-action proj-action--primary" style={{ flex: 1 }}>
+                <Link href={`${base}/${project.id}`} className="proj-action proj-action--primary" style={{ flex: 1 }}>
                   이어하기
                 </Link>
               )}

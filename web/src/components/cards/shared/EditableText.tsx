@@ -13,7 +13,7 @@
 
 'use client'
 
-import { type CSSProperties, type JSX, useCallback, useEffect, useRef, useState } from 'react'
+import { type CSSProperties, type JSX, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 
 type Mode = 'edit' | 'render' | 'thumbnail'
 
@@ -28,6 +28,10 @@ interface EditableTextProps {
   onFieldChange?: (fieldKey: string, value: string) => void
   onFieldFocus?: (fieldKey: string) => void
   focused?: boolean
+  // edit 모드에서 '비포커스' 시 raw 텍스트 위에 얹을 강조 표시(예: *별표* → accent).
+  // 제공되면: 평소엔 강조 오버레이를 보이고 원본은 투명, 클릭/포커스 시 raw 편집.
+  // 미제공이면: 기존과 동일(항상 raw contenteditable). contenteditable 자체는 손대지 않음.
+  renderDisplay?: (value: string) => ReactNode
 }
 
 const FLUSH_DELAY_MS = 200
@@ -43,6 +47,7 @@ export default function EditableText({
   onFieldChange,
   onFieldFocus,
   focused,
+  renderDisplay,
 }: EditableTextProps) {
   const ref = useRef<HTMLElement | null>(null)
   const pendingRef = useRef<string | null>(null)
@@ -103,9 +108,11 @@ export default function EditableText({
 
   // 모드별 분기
   const isEditable = mode === 'edit'
+  // 강조 오버레이를 보일 조건: edit 모드 + renderDisplay 제공 + 현재 비포커스.
+  const overlayVisible = isEditable && !!renderDisplay && !focused
 
   const TagAny = Tag as unknown as 'span'
-  return (
+  const editable = (
     <TagAny
       ref={(el: HTMLElement | null) => { ref.current = el }}
       contentEditable={isEditable}
@@ -116,6 +123,8 @@ export default function EditableText({
       className={className}
       style={{
         ...style,
+        // 오버레이가 보일 땐 raw 텍스트(*별표*)를 투명 처리 → 오버레이만 보임. caret는 포커스 시 복원.
+        color: overlayVisible ? 'transparent' : style?.color,
         cursor: isEditable ? 'text' : undefined,
         background: isEditable && hovered && !focused ? 'rgba(22,163,74,0.08)' : undefined,
         borderRadius: (isEditable && hovered && !focused) || focused ? 4 : undefined,
@@ -129,5 +138,31 @@ export default function EditableText({
       onMouseEnter={isEditable ? () => setHovered(true) : undefined}
       onMouseLeave={isEditable ? () => setHovered(false) : undefined}
     />
+  )
+
+  // renderDisplay 미제공: 기존과 100% 동일(래퍼 없음).
+  if (!renderDisplay || !isEditable) return editable
+
+  // renderDisplay 제공: contenteditable은 그대로, 비포커스 시 강조 오버레이를 위에 얹음.
+  //  - 오버레이는 pointer-events:none → 클릭이 아래 contenteditable로 통과(네이티브 포커스).
+  //  - 포커스/커서 기계장치는 손대지 않는다.
+  return (
+    <span style={{ position: 'relative', display: (style?.display as string) ?? 'block' }}>
+      {editable}
+      {overlayVisible && (
+        <span
+          aria-hidden
+          style={{
+            ...style,
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            whiteSpace: multiline ? 'pre-wrap' : undefined,
+          }}
+        >
+          {renderDisplay(value)}
+        </span>
+      )}
+    </span>
   )
 }

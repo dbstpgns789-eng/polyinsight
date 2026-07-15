@@ -1,0 +1,180 @@
+# -*- coding: utf-8 -*-
+"""비전 자기수정 — 모델이 자기 카드의 **렌더 결과**를 보고 고친다 (2026-07-13).
+
+왜 이것이 유일한 남은 레버인가:
+  실측(after-0712, 5편)에서 모델은 PI_SELFCHECK에 **5편 전부 "전항 통과"**라 자가신고했는데,
+  저지는 5편 전부에서 결함을 찾았다(dead_zone 4/5). 모델은 자기가 쓴 HTML이 어떻게 렌더되는지
+  **볼 수 없다**. 빈 공간·요소 겹침·형상 오독은 텍스트 체크리스트로는 원리적으로 안 잡힌다.
+  프롬프트 백 줄보다 스크린샷 한 장이 빠르다.
+
+설계 결정:
+  - **전체 HTML 재출력**(국소 패치 아님). 카드 div 경계를 정규식으로 오려붙이는 건 중첩 div에서
+    깨진다 — 단순함이 안전함이다. 대신 "결함 없는 카드는 글자 하나 바꾸지 마라"를 강제한다.
+  - **가드레일**: 카드 수가 줄거나 카드가 사라지면 **수정을 버리고 원본을 쓴다**.
+    멀쩡한 덱을 수정이 망가뜨리는 게 최악이다.
+  - 실패는 전부 **소프트** — 저작(비싼 것)을 수정 단계가 죽이면 안 된다.
+"""
+from __future__ import annotations
+
+import logging
+import re
+
+from ...core.config import settings
+from ...core.fidelity import verify_deck
+from ...core.llm_client import LLMClient
+from .card_patch import apply_card_patch
+from .layout_audit import audit_deck
+
+logger = logging.getLogger(__name__)
+
+_CARD_RE = re.compile(r"data-screen-label", re.I)
+
+
+def _quant_set(html: str) -> set[str]:
+    """덱에 실린 정량 수치 집합. fidelity의 검증된 추출기를 재사용(중복 구현 금지).
+
+    verify_deck은 (수치, 원문존재여부)를 내는데 여기선 수치 토큰만 쓴다 —
+    paper_text를 빈 문자열로 줘도 추출 자체는 동일하다.
+    """
+    return {c.value for c in verify_deck(html, "")}
+
+VISION_FIX_SYSTEM = """당신은 방금 이 카드뉴스 덱을 저작한 디자이너다. 이제 **처음으로 자기 결과물을
+눈으로 본다**. 첨부된 이미지는 당신의 HTML이 실제로 렌더된 카드들이다(순서대로 01, 02, …).
+
+머릿속으로 상상한 레이아웃과 실제 렌더는 다르다. 지금 보이는 것을 **냉정하게** 판정하라.
+
+[검사 1단계 — 먼저 **디자이너 모자를 벗어라**]
+★당신은 이 논문을 읽었고 이 분야의 용어를 안다. **그래서 무엇이 어려운지 느끼지 못한다.**
+이것이 이 단계가 매번 실패하는 이유다(실측: accessibility 2/5).
+
+지금부터 당신은 **화학도 공학도 배운 적 없는 사람**이다. 논문을 읽은 기억을 지워라.
+카드에 적힌 글자를 **소리 내어 읽듯이 한 줄씩** 훑고, 아래 규칙으로 판정하라:
+
+**규칙: 당신이 아는 단어라도, 길에서 만난 사람이 모르면 그것은 외계어다.**
+- 화학·재료·공학 용어(아세트산셀룰로오스·수산화나트륨·아민기·수산기·공유결합 나노시트·전구체…)
+- 단위·약어(nm·μm·wt%·cP·MPa·kV·SGD·O(n)·D50…)
+- 학술 표현(전구체·가교·소수성·전기방사…)
+
+발견하면 **그 자리에서** 처리하라(둘 중 하나):
+(a) 짧은 앵커를 붙인다 — "100나노미터(머리카락 굵기의 1000분의 1)", "cP(꿀처럼 끈적한 정도)"
+(b) 공간이 없으면 **쉬운 말로 갈아치운다** — "수산화나트륨"→"강한 알칼리 용액"
+논문 용어를 지키는 것보다 **독자가 이해하는 것**이 우선이다. (단, 수치 자체는 절대 불변.)
+※ 한 카드에 어려운 용어가 3개 이상 연속하면, 앵커를 붙여도 독자는 지친다 — **덜 중요한 용어는 지워라.**
+
+[검사 2단계 — 이제 다시 디자이너로 돌아와 **렌더를 보라**]
+1. **죽은 공간**: 카드를 세로 3등분했을 때 통째로 빈 구획. (실측 1순위 결함 — 5장 중 4장에서 발생)
+2. **겹침·잘림**: 텍스트가 다른 요소·카드 경계와 겹치거나 잘려 읽을 수 없는 곳.
+3. **형상 불일치**: 본문이 말한 형태(삼각형·구슬·거친 표면 등)와 실제로 그려진 그림이 다른 곳.
+   표지의 초점 오브젝트가 **주제와 다른 것으로 읽히지 않는지** 보라(실측: 미세구슬이 진주·달로 보임).
+4. **비율 거짓말**: 막대·게이지의 길이가 수치 비율과 안 맞는 곳. **눈으로 길이를 재라** —
+   값이 8배인데 막대가 2배로 보이면 거짓말이다. 값의 스케일 차가 100배를 넘어 선형 막대로는
+   작은 값이 보이지도 않는다면, 막대를 버리고 다른 형태(수치 나열·로그 축 명시·계단)로 바꿔라.
+5. **읽히지 않는 대비**: 배경과 글자 명도차가 부족해 뭉개지는 곳.
+
+[수정 규칙 — 엄수]
+- **결함이 없는 카드는 글자 하나도 바꾸지 마라.** 고칠 곳만 고쳐라(전면 재디자인 금지).
+- 카드를 삭제하거나 추가하지 마라. **카드 수는 반드시 그대로**다.
+- ★**수치는 절대 바꾸지 마라.** 숫자·단위·비율은 원문에서 온 것이다. 건드리면 충실성이 깨진다.
+  (용어를 쉽게 풀거나 앵커를 붙이는 것은 허용 — 수치를 손대는 것과는 다르다.)
+- 팔레트·서체·아크를 바꾸지 마라. 이 덱의 정체성은 유지한다.
+- ★★**당신의 수정이 새 결함을 만든다** (실측: 용어 앵커를 넣어 텍스트가 길어지자 제목과 수치가
+  겹쳤다 — finish 4→1). 텍스트를 **늘리는** 수정을 할 때는 그 카드의 다른 요소가 밀려나지 않는지
+  세로 픽셀을 다시 합산하라. 공간이 없으면 **길게 덧붙이지 말고 다른 말을 줄여라**.
+  고치는 것보다 **망가뜨리지 않는 것**이 우선이다.
+
+[출력 — ★고친 카드만]
+**수정한 카드의 <div data-screen-label="NN"> … </div> 블록만** 출력하라(여러 장이면 이어서).
+- 손대지 않은 카드는 **출력하지 마라**. HTML 전문·<head>·<style>을 다시 쓰지 마라.
+- 카드 div는 **완결된 형태**로(여는 태그부터 짝 맞는 </div>까지). 여는 태그의 `data-screen-label`·`data-role` 속성은 원본 그대로 유지.
+- 고칠 게 하나도 없으면 `NO_CHANGES` 한 줄만 출력하라.
+- 코드펜스·설명 없이 카드 블록만."""
+
+
+async def apply_vision_fix(
+    html: str,
+    card_pngs: list[bytes],
+    *,
+    round_no: int = 1,
+) -> tuple[str, list[str]]:
+    """렌더된 카드 PNG를 모델에게 보여주고 시각 결함을 수정. (수정된 html, warnings) 반환.
+
+    실패·의심스러운 출력은 전부 원본으로 폴백한다(소프트 — 저작을 죽이지 않는다).
+    round_no≥2면 '당신의 이전 수정 결과'임을 알려준다(수정이 만든 새 결함을 잡기 위해).
+    """
+    if not card_pngs:
+        return html, ["비전 수정 건너뜀 — 렌더된 카드가 없습니다."]
+
+    original_cards = len(_CARD_RE.findall(html))
+    if round_no == 1:
+        lead = f"위 이미지는 당신이 저작한 덱의 카드 {len(card_pngs)}장이 실제로 렌더된 모습이다."
+    else:
+        lead = (
+            f"위 이미지는 **당신이 방금 수정한 결과**가 다시 렌더된 모습이다({len(card_pngs)}장).\n"
+            "수정이 새 결함을 만들었을 수 있다(텍스트를 늘려 다른 요소를 밀어냈다든지).\n"
+            "**남은 결함이 없다면 HTML을 그대로 다시 출력하라** — 억지로 더 고치지 마라."
+        )
+
+    # ★코드는 **측정**만 한다 — 판정은 저작자가 한다(§1: 코드가 미감을 규정하지 않는다).
+    #   측정하는 것: 빈 구획 / 잉크 쏠림(무게중심). 실측 재캘리브레이션(2026-07-14):
+    #   "공백이 크다"는 결함이 아니다(호흡일 수 있다) — **쏠림**이 미완성의 신호다.
+    _, notes = audit_deck(card_pngs)
+    audit_block = ""
+    if notes:
+        audit_block = (
+            "\n\n[코드가 픽셀로 잰 관찰 — 사실이다. 다만 **고칠지는 당신이 정한다**]\n"
+            + "\n".join(f"- {n}" for n in notes)
+            + "\n여백이 초점을 만들기 위한 **의도된 호흡**이면 그대로 두라 — 채우지 마라.\n"
+            "요소가 갈 곳을 못 찾아 한쪽에 몰린 것(=미완성)이면, 세로 분배를 다시 하거나 요소를 키워라.\n"
+            "이 관찰은 당신이 보지 못하는 것을 알려줄 뿐이다. 미감의 결정권은 당신에게 있다.\n"
+        )
+
+    user = (
+        f"{lead}{audit_block}\n"
+        "아래는 그 HTML이다. 위 결함 목록으로 카드를 하나씩 검사하고, **발견한 결함만** 고쳐라.\n\n"
+        f"```\n{html}\n```"
+    )
+
+    try:
+        client = LLMClient()   # 호출당 생성(이벤트 루프 안전)
+        raw = await client.call(
+            system_prompt=VISION_FIX_SYSTEM,
+            user_prompt=user,
+            model=settings.LLM_MODEL_AUTHOR,
+            max_tokens=settings.AUTHOR_MAX_TOKENS,
+            timeout_s=settings.AUTHOR_TIMEOUT_S,
+            stream=True,
+            images=card_pngs,
+        )
+    except Exception as exc:
+        logger.warning("vision fix 실패(%s) — 원본 유지", exc)
+        return html, [f"비전 수정 실패 — 원본을 유지합니다 ({type(exc).__name__})."]
+
+    # ★국소 패치 — 고친 카드만 받아 교체한다(전체 HTML 재출력이 최대 원가 드라이버였다:
+    #   출력 15~18k 토큰 × $25/M = 라운드당 $0.45. 실제 덱 5개로 무손실 교체 검증 완료).
+    fixed, n_patched, patch_warns = apply_card_patch(html, raw)
+    if n_patched == 0:
+        if patch_warns:
+            logger.warning("vision fix: 패치 적용 0장 — %s", patch_warns[0])
+            return html, patch_warns
+        logger.info("vision fix: 고칠 것 없음(수렴)")
+        return html, []
+
+    fixed_cards = len(_CARD_RE.findall(fixed))
+    if fixed_cards != original_cards:                 # 카드 수는 절대 변하면 안 된다
+        logger.warning("vision fix: 카드 수 변동 %d→%d — 무시", original_cards, fixed_cards)
+        return html, [
+            f"비전 수정이 카드 수를 바꿔({original_cards}→{fixed_cards}) 무시했습니다 — 원본을 유지합니다."
+        ]
+
+    # ★수치 불변 가드 — 비전 수정은 레이아웃·표현을 고치는 단계이지 사실을 바꾸는 단계가 아니다.
+    # 프롬프트로 "수치를 바꾸지 마라"고 말했지만, 말은 지켜지지 않을 수 있다(실측: L4 자가검수는
+    # 5/5 무력했다). 코드가 확인한다 — 정량 수치 집합이 줄어들면 수정을 버린다.
+    lost = _quant_set(html) - _quant_set(fixed)
+    if lost:
+        logger.warning("vision fix: 수치 소실 %s — 무시", sorted(lost)[:5])
+        return html, [
+            f"비전 수정이 수치를 변경/삭제해({', '.join(sorted(lost)[:3])}) 무시했습니다 — 원본을 유지합니다."
+        ]
+
+    logger.info("vision fix 적용: 카드 %d장 교체 (%d→%d chars)", n_patched, len(html), len(fixed))
+    return fixed, patch_warns

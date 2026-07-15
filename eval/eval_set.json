@@ -1,0 +1,33 @@
+{
+  "_설명": "고정 평가셋 — 프롬프트 변경 전후 같은 논문으로 회귀 측정.",
+  "_순서": "papers 배열 순서 = 실행 순서(고정). 라벨 간 비교 안정성을 위해 변경 금지.",
+  "_구성_의도": "재료 3편이 전부 셀룰로오스/마이크로비드 계열 = 동질화 최강 테스트(주제가 거의 같은데 다르게 나오나?). CS 2편은 장르 대비. 이론·장문은 이번 셋에 없음 — 꼬리 generality는 미측정(비용 제약, 2026-07-12).",
+  "_베이스라인": "microbead-cof는 구 프롬프트 덱(블랙박스 심사본)이 eval/runs/baseline-oldprompt/에 있어 유일하게 진짜 전후 비교가 가능하다.",
+  "papers": [
+    {
+      "id": "chitosan-membrane",
+      "genre": "재료·고분자(키토산/셀룰로오스 입자)",
+      "path": "C:/Users/User/Desktop/한국생산기술연구원_근로장학/poly_claude_code/논문/[2026_Carbohydrate polymers] Membrane Chitosan Cellulose Particles (1).pdf"
+    },
+    {
+      "id": "cellulose-emulsification",
+      "genre": "재료·고분자(막유화 마이크로비드, KITECH)",
+      "path": "C:/Users/User/Desktop/한국생산기술연구원_근로장학/poly_claude_code/논문/1-s2.0-S2666893924001257-main.pdf"
+    },
+    {
+      "id": "microbead-cof",
+      "genre": "재료(셀룰로오스+COF 나노시트 전기분무) — 블랙박스 심사 논문",
+      "path": "C:/Users/User/Desktop/한국생산기술연구원_근로장학/poly_claude_code/논문/80 [cellulose_2024] Fabrication of composite microbeads consisting of cellulose and covalent organic nanosheets via electrospray process (1) (2).pdf"
+    },
+    {
+      "id": "attention",
+      "genre": "CS·ML(Transformer)",
+      "path": "C:/Users/User/Desktop/한국생산기술연구원_근로장학/poly_claude_code/논문/1706.03762v7.pdf"
+    },
+    {
+      "id": "resnet",
+      "genre": "CS·ML(잔차학습, CVPR)",
+      "path": "C:/Users/User/Desktop/한국생산기술연구원_근로장학/poly_claude_code/논문/golden_22/He_Deep_Residual_Learning_CVPR_2016_paper.pdf"
+    }
+  ]
+}

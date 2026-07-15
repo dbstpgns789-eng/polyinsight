@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 export default function Home() {
   const [navScrolled, setNavScrolled] = useState(false);
@@ -66,7 +67,7 @@ export default function Home() {
 
           <div className="nav__actions">
             <a href="/login" className="btn btn-ghost btn-login">로그인</a>
-            <a href="/dashboard" className="btn btn-primary">바로 테스트</a>
+            <a href="/dashboard" className="btn btn-primary">카드뉴스 만들기</a>
           </div>
 
           <button
@@ -99,7 +100,7 @@ export default function Home() {
             className="btn btn-primary"
             style={{ width: '100%', justifyContent: 'center' }}
           >
-            무료로 시작하기
+            카드뉴스 만들러 가기
           </a>
         </div>
       </header>
@@ -111,71 +112,33 @@ export default function Home() {
           <div className="container hero__grid">
 
             <div className="hero__content">
-              <p className="eyebrow">무료 베타 운영 중</p>
+              <p className="hero-kicker">✦ 베타 · 논문 원문 기반</p>
               <h1 id="hero-title" className="hero__title">
-                논문 PDF 하나로,<br />카드뉴스 완성
+                논문 읽는 시간은 그대로.<br /><span className="hi">알리는 시간은 1/10</span>로.
               </h1>
               <p className="hero__sub">
-                학술 논문을 업로드하면 AI가 원문에서 핵심 내용을 직접 추출해 카드뉴스를 만듭니다.
-                수치와 근거는 논문 그대로, 편집 가능한 형태로 제공됩니다.
+                PDF 하나를 올리면 AI가 원문 근거만으로 카드뉴스를 만듭니다.
+                모든 수치는 논문 원문에서 검증되고, 편집 가능한 형태로 제공됩니다.
               </p>
-              <div className="hero__actions">
-                <a href="/dashboard" className="btn btn-primary btn-lg">
-                  무료로 시작하기
-                </a>
+              <div className="hero__actions hero__actions--row">
+                <a href="/dashboard" className="btn btn-primary btn-lg">카드뉴스 만들러 가기</a>
+                <a href="#how-it-works" className="btn btn-ghost btn-lg">작동 방식 보기</a>
               </div>
+              <p className="hero__trust">
+                <span className="hero__trust-mark">✓ 원문 검증</span> 지어내지 않습니다. 논문이 근거입니다.
+              </p>
             </div>
 
             <div className="hero__visual" aria-hidden="true">
-              <div className="card-stack">
-                <div className="card-mock card-mock--3">
-                  <div className="card-mock__header"><span>서론</span><span>1 / 8</span></div>
+              <div className="hero-stage">
+                <div className="hero-fstat"><b>6.8%</b><span>평균 저장률 (예시)</span></div>
+                <div className="hero-card hero-card--a"><img src="/cards/attn_05.png" alt="" /></div>
+                <div className="hero-card hero-card--b"><img src="/cards/bert_03.png" alt="" /></div>
+                <div className="hero-card hero-card--c"><img src="/cards/attn_01.png" alt="" /></div>
+                <div className="hero-badge">
+                  <span className="hero-badge__ring">✓</span>
+                  <span className="hero-badge__txt"><b>28.4 BLEU</b><small>논문 7페이지 확인됨</small></span>
                 </div>
-                <div className="card-mock card-mock--2">
-                  <div className="card-mock__header"><span>연구 방법</span><span>3 / 8</span></div>
-                  <div className="card-mock__body">
-                    <div className="mock-line mock-line--title"></div>
-                    <div className="mock-line"></div>
-                    <div className="mock-line mock-line--short"></div>
-                  </div>
-                </div>
-                <div className="card-mock card-mock--1">
-                  <div className="card-mock__header"><span>연구 결과</span><span>4 / 8</span></div>
-                  <div className="card-mock__body">
-                    <p className="card-mock__stat">73.2%</p>
-                    <p className="card-mock__claim">전체 샘플에서 통계적 유의성 확인</p>
-                    <div className="card-mock__cite">
-                      <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                        <rect x="1" y="1" width="9" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.1"/>
-                        <line x1="3" y1="4" x2="8" y2="4" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round"/>
-                        <line x1="3" y1="6" x2="6.5" y2="6" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round"/>
-                      </svg>
-                      Table 2, p.8
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="visual-label visual-label--input">
-                <svg width="28" height="36" viewBox="0 0 28 36" fill="none" aria-hidden="true">
-                  <rect x="1" y="1" width="26" height="34" rx="3" fill="white" stroke="var(--border)" strokeWidth="1.5"/>
-                  <rect x="5" y="8" width="12" height="2" rx="1" fill="var(--border)"/>
-                  <rect x="5" y="13" width="18" height="1.5" rx="0.75" fill="var(--border-subtle)"/>
-                  <rect x="5" y="17" width="15" height="1.5" rx="0.75" fill="var(--border-subtle)"/>
-                  <rect x="5" y="21" width="17" height="1.5" rx="0.75" fill="var(--border-subtle)"/>
-                  <path d="M19 1v8h8" fill="none" stroke="var(--border)" strokeWidth="1.5"/>
-                </svg>
-                <span>논문 PDF</span>
-              </div>
-
-              <div className="visual-arrow" aria-hidden="true">
-                <svg width="36" height="16" viewBox="0 0 36 16" fill="none">
-                  <path d="M2 8h28M24 3l6 5-6 5" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-
-              <div className="visual-label visual-label--output">
-                <span>카드뉴스 8장</span>
               </div>
             </div>
 
@@ -205,10 +168,97 @@ export default function Home() {
                 <div className="step__num" aria-hidden="true">3</div>
                 <div className="step__content">
                   <h3 className="step__title">편집 후 내보내기</h3>
-                  <p className="step__desc">카드 에디터에서 문구와 이미지를 수정하세요. 완료하면 1080×1080 PNG 파일을 한 번에 내보냅니다.</p>
+                  <p className="step__desc">카드 에디터에서 문구와 이미지를 수정하세요. 완료하면 1080×1350 카드뉴스를 PNG로 한 번에 내보냅니다.</p>
                 </div>
               </li>
             </ol>
+          </div>
+        </section>
+
+        {/* ─── Showcase (논문마다 다른 형태 — 형태 발명 증명) ─── */}
+        <section className="section section--surface" aria-labelledby="showcase-title">
+          <div className="container">
+            <div className="showcase__head">
+              <h2 id="showcase-title" className="section__title reveal">논문마다, 다른 얼굴로 나옵니다</h2>
+              <p className="showcase__lead reveal reveal-delay-1">고정 템플릿이 아닙니다. AI가 각 논문의 내용에 맞는 형태를 직접 저작합니다. 아래는 서로 다른 세 논문에서 나온 실제 결과물입니다.</p>
+            </div>
+            <div className="showcase__grid">
+              <figure className="showcase-item reveal reveal-delay-1">
+                <div className="showcase-item__frame">
+                  <img src="/cards/showcase_attention.png" alt="Attention Is All You Need 논문을 요약한 카드뉴스 표지 — 미니멀 다크 에메랄드" loading="lazy" />
+                </div>
+                <figcaption className="showcase-item__cap">
+                  <b>Attention Is All You Need</b>
+                  <span>Transformer · NIPS 2017</span>
+                  <span className="showcase-item__tag">미니멀 다크</span>
+                </figcaption>
+              </figure>
+              <figure className="showcase-item reveal reveal-delay-2">
+                <div className="showcase-item__frame">
+                  <img src="/cards/showcase_bert.png" alt="BERT 논문을 요약한 카드뉴스 표지 — 빈칸 채우기 체험형" loading="lazy" />
+                </div>
+                <figcaption className="showcase-item__cap">
+                  <b>BERT</b>
+                  <span>언어 이해 모델 · 2018</span>
+                  <span className="showcase-item__tag">빈칸 체험형</span>
+                </figcaption>
+              </figure>
+              <figure className="showcase-item reveal reveal-delay-3">
+                <div className="showcase-item__frame">
+                  <img src="/cards/showcase_resnet.png" alt="ResNet 논문을 요약한 카드뉴스 표지 — 수식 칠판형" loading="lazy" />
+                </div>
+                <figcaption className="showcase-item__cap">
+                  <b>ResNet</b>
+                  <span>잔차 연결 · CVPR 2015</span>
+                  <span className="showcase-item__tag">수식 칠판형</span>
+                </figcaption>
+              </figure>
+            </div>
+          </div>
+        </section>
+
+        {/* ─── Moat (원문 검증 해자) ─── */}
+        <section className="section moat" aria-labelledby="moat-title">
+          <div className="container">
+            <div className="moat__card reveal">
+              <div className="moat__lead">
+                <span className="moat__chip">우리만의 해자</span>
+                <h2 id="moat-title" className="moat__title">AI가 지어내지 않습니다.<br />원문이 근거입니다.</h2>
+                <p className="moat__desc">모든 수치와 주장에 논문 근거 배지가 붙습니다. 카드에 적힌 숫자가 원문 몇 페이지에서 왔는지 바로 확인됩니다.</p>
+                <div className="moat__stats">
+                  <div className="moat__stat moat__stat--g"><b>98.4%</b><span>수치 원문 일치율 (예시)</span></div>
+                  <div className="moat__stat moat__stat--w"><b>p.단위</b><span>페이지까지 추적</span></div>
+                </div>
+              </div>
+              <div className="moat__snippet">
+                <p className="moat__snippet-lab">카드 본문</p>
+                <p className="moat__snippet-body">번역 품질 <u>28.4 BLEU</u>로 당시 최고 기록을 세웠습니다.</p>
+                <span className="moat__badge">✓ 논문 7페이지 · Results 표에서 확인</span>
+                <div className="moat__vsum">
+                  <div><b className="g">8</b><span>논문 근거 확인</span></div>
+                  <div><b className="a">1</b><span>확인 필요</span></div>
+                </div>
+              </div>
+            </div>
+
+            <ul className="moat-guards reveal reveal-delay-1" role="list">
+              <li className="moat-guard">
+                <span className="moat-guard__ic" aria-hidden="true">✓</span>
+                <div><b>수치 출처 자동 표기</b><span>모든 숫자에 섹션명과 페이지가 함께 붙습니다.</span></div>
+              </li>
+              <li className="moat-guard">
+                <span className="moat-guard__ic" aria-hidden="true">✓</span>
+                <div><b>위험 항목 경고</b><span>검증이 불확실한 항목은 에디터에서 명확히 표시됩니다.</span></div>
+              </li>
+              <li className="moat-guard">
+                <span className="moat-guard__ic" aria-hidden="true">✓</span>
+                <div><b>AI 결과 강제 없음</b><span>생성된 내용은 언제든 수정하거나 삭제할 수 있습니다.</span></div>
+              </li>
+              <li className="moat-guard">
+                <span className="moat-guard__ic" aria-hidden="true">✓</span>
+                <div><b>프로젝트 이력 보존</b><span>변환한 논문과 작업 내역은 대시보드에 남습니다.</span></div>
+              </li>
+            </ul>
           </div>
         </section>
 
@@ -228,28 +278,28 @@ export default function Home() {
                 <div className="feature__num" aria-hidden="true">02</div>
                 <div>
                   <h3 className="feature__title">신뢰도 표시</h3>
-                  <p className="feature__desc">추출된 각 항목에 신뢰도(높음·보통·낮음)와 검토 필요 여부가 표시됩니다. 검토가 필요한 항목이 남아있으면 내보내기 버튼이 잠깁니다.</p>
+                  <p className="feature__desc">추출된 각 항목에 신뢰도와 검토 필요 여부가 표시됩니다. 검토가 필요한 항목은 경고로 알려주되, 내보낼지는 사용자가 결정합니다.</p>
                 </div>
               </article>
               <article className="feature reveal reveal-delay-2">
                 <div className="feature__num" aria-hidden="true">03</div>
                 <div>
-                  <h3 className="feature__title">가변 카드 구조</h3>
-                  <p className="feature__desc">논문 분량과 내용에 따라 3장에서 15장까지 자유롭게 구성합니다. 표지, 문제 제기, 연구 방법, 결과, 마무리 등 12가지 슬라이드 유형을 지원합니다.</p>
+                  <h3 className="feature__title">내용에 맞는 자유 구성</h3>
+                  <p className="feature__desc">논문 분량과 내용에 따라 카드 수와 구성을 정합니다. AI가 표지·문제 제기·핵심 결과·마무리까지 내용에 맞는 형태를 직접 저작합니다.</p>
                 </div>
               </article>
               <article className="feature reveal reveal-delay-1">
                 <div className="feature__num" aria-hidden="true">04</div>
                 <div>
                   <h3 className="feature__title">카드 에디터</h3>
-                  <p className="feature__desc">생성된 카드를 브라우저에서 바로 수정할 수 있습니다. 5초 자동저장으로 작업 내용이 유지됩니다.</p>
+                  <p className="feature__desc">생성된 카드를 브라우저에서 바로 수정합니다. 텍스트·이미지·배치를 자유롭게 편집하고 저장할 수 있습니다.</p>
                 </div>
               </article>
               <article className="feature reveal reveal-delay-2">
                 <div className="feature__num" aria-hidden="true">05</div>
                 <div>
                   <h3 className="feature__title">고해상도 내보내기</h3>
-                  <p className="feature__desc">편집 완료 후 1080×1080 PNG를 ZIP으로 일괄 다운로드합니다.</p>
+                  <p className="feature__desc">편집 완료 후 1080×1350 PNG를 ZIP으로 일괄 다운로드합니다.</p>
                 </div>
               </article>
             </div>
@@ -257,7 +307,7 @@ export default function Home() {
         </section>
 
         {/* ─── Target Users ─── */}
-        <section className="section" aria-labelledby="users-title">
+        <section className="section section--subtle" aria-labelledby="users-title">
           <div className="container">
             <h2 id="users-title" className="section__title reveal">이런 분들을 위해 만들었습니다</h2>
             <ul className="users__list" role="list">
@@ -277,37 +327,12 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ─── Trust Points ─── */}
-        <section className="section section--subtle" aria-labelledby="trust-title">
-          <div className="container">
-            <h2 id="trust-title" className="section__title reveal">정확성을 설계에 넣었습니다</h2>
-            <div className="trust__grid">
-              <article className="trust-item reveal reveal-delay-1">
-                <h3 className="trust-item__title">수치에 출처 자동 표기</h3>
-                <p className="trust-item__desc">모든 숫자에 섹션명과 페이지가 함께 표시됩니다.</p>
-              </article>
-              <article className="trust-item reveal reveal-delay-2">
-                <h3 className="trust-item__title">위험 항목 경고</h3>
-                <p className="trust-item__desc">검증이 불확실한 항목은 에디터에서 명확히 표시됩니다.</p>
-              </article>
-              <article className="trust-item reveal reveal-delay-3">
-                <h3 className="trust-item__title">AI 결과 강제 없음</h3>
-                <p className="trust-item__desc">생성된 모든 내용은 에디터에서 수정하거나 삭제할 수 있습니다.</p>
-              </article>
-              <article className="trust-item reveal reveal-delay-4">
-                <h3 className="trust-item__title">프로젝트 이력 보존</h3>
-                <p className="trust-item__desc">변환한 논문과 작업 내역은 대시보드에서 언제든 다시 확인할 수 있습니다.</p>
-              </article>
-            </div>
-          </div>
-        </section>
-
         {/* ─── CTA ─── */}
         <section className="section section--dark cta-section" aria-labelledby="cta-title">
           <div className="container cta__inner">
             <h2 id="cta-title" className="cta__title reveal">지금 논문을 업로드해 보세요.</h2>
-            <p className="cta__sub reveal reveal-delay-1">무료로 시작할 수 있습니다.</p>
-            <a href="/dashboard" className="btn btn-white btn-lg reveal reveal-delay-2">바로 테스트하기</a>
+            <p className="cta__sub reveal reveal-delay-1">PDF 하나면 바로 시작할 수 있습니다.</p>
+            <a href="/dashboard" className="btn btn-white btn-lg reveal reveal-delay-2">카드뉴스 만들기</a>
           </div>
         </section>
 
@@ -317,9 +342,9 @@ export default function Home() {
         <div className="container footer__inner">
           <p className="footer__logo">PolyInsight</p>
           <div className="footer__links">
-            <a href="#">개인정보 처리방침</a>
-            <a href="#">이용약관</a>
-            <a href="#">문의하기</a>
+            <Link href="/privacy">개인정보 처리방침</Link>
+            <Link href="/terms">이용약관</Link>
+            <a href="mailto:dbstpgns789@gmail.com">문의하기</a>
           </div>
           <p className="footer__copy">&copy; 2026 PolyInsight. All rights reserved.</p>
         </div>

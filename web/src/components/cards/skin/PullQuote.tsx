@@ -23,18 +23,9 @@ const baseStyle = {
   wordBreak: 'keep-all' as const,
 }
 
-export default function PullQuote({ value, fieldKey, mode, onFieldChange, onFieldFocus, focused }: Props) {
-  if (mode === 'edit') {
-    return (
-      <EditableText
-        fieldKey={fieldKey} value={value} mode={mode} multiline
-        onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focused}
-        style={baseStyle}
-      />
-    )
-  }
+function renderQuoted(value: string) {
   return (
-    <div style={baseStyle}>
+    <>
       <span aria-hidden style={{ color: 'var(--set-accent)' }}>“</span>
       {parseEmphasis(value).map((seg, i) =>
         seg.em
@@ -42,6 +33,20 @@ export default function PullQuote({ value, fieldKey, mode, onFieldChange, onFiel
           : <span key={i}>{seg.text}</span>
       )}
       <span aria-hidden style={{ color: 'var(--set-accent)' }}>”</span>
-    </div>
+    </>
   )
+}
+
+export default function PullQuote({ value, fieldKey, mode, onFieldChange, onFieldFocus, focused }: Props) {
+  if (mode === 'edit') {
+    return (
+      <EditableText
+        fieldKey={fieldKey} value={value} mode={mode} multiline
+        onFieldChange={onFieldChange} onFieldFocus={onFieldFocus} focused={focused}
+        style={baseStyle}
+        renderDisplay={renderQuoted}
+      />
+    )
+  }
+  return <div style={baseStyle}>{renderQuoted(value)}</div>
 }
