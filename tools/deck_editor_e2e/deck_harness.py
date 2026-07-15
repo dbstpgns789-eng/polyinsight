@@ -591,6 +591,55 @@ def test_insert_image():
         return ok
 
 
+def test_highlight():
+    """HIGHLIGHT(팩트 점프): 현재 카드 안 수치 위에 오버레이 마커.
+    핵심 불변식 — DOM에 <mark> 삽입 없음 → 저장 HTML 무오염 + 자동저장(DIRTY) 미기동."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as pw:
+        browser, page = make_page(pw)   # SET_MODE edit(=paged), activeCard=0
+        results = []
+
+        def check(name, cond):
+            results.append((name, bool(cond)))
+
+        def visible_marks():
+            return page.evaluate(
+                """() => Array.from(document.querySelectorAll('[data-pi-mark]'))
+                  .filter(m => getComputedStyle(m).display !== 'none').length"""
+            )
+
+        # 카드 index 1(카드2)로 이동 후, 그 카드에 있는 텍스트("카드2 B")를 하이라이트
+        goto_card(page, 1)
+        clear_msgs(page)
+        host(page, "HIGHLIGHT", value="카드2 B")
+        hl = wait_msg(page, "HIGHLIGHTED")
+        # 1) 마커가 실제로 보인다(display:block, 레이아웃 필요 — 실 Chromium이라 getClientRects 동작)
+        check("HIGHLIGHT → HIGHLIGHTED found>=1", hl is not None and (hl.get("found") or 0) >= 1)
+        check("HIGHLIGHT → 보이는 마커>=1개", visible_marks() >= 1)
+
+        # 3) 자동저장 미기동: HIGHLIGHT 후 DIRTY 메시지가 오지 않아야 함(get_html 전에 검사 — get_html이 msgs를 비움)
+        check("HIGHLIGHT → DIRTY 없음(자동저장 잠듦)", len(msgs(page, "DIRTY")) == 0)
+
+        # 2) 저장 HTML 무오염: serialize가 data-pi-mark를 제거 → 원본 오염 없음
+        html = get_html(page)
+        check("serialize: data-pi-mark 0(저장 무오염)", "data-pi-mark" not in html)
+        check("serialize: data-pi 아티팩트 0", "data-pi-" not in html)
+
+        # 4) 다른 카드로 이동 → 이전 카드 마커 전부 숨김(clearHighlight)
+        goto_card(page, 0)
+        check("SET_PAGE 0 → 보이는 마커 0개", visible_marks() == 0)
+
+        browser.close()
+        print("\n=== 하이라이트(팩트 점프) ===")
+        ok = True
+        for name, passed in results:
+            print(f"  [{'PASS' if passed else 'FAIL'}] {name}")
+            ok = ok and passed
+        print(f"결과: {'ALL PASS' if ok else 'FAIL 있음'}")
+        return ok
+
+
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
     ok = True
@@ -606,4 +655,6 @@ if __name__ == "__main__":
         ok = test_paging() and ok
     if mode in ("all", "insert"):
         ok = test_insert_image() and ok
+    if mode in ("all", "highlight"):
+        ok = test_highlight() and ok
     sys.exit(0 if ok else 1)

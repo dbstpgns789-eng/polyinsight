@@ -17,6 +17,8 @@ const AGENT_BODY = `
   var mode = 'view';
   var selection = [];      // 선택된 요소들(배열). primary()=마지막.
   var overlayPool = [];    // 요소별 하이라이트 오버레이 풀(재사용)
+  var markPool = [];       // 팩트 점프 하이라이트(수치 위 마커) — 선택 오버레이와 별도 풀
+  var markRects = [];      // 현재 마킹된 사각형(스크롤·리사이즈 시 재배치용)
   var groupBox = null;     // 2개+ 선택 시 집합 바운딩박스(점선)
   var handles = [];        // 8방향 리사이즈 핸들(단일 선택 시만)
   var guides = [];         // 스냅 정렬 가이드선
@@ -121,6 +123,71 @@ const AGENT_BODY = `
   }
   function placeBox(ov, b) { ov.style.display = 'block'; ov.style.left = (b.x - 2) + 'px'; ov.style.top = (b.y - 2) + 'px'; ov.style.width = b.w + 'px'; ov.style.height = b.h + 'px'; }
 
+  // ── 팩트 점프 하이라이트 ────────────────────────────────────────────────────
+  // DOM에 <mark>를 넣지 않는다 — 삽입하면 문서가 dirty가 되어 자동저장이 원본을 오염시킨다.
+  // Range 좌표만 읽어 오버레이 박스를 띄운다(data-pi-artifact → serialize에서 제거됨).
+  function makeMarkEl() {
+    var d = document.createElement('div');
+    d.setAttribute('data-pi-mark', '1'); d.setAttribute('data-pi-artifact', '1');
+    d.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483644;border-radius:3px;'
+      + 'background:rgba(250,204,21,.38);box-shadow:0 0 0 2px rgba(202,138,4,.55);display:none;';
+    document.body.appendChild(d);
+    return d;
+  }
+
+  function clearHighlight() {
+    markRects = [];
+    for (var i = 0; i < markPool.length; i++) markPool[i].style.display = 'none';
+  }
+
+  // 현재 카드 안에서 needle이 나오는 모든 위치의 사각형을 모은다.
+  function findRects(needle) {
+    var cs = cardEls();
+    var card = cs[activeCard];
+    if (!card || !needle) return [];
+    var rects = [];
+    var walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, null);
+    var node;
+    while ((node = walker.nextNode())) {
+      var text = node.nodeValue || '';
+      var from = 0;
+      while (true) {
+        var at = text.indexOf(needle, from);
+        if (at < 0) break;
+        var r = document.createRange();
+        r.setStart(node, at); r.setEnd(node, at + needle.length);
+        var list = r.getClientRects();
+        for (var i = 0; i < list.length; i++) {
+          var b = list[i];
+          if (b.width > 0 && b.height > 0) {
+            rects.push({ x: b.left + window.scrollX, y: b.top + window.scrollY, w: b.width, h: b.height });
+          }
+        }
+        from = at + needle.length;
+      }
+    }
+    return rects;
+  }
+
+  function positionMarks() {
+    for (var i = 0; i < markPool.length; i++) markPool[i].style.display = 'none';
+    while (markPool.length < markRects.length) markPool.push(makeMarkEl());
+    for (var j = 0; j < markRects.length; j++) placeBox(markPool[j], markRects[j]);
+  }
+
+  function highlight(value) {
+    clearHighlight();
+    // 텍스트가 공백으로 갈라져 있을 수 있다("170% 증가" vs "170 % 증가") — 원문 → 공백제거 순으로 시도
+    markRects = findRects(value);
+    if (!markRects.length) markRects = findRects(value.replace(/\\s+/g, ''));
+    positionMarks();
+    if (markRects.length) {
+      var first = markRects[0];
+      window.scrollTo({ top: Math.max(0, first.y - 120), behavior: 'smooth' });
+    }
+    post('HIGHLIGHTED', { value: value, found: markRects.length });
+  }
+
   function resizeCursor(dir) {
     var m = { n: 'ns', s: 'ns', e: 'ew', w: 'ew', ne: 'nesw', sw: 'nesw', nw: 'nwse', se: 'nwse' };
     return (m[dir] || 'default') + '-resize';
@@ -162,6 +229,7 @@ const AGENT_BODY = `
         handles[i].style.left = pos[d][0] + 'px'; handles[i].style.top = pos[d][1] + 'px';
       }
     } else { showHandles(false); }
+    positionMarks();   // 마커도 스크롤·리사이즈·줌에 맞춰 재추적
   }
 
   // 자연 카드좌표(카드 좌상단 기준)에서의 요소 rect
@@ -739,6 +807,7 @@ const AGENT_BODY = `
     var n = cardEls().length;
     activeCard = Math.max(0, Math.min(index, n - 1));
     deselect();          // 이전 페이지 선택의 유령 오버레이 방지
+    clearHighlight();    // 다른 카드로 넘어가면 이전 카드의 마커는 무효
     applyPaging(); emitPage();
   }
 
@@ -772,6 +841,8 @@ const AGENT_BODY = `
       case 'SET_RECT': setRect(d); break;
       case 'SET_IMAGE_BG': setImageBg(); break;
       case 'SET_PAGE': setPage(d.index); break;
+      case 'HIGHLIGHT': highlight(String(d.value || '')); break;
+      case 'CLEAR_HIGHLIGHT': clearHighlight(); break;
       case 'APPLY_STYLE': {
         var el = primary();
         if (el) {
