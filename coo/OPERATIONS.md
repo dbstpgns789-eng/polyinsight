@@ -40,10 +40,36 @@ DevOps 몰라도 되게 썼다. 상황별로 여기만 보면 된다:
 
 | 주기 | 할 일 |
 |---|---|
+| **매일 18:00**(배포 창) | **일과 종료 배포** — 그날 머지된 코드 변경을 서버에 올린다. 절차 = §2-1. 코드 변경 없으면 건너뛴다 |
 | **매일**(자동+눈) | 자동 백업(cron 03:00) 돌았나 로그 1줄 확인 · 업타임 모니터 초록인지 · (경보 오면만 대응) |
 | **매주** | `docker compose ps`(3개 up) · `df -h`(디스크 여유) · **Anthropic 사용량**(console.anthropic.com — 급증=키유출/폭주 신호) · fail2ban 차단현황 · `run.log`서 로그인실패·rate limit 훑기 |
 | **매월** | OS 보안패치(unattended-upgrades 자동) · Playwright/베이스 이미지 갱신 검토(`Dockerfile:3`) · `pip-audit`(의존성 취약점) · `.env` 밖-VM 사본 최신인지 · Azure 잔여 크레딧 확인 |
 | **분기** | **복원 드릴**(백업을 실제로 새 위치에 복원해 뜨는지) · SSH 키/시크릿 로테이션 검토 · 크레딧 소진 예상 시 Oracle 이사 계획 |
+
+---
+
+## 2-1. 일과 종료 배포 (매일 18:00) — 확정 2026-07-15
+
+> **왜 18:00인가**: 재배포는 **진행 중인 덱 생성 잡을 죽인다**(`recover_stale_jobs` 단일프로세스 전제, §5).
+> 일과 종료 시각이 트래픽이 가장 한산하다. 여러 세션이 낮 동안 각자 커밋하므로, **하루치를 모아 저녁에 한 번** 올린다
+> (= 변경 추적이 쉽고, 재시작으로 잡 죽이는 횟수가 하루 1회로 제한된다).
+
+**절차** (코드 변경이 있는 날만):
+
+```
+1. 그린 확인 (로컬)         cd backend && pytest tests/  ·  cd web && npx tsc --noEmit && npx vitest run
+2. 오늘 변경 훑기           git log --oneline --since="오늘 00:00"   (뭘 올리는지 눈으로)
+3. GitHub 푸시             git push origin feat/emerald-redesign     ← Claude가 여기까지 대신 함
+4. VM 접속·배포            ssh <VM> → cd <repo> && git pull && docker compose up -d --build   ← SSH 필요(사람)
+5. 헬스 확인               docker compose ps (3개 Up) · logs backend에 "startup complete" · 공개 URL 자물쇠+랜딩
+6. 유저 안내               재배포 중이던 덱 생성 잡은 실패 → 재생성 안내
+```
+
+- **Claude가 할 수 있는 것**: 1·2·3(그린 확인 + 오늘 변경 요약 + GitHub 푸시). **여기까지가 이 개발 머신의 한계다.**
+- **사람이 해야 하는 것**: 4·5·6. VM(20.210.112.15)은 **이 머신에 SSH 키가 없어** Claude가 직접 못 친다.
+  터미널에 SSH가 설정돼 있으면 `!ssh ...` 로 이 세션에서 돌릴 수 있다.
+- **안전장치**: `STORAGE_DIR=/data/blobstore` 볼륨 픽스가 `docker-compose.yml:14`에 있어 **재배포해도 카드·유저 자산은 살아남는다**(위험대장 C3 해소). DB는 `/data` 볼륨.
+- **배포 안 하는 날**: 문서·계획·메모리만 바뀐 날은 서버 코드에 영향 없음 → 건너뛴다.
 
 ---
 
