@@ -11,12 +11,14 @@ export interface DerivedClaim {
   unresolved: boolean
   verified: boolean
   context: string
+  card?: number | null // 구 덱엔 없음
 }
 
 export interface VerifyClaim {
   value: string
   context: string
   verified: boolean
+  card?: number | null // 구 덱엔 없음
 }
 
 export interface VerifyData {
@@ -33,4 +35,22 @@ export function suspectClaims(verify: VerifyData | null | undefined): DerivedCla
 export function isAllClear(verify: VerifyData | null | undefined): boolean {
   if (!verify) return false
   return verify.unverified === 0 && suspectClaims(verify).length === 0
+}
+
+/** 사용자가 훑어야 할 항목(확인 필요) — 패널·문맥 바가 공유하는 단일 순서. */
+export interface ReviewItem {
+  value: string
+  context: string
+  card: number | null
+  reason: 'mismatch' | 'missing'   // 계산이 안 맞음 / 원문에 없음
+}
+
+export function reviewQueue(verify: VerifyData | null | undefined): ReviewItem[] {
+  const mismatch: ReviewItem[] = suspectClaims(verify).map((d) => ({
+    value: d.value, context: d.context, card: d.card ?? null, reason: 'mismatch' as const,
+  }))
+  const missing: ReviewItem[] = (verify?.claims ?? [])
+    .filter((c) => !c.verified)
+    .map((c) => ({ value: c.value, context: c.context, card: c.card ?? null, reason: 'missing' as const }))
+  return [...mismatch, ...missing]
 }
