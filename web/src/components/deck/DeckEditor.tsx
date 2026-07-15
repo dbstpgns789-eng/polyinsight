@@ -69,6 +69,7 @@ interface Props {
   onDirty?: () => void
   onHistory?: (state: HistoryState) => void
   onPage?: (state: PageState) => void
+  onHighlighted?: (info: { value: string; found: number }) => void
   onScaleChange?: (effective: number, fit: number) => void
   className?: string                                    // 스크롤 뷰포트 배치(예: absolute inset-0)
   initialPage?: number                                  // 편집 진입 시 열 카드(뷰어서 보던 카드). EDITOR_READY 후 반영
@@ -82,7 +83,7 @@ function buildSrcDoc(html: string): string {
 }
 
 const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
-  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage, onScaleChange, className, initialPage }, ref,
+  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage, onHighlighted, onScaleChange, className, initialPage }, ref,
 ) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -161,6 +162,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
         case 'DIRTY': onDirty?.(); break
         case 'HISTORY_STATE': onHistory?.({ canUndo: !!d.canUndo, canRedo: !!d.canRedo }); break
         case 'PAGE': onPage?.({ index: Number(d.index) || 0, count: Number(d.count) || 0 }); break
+        case 'HIGHLIGHTED': onHighlighted?.({ value: String(d.value), found: Number(d.found) || 0 }); break
         case 'VIEWPORT': {
           const wrap = wrapRef.current; if (!wrap) break
           const v = viewRef.current
@@ -187,7 +189,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
-  }, [mode, send, onSelected, onDeselected, onDirty, onHistory, onPage, initialPage, zoomAt])
+  }, [mode, send, onSelected, onDeselected, onDirty, onHistory, onPage, onHighlighted, initialPage, zoomAt])
 
   // 모드 변경을 iframe에 반영
   useEffect(() => { send('SET_MODE', { mode }) }, [mode, send])

@@ -24,7 +24,8 @@ import DeckFactPanel from '@/components/deck/DeckFactPanel'
 import DeckExportModal from '@/components/deck/DeckExportModal'
 import { extractCardLabels } from '@/lib/deckLabels'
 import { failureReason } from '@/lib/failureReason'
-import { type VerifyData } from '@/lib/verifyStatus'
+import DeckFactJumpBar from '@/components/deck/DeckFactJumpBar'
+import { reviewQueue, type ReviewItem, type VerifyData } from '@/lib/verifyStatus'
 import { useAutosave } from '@/lib/useAutosave'
 
 interface DeckPayload {
@@ -161,6 +162,8 @@ function DeckPageInner() {
   const [viewIdx, setViewIdx] = useState(0)         // 뷰 모드 현재 카드(뷰어·개요 레일 동기)
   const [railCollapsed, setRailCollapsed] = useState(false)   // 개요 레일 접기(선호 기억)
   const [showFact, setShowFact] = useState(false)   // 팩트체크 온디맨드 드로어(뷰·편집 공통)
+  const [jump, setJump] = useState<{ item: ReviewItem; index: number } | null>(null)  // 팩트 점프 중인 항목
+  const [jumpFound, setJumpFound] = useState<boolean | null>(null)                    // 카드 안에서 찾았나
   const closeFactRef = useRef<HTMLButtonElement>(null)
   const restoreFocusRef = useRef<Element | null>(null)
   const editorRef = useRef<DeckEditorHandle>(null)
@@ -333,6 +336,36 @@ function DeckPageInner() {
     setMode('edit')
   }, [])
 
+  // 팩트 패널 수치 클릭 → 그 카드로 데려가 수치에 마커를 씌운다.
+  // 뷰 모드면 편집 모드로 전환한다(뷰어는 PNG라 텍스트 좌표를 모른다).
+  // 안전: toggleMode의 ver 상승은 pngStale 가드를 타므로, 보기만 하고 나오면 재렌더가 없다.
+  const queue = useMemo(() => reviewQueue(deck?.verify), [deck?.verify])
+
+  const jumpTo = useCallback((index: number) => {
+    const item = queue[index]
+    if (!item || item.card === null) return
+    setJump({ item, index })
+    setJumpFound(null)
+    setShowFact(false)
+    if (mode === 'view') {
+      enterEditAt(item.card)                 // EDITOR_READY 후 initialPage로 그 카드에 진입
+    } else {
+      editorRef.current?.setPage(item.card)
+    }
+    // 카드 전환(페이징·폰트 프리즈) 후에 마킹해야 좌표가 맞는다
+    window.setTimeout(() => editorRef.current?.highlight(item.value), 260)
+  }, [queue, mode, enterEditAt])
+
+  const handleJump = useCallback((it: { value: string; card: number }) => {
+    const i = queue.findIndex((q) => q.value === it.value && q.card === it.card)
+    jumpTo(i < 0 ? 0 : i)
+  }, [queue, jumpTo])
+
+  const closeJump = useCallback(() => {
+    setJump(null)
+    editorRef.current?.clearHighlight()
+  }, [])
+
   // 뷰 모드는 팩트가 우측 상시 노출 → 배지=상태만. 편집 모드만 드로어 토글.
   const onBadgeClick = useCallback(() => { if (mode === 'edit') setShowFact((v) => !v) }, [mode])
 
@@ -457,10 +490,21 @@ function DeckPageInner() {
                 onDirty={handleDirty}
                 onHistory={setHistory}
                 onPage={setPage}
+                onHighlighted={(info) => setJumpFound(info.found > 0)}
               />
               {(proposing || !!pending) && (
                 <div className="absolute inset-0 z-10 cursor-not-allowed" aria-hidden="true"
                   title={proposing ? 'AI가 고치는 중…' : 'AI 제안 확인 중 — 적용/취소 후 편집하세요'} />
+              )}
+              {jump && (
+                <DeckFactJumpBar
+                  item={jump.item}
+                  index={jump.index}
+                  total={queue.length}
+                  found={jumpFound}
+                  onNext={() => jumpTo((jump.index + 1) % queue.length)}
+                  onClose={closeJump}
+                />
               )}
               {/* 릴 좌우 이동 — 덱은 좌우 슬라이드 카드뉴스. 하단 중앙 페이저(‹ 3/7 ›) */}
               {page.count > 1 && (
@@ -496,7 +540,7 @@ function DeckPageInner() {
         {/* ▶ 우측 팩트 패널 (뷰 모드) — 해자를 상시 노출 (3패널: 우 팩트). 블랙박스 벤치 반영 */}
         {!editing && (
           <aside className="w-[380px] shrink-0 border-l border-deck-line bg-surface min-h-0 overflow-y-auto p-5">
-            <DeckFactPanel verify={v} canReverify={deck.canReverify !== false} />
+            <DeckFactPanel verify={v} canReverify={deck.canReverify !== false} onJump={handleJump} />
           </aside>
         )}
 
@@ -555,7 +599,7 @@ function DeckPageInner() {
                   className="w-7 h-7 rounded-lg grid place-items-center text-ink-3 hover:text-ink hover:bg-bg-subtle transition-colors">✕</button>
               </div>
               <div className="flex-1 overflow-y-auto px-5 pb-5">
-                <DeckFactPanel verify={v} canReverify={deck.canReverify !== false} />
+                <DeckFactPanel verify={v} canReverify={deck.canReverify !== false} onJump={handleJump} />
               </div>
             </aside>
           </>
