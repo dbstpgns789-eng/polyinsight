@@ -39,3 +39,11 @@ def test_html_without_card_markers_yields_card_none():
     # 카드 분할 마커가 없는 HTML(구 저작물/조각) — 죽지 않고 card=None
     claims = verify_deck("<p>49.3 mV</p>", PAPER)
     assert claims and claims[0].card is None
+
+
+def test_compute_verify_payload_includes_card():
+    from backend.agents.deck.pipeline import compute_verify
+    payload = compute_verify(DECK, PAPER)
+    cards = {c["value"]: c["card"] for c in payload["claims"]}
+    assert cards["49.3 mV"] == 0
+    assert cards["238 MPa"] == 1

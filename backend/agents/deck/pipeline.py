@@ -47,7 +47,10 @@ def _verify_to_json(html: str, paper_text: str | None) -> tuple[str, dict]:
     payload = {
         "verified": sum(c.verified for c in claims),
         "unverified": sum(not c.verified for c in claims),
-        "claims": [{"value": c.value, "context": c.context, "verified": c.verified} for c in claims],
+        "claims": [
+            {"value": c.value, "context": c.context, "verified": c.verified, "card": c.card}
+            for c in claims
+        ],
         "derived": derived_claims(html, paper_text),
     }
     return json.dumps(payload, ensure_ascii=False), payload
