@@ -51,6 +51,8 @@ export interface DeckEditorHandle {
   distribute: (axis: 'h' | 'v') => void
   setRect: (r: { left?: number; top?: number; width?: number; height?: number }) => void
   setPage: (index: number) => void
+  highlight: (value: string) => void
+  clearHighlight: () => void
   zoomBy: (factor: number) => void       // 중앙 기준 확대/축소
   zoomFit: () => void                    // 폭 맞춤
   insertImage: (p: {
@@ -136,6 +138,8 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     distribute: (axis) => send('DISTRIBUTE', { axis }),
     setRect: (r) => send('SET_RECT', r),
     setPage: (index) => send('SET_PAGE', { index }),
+    highlight: (value) => send('HIGHLIGHT', { value }),
+    clearHighlight: () => send('CLEAR_HIGHLIGHT'),
     zoomBy: (factor) => zoomByCenter(factor),
     zoomFit: () => setZoom(null),
     insertImage: (p) => send('INSERT_IMAGE', p),
