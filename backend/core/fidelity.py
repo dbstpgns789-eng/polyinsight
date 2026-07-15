@@ -59,6 +59,53 @@ _NUM = re.compile(
 _CORE = re.compile(r"\d[\d,]*\.?\d*")
 _CARD_SPLIT = re.compile(r'(?=<div[^>]+data-screen-label=)', re.I)
 
+# 서지 식별자 — 수치 주장이 아니다(arXiv ID·DOI). "소수점=수치"라는 순진한 규칙에 뚫린다.
+_IDENTIFIER = re.compile(r"^(?:\d{4}\.\d{4,5}|10\.\d{4,}(?:/|$))")   # 2005.14165 / 10.1234/...
+# 과학표기(3.64E+03) — 원문이 이렇게 쓰면 카드의 "3,640"과 문자열이 안 맞는다.
+_SCI = re.compile(r"(\d(?:\.\d+)?)\s*[eE]\s*([+\-]?\d+)")
+# 한국어 큰수 접미사 → 10의 지수. "1,750억"=175 billion을 영어 원문과 잇는다.
+_KO_MAG = {"조": 12, "억": 8, "만": 4}
+
+
+def _expand_scientific(text: str) -> str:
+    """원문의 과학표기를 평문 정수로 확장해 붙인다(원본은 유지, 확장본을 뒤에 이어 검색 대상 확대).
+
+    3.64E+03 → 3640. 카드가 재표현한 '3,640'이 문자열 대조로 잡히게 한다.
+    """
+    extra: list[str] = []
+    for m in _SCI.finditer(text):
+        try:
+            v = float(m.group(1)) * (10 ** int(m.group(2)))
+            if v == int(v):
+                extra.append(str(int(v)))
+        except (ValueError, OverflowError):
+            continue
+    return text + (" " + " ".join(extra) if extra else "")
+
+
+def _korean_magnitude_reprs(tok: str) -> list[str]:
+    """'1,750억' → 원문에 나타날 법한 후보 표현들. 없으면 빈 리스트.
+
+    영어 논문은 "175 billion"으로 쓴다 → 175000000000을 10^9·10^8·10^6·10^4로 나눈
+    유효숫자 후보를 만들어 어느 하나가 원문에 있으면 매칭으로 본다.
+    """
+    exp = next((e for s, e in _KO_MAG.items() if tok.endswith(s)), None)
+    if exp is None:
+        return []
+    cm = _CORE.search(tok)
+    if not cm:
+        return []
+    try:
+        base = float(cm.group().replace(",", ""))
+    except ValueError:
+        return []
+    full = int(base * (10 ** exp))
+    reprs = {str(full)}
+    for div in (10 ** 9, 10 ** 8, 10 ** 6, 10 ** 4):     # billions / 억 / millions / 만
+        if full % div == 0 and full // div >= 1:
+            reprs.add(str(full // div))
+    return list(reprs)
+
 
 def _content_text(html: str) -> str:
     """HTML에서 CSS(스타일 블록·style 속성)를 걷어내고 콘텐츠 텍스트만 추출."""
@@ -84,8 +131,10 @@ def _flat(s: str) -> str:
 
 
 def _is_meaningful(tok: str) -> bool:
-    """정량 수치(단위 또는 소수점 동반)인가. 맨정수(권/연도/페이지/id 노이즈)는 제외."""
+    """정량 수치(단위 또는 소수점 동반)인가. 맨정수·서지식별자(권/연도/페이지/arXiv/DOI)는 제외."""
     t = tok.strip()
+    if _IDENTIFIER.match(t):        # arXiv ID·DOI — 소수점이 있어도 수치 주장이 아니다
+        return False
     if "." in t:
         return True
     # 숫자·부호·콤마·±·공백을 뺀 나머지 문자 = 단위. 남으면 정량 수치.
@@ -110,7 +159,8 @@ def verify_deck(html: str, paper_text: str) -> list[NumberClaim]:
     팩트 패널이 '이 수치가 쓰인 카드'로 사용자를 데려갈 수 있게 하는 좌표다.
     dedup은 덱 전역(seen)으로 유지한다 — 원장 카운트를 바꾸지 않는다(위치만 덧붙이는 작업).
     """
-    paper_flat = _flat(paper_text)
+    paper_exp = _expand_scientific(paper_text)      # 3.64E+03 → 3640 도 검색 대상에 포함
+    paper_flat = _flat(paper_exp)
     seen: set[str] = set()
     claims: list[NumberClaim] = []
 
@@ -122,7 +172,9 @@ def verify_deck(html: str, paper_text: str) -> list[NumberClaim]:
             seen.add(tok)
             cm = _CORE.search(tok)
             core = cm.group().replace(",", "") if cm else ""
-            verified = bool(core) and (core in paper_text or core in paper_flat)
+            verified = bool(core) and (core in paper_exp or core in paper_flat)
+            if not verified:                        # 한국어 만/억 표기 → 영어/과학표기 원문과 대조
+                verified = any(r in paper_flat for r in _korean_magnitude_reprs(tok))
             claims.append(NumberClaim(
                 value=tok,
                 context=_clean_context(content, m.start(), m.end()),
@@ -247,6 +299,35 @@ def derived_claims(html: str, paper_text: str) -> list[dict]:
                     "card": card_idx,
                 })
     return results
+
+
+def _core_of(v: str) -> str:
+    m = _CORE.search(v)
+    return m.group().replace(",", "") if m else ""
+
+
+def verify_claims_with_derived(html: str, paper_text: str) -> list[NumberClaim]:
+    """V1 claims에 V2 확인을 반영한다 — 산수로 검증된 파생값은 verified로 승격.
+
+    파생값(1.7배)은 정의상 원문에 문자열로 없다(142·238에서 유도). V1이 "1.7 원문에 없음"으로
+    이걸 '확인 필요'로 세면 완벽한 덱에도 늑대야를 외친다. V2가 산수로 확인(suspect·unresolved
+    모두 아님)한 값은 확인 필요가 아니라 **우리가 검증한 값**이다.
+    """
+    confirmed_cores = {
+        _core_of(str(d["value"]))
+        for d in derived_claims(html, paper_text)
+        if not d["suspect"] and not d["unresolved"]
+    }
+    claims = verify_deck(html, paper_text)
+    for c in claims:
+        if not c.verified and _core_of(c.value) in confirmed_cores:
+            c.verified = True
+    return claims
+
+
+def compute_verify_unverified(html: str, paper_text: str) -> int:
+    """사용자에게 보일 '확인 필요' 카운트 (V2 확인 파생값 제외)."""
+    return sum(not c.verified for c in verify_claims_with_derived(html, paper_text))
 
 
 def report(claims: list[NumberClaim]) -> str:

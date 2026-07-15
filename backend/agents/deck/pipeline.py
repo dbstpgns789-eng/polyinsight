@@ -13,7 +13,7 @@ import time
 
 from ...core import db
 from ...core.config import settings
-from ...core.fidelity import derived_claims, verify_deck
+from ...core.fidelity import derived_claims, verify_claims_with_derived
 from ...core.llm_client import LLMCreditError, get_usage, start_usage_capture
 from ...core.models import JobStatus, S1Input
 from ..s1_extractor import s1_agent
@@ -43,7 +43,8 @@ def _verify_to_json(html: str, paper_text: str | None) -> tuple[str, dict]:
     if not paper_text:
         payload = {"verified": 0, "unverified": 0, "claims": [], "derived": [], "skipped": True}
         return json.dumps(payload, ensure_ascii=False), payload
-    claims = verify_deck(html, paper_text)
+    # V2가 산수로 확인한 파생값(1.7배)은 verified로 승격 — count·리스트가 일관되게(오탐 억제)
+    claims = verify_claims_with_derived(html, paper_text)
     payload = {
         "verified": sum(c.verified for c in claims),
         "unverified": sum(not c.verified for c in claims),
