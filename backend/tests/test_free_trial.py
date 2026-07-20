@@ -166,26 +166,30 @@ async def test_migrate_backfill_survives_crash_between_alter_and_update(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_migrate_backfill_keeps_real_external_users_free(tmp_path, monkeypatch):
-    """운영 DB엔 게이트 도입 전 가입한 진짜 외부 유저(hoik0822@gmail.com 등)가 섞여 있었다
-    (로컬엔 없어 안 보였음) — '기존 유저=전원 내부' 전제가 운영에서만 깨진 사례.
-    이 두 이메일은 무료체험 정상 대상이라 free로 남아야 하고, 나머지 내부 계정은 lab 그대로여야 한다."""
+async def test_migrate_backfill_maps_prod_users_by_identity(tmp_path, monkeypatch):
+    """운영 DB엔 게이트 도입 전 가입한 유저가 신원별로 섞여 있었다(로컬엔 없어 안 보였음) —
+    '기존 유저=전원 내부' 전제가 운영에서만 깨진 사례. 신원 매핑(2026-07-20 확정):
+      - hoik0822@gmail.com = 박사님·동업자 → lab(벽 면제)
+      - dhkdals14@gmail.com = 지인 → free(정상 무료체험, 벽 적용)
+      - 나머지 내부 계정(admin 등) → lab 그대로."""
     prod_db = str(tmp_path / "prod.db")
     monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{prod_db}")
     await _seed_old_users_schema(prod_db, "admin@internal")
     async with aiosqlite.connect(prod_db) as conn:
-        await conn.execute(
+        await conn.executemany(
             "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-            ("hoik0822@gmail.com", "hash", "2026-07-14T00:00:00"),
+            [
+                ("hoik0822@gmail.com", "hash", "2026-07-14T00:00:00"),   # 박사님·동업자
+                ("dhkdals14@gmail.com", "hash", "2026-07-16T00:00:00"),  # 지인
+            ],
         )
         await conn.commit()
 
     await _db.migrate()
 
-    internal = await _db.get_user_by_email("admin@internal")
-    external = await _db.get_user_by_email("hoik0822@gmail.com")
-    assert internal["plan"] == "lab"
-    assert external["plan"] == "free"
+    assert (await _db.get_user_by_email("admin@internal"))["plan"] == "lab"
+    assert (await _db.get_user_by_email("hoik0822@gmail.com"))["plan"] == "lab"   # 동업자=면제
+    assert (await _db.get_user_by_email("dhkdals14@gmail.com"))["plan"] == "free"  # 지인=벽 적용
 
 
 # ── 게이트 판정 ────────────────────────────────────────────────────────────
