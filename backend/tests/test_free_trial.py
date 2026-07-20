@@ -1,14 +1,19 @@
 """무료체험 배관 — 스키마·차감·환불·게이트."""
 from __future__ import annotations
 
+import io
+
 import aiosqlite
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException
+from httpx import ASGITransport, AsyncClient
 
 from backend.core import db as _db
 from backend.core import plans
+from backend.core.auth import get_current_user
 from backend.core.config import settings
+from backend.main import app
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -198,3 +203,90 @@ def test_gate_error_factories_match_require_responses():
     exp = plans.export_gate_error()
     assert exp.status_code == 402
     assert exp.detail["code"] == "ERR-PLAN-EXPORT"
+
+
+# ── 생성 게이트 (HTTP) ─────────────────────────────────────────────────────
+
+
+@pytest_asyncio.fixture
+async def client():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        yield c
+
+
+def _as_user(user: dict):
+    """이 유저로 로그인된 것처럼 만든다."""
+    app.dependency_overrides[get_current_user] = lambda: user
+
+
+@pytest.fixture(autouse=True)
+def _clear_overrides():
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
+
+
+def _fake_pdf() -> tuple[str, io.BytesIO, str]:
+    return ("p.pdf", io.BytesIO(b"%PDF-1.4 fake"), "application/pdf")
+
+
+@pytest.mark.asyncio
+async def test_free_user_first_upload_accepted(client, monkeypatch):
+    uid = await _mk_user("first@test")
+    user = dict(await _db.get_user_by_id(uid))
+    _as_user(user)
+    # 파이프라인은 돌리지 않는다 — 게이트만 검증
+    monkeypatch.setattr(
+        "backend.routers.deck.run_authoring_pipeline",
+        lambda *a, **k: None,
+    )
+    r = await client.post("/api/deck/upload", files={"file": _fake_pdf()})
+    assert r.status_code == 202
+    # 선차감됐나
+    assert (await _db.get_user_by_id(uid))["free_decks_used"] == 1
+
+
+@pytest.mark.asyncio
+async def test_free_user_second_upload_blocked_with_402(client):
+    uid = await _mk_user("second@test")
+    await _db.consume_free_deck(uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    r = await client.post("/api/deck/upload", files={"file": _fake_pdf()})
+    assert r.status_code == 402
+    assert r.json()["detail"]["code"] == "ERR-PLAN-AUTHOR"
+
+
+@pytest.mark.asyncio
+async def test_paid_user_upload_does_not_consume_free_counter(client, monkeypatch):
+    """유료 유저는 무료 카운터를 건드리지 않는다(no-op 반환을 실패로 오해하면 안 됨)."""
+    uid = await _mk_user("paidupload@test")
+    await _db.set_plan(uid, "pro")
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    monkeypatch.setattr(
+        "backend.routers.deck.run_authoring_pipeline",
+        lambda *a, **k: None,
+    )
+    r = await client.post("/api/deck/upload", files={"file": _fake_pdf()})
+    assert r.status_code == 202
+    assert (await _db.get_user_by_id(uid))["free_decks_used"] == 0
+
+
+@pytest.mark.asyncio
+async def test_race_loser_gets_same_402_as_read_gate(client, monkeypatch):
+    """★읽기 판정을 통과했어도 원자적 소비에서 지면 같은 402를 받아야 한다.
+
+    스냅샷(free_decks_used=0)으로 요청을 만들되 DB는 이미 소진 상태로 만들어
+    레이스에서 진 상황을 재현한다. 프론트가 한 가지 분기만 다루려면 code가 같아야 한다.
+    """
+    uid = await _mk_user("racer@test")
+    stale = dict(await _db.get_user_by_id(uid))   # free_decks_used = 0 스냅샷
+    await _db.consume_free_deck(uid)              # 그 사이 다른 요청이 먼저 소비
+    _as_user(stale)
+    monkeypatch.setattr(
+        "backend.routers.deck.run_authoring_pipeline",
+        lambda *a, **k: None,
+    )
+    r = await client.post("/api/deck/upload", files={"file": _fake_pdf()})
+    assert r.status_code == 402
+    assert r.json()["detail"]["code"] == "ERR-PLAN-AUTHOR"
+    # 카운터가 2가 되면 안 된다(뚫린 것)
+    assert (await _db.get_user_by_id(uid))["free_decks_used"] == 1

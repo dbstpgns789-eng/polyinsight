@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from ..agents.deck.deck_renderer import render_deck
 from ..agents.deck.nl_patch import apply_nl_patch
 from ..agents.deck.pipeline import compute_verify, persist_edited_deck, run_authoring_pipeline
-from ..core import db, ratelimit
+from ..core import db, plans, ratelimit
 from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
 
@@ -61,7 +61,8 @@ async def deck_upload(
 
     style_direction: 아트 디렉션(미감 방향, 선택). 비우면 모델 자유 선택.
     """
-    ratelimit.enforce_upload_quota(user)  # 유저별 일일 쿼터(미인증 낮은 상한) — 재정 DoS 차단
+    plans.require_can_author(user)         # 플랜 게이트 — 무료 1덱 상한(원가 방어)
+    ratelimit.enforce_upload_quota(user)   # 유저별 일일 쿼터(재정 DoS) — 플랜과 별개 축
     if file.content_type not in ("application/pdf", "application/octet-stream"):
         if not (file.filename or "").lower().endswith(".pdf"):
             raise HTTPException(400, detail={"code": "ERR-INP-001", "message": "PDF 파일만 업로드 가능합니다."})
@@ -72,6 +73,17 @@ async def deck_upload(
 
     # 티어 상한으로 클램프(base=Sonnet/AUTHOR_MAX_CARDS, 추후 premium 확장)
     card_count = max(3, min(card_count, settings.AUTHOR_MAX_CARDS))
+
+    # 무료 체험 선차감 — **원자적**으로 소비한다. job 생성보다 먼저 해야 한다:
+    # require_can_author는 읽은 스냅샷 기반이라 동시 요청 2건이 둘 다 통과할 수 있고
+    # (check-then-act), 실제 상한 강제는 이 UPDATE 한 문장이 담당한다. create_job **뒤에**
+    # 두면 레이스에서 진 요청이 이미 만든 job 행을 고아로 남긴다 — list_jobs/list_projects는
+    # status 필터 없이 그대로 노출하므로 대시보드에 "PENDING"이 서버 재시작 전까지 영원히
+    # 뜬다(recover_stale_jobs는 startup 1회뿐). 그래서 job_id를 만들기 전에 소비부터 한다.
+    # 파이프라인이 ERROR로 끝나면 pipeline._log_done에서 환불한다(Task 4, 아하 보장).
+    if plans.plan_of(user) == "free":
+        if not await db.consume_free_deck(user["id"], plans.FREE_DECK_LIMIT):
+            raise plans.author_gate_error()   # 레이스에서 진 요청
 
     job_id = str(uuid.uuid4())
     await db.create_job(job_id, title=file.filename, user_id=user["id"])
