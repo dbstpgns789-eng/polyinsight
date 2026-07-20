@@ -169,6 +169,33 @@ function DashboardPageInner() {
         </div>
       )}
 
+      {/* 무료 미터 — projects.length에 매이지 않는다. 덱 0개인 신규 무료 유저도
+          자기 한도("0/1")를 미리 알아야 한다(온보딩 건너뛴 유저의 유일한 안내처).
+          유료 유저는 trialLabel()이 null이라 자동으로 감춰진다. */}
+      {!loading && !error && me && trialLabel(me) && (
+        <section className="trial-meter">
+          <div className="trial-meter__left">
+            <span className="trial-meter__badge">무료 체험</span>
+            <p className="trial-meter__usage">
+              {me.freeDecksUsed}<span> / {me.freeDeckLimit} 덱 사용</span>
+            </p>
+            <div className="trial-meter__bar">
+              <i style={{ width: `${Math.min(100, (me.freeDecksUsed / me.freeDeckLimit) * 100)}%` }} />
+            </div>
+          </div>
+          <div className="trial-meter__mid">
+            <p className="trial-meter__t">
+              {me.canAuthor ? '카드뉴스 1덱을 무료로 만들어 보세요.' : '만들고 검증까지 무료로 다 봤어요.'}
+            </p>
+            <p className="trial-meter__d">
+              <strong>내보내기</strong>와 <strong>다음 카드뉴스</strong>는 업그레이드 후 이용할 수 있어요.
+              만든 덱은 그대로 보관돼요.
+            </p>
+          </div>
+          <a className="btn btn-primary" href="/upgrade">업그레이드 →</a>
+        </section>
+      )}
+
       {isEmpty && (
         <div className="dash-empty">
           <svg className="dash-empty__icon" width="52" height="52" viewBox="0 0 52 52" fill="none" aria-hidden="true">
@@ -232,30 +259,6 @@ function DashboardPageInner() {
           <p className="dash-result-count" role="status" aria-live="polite">
             {getResultCountText(filter, search, sorted.length)}
           </p>
-
-          {me && trialLabel(me) && (
-            <section className="trial-meter">
-              <div className="trial-meter__left">
-                <span className="trial-meter__badge">무료 체험</span>
-                <p className="trial-meter__usage">
-                  {me.freeDecksUsed}<span> / {me.freeDeckLimit} 덱 사용</span>
-                </p>
-                <div className="trial-meter__bar">
-                  <i style={{ width: `${Math.min(100, (me.freeDecksUsed / me.freeDeckLimit) * 100)}%` }} />
-                </div>
-              </div>
-              <div className="trial-meter__mid">
-                <p className="trial-meter__t">
-                  {me.canAuthor ? '카드뉴스 1덱을 무료로 만들어 보세요.' : '만들고 검증까지 무료로 다 봤어요.'}
-                </p>
-                <p className="trial-meter__d">
-                  <strong>내보내기</strong>와 <strong>다음 카드뉴스</strong>는 업그레이드 후 이용할 수 있어요.
-                  만든 덱은 그대로 보관돼요.
-                </p>
-              </div>
-              <a className="btn btn-primary" href="/upgrade">업그레이드 →</a>
-            </section>
-          )}
 
           <div className="dash-grid" role="list" aria-label="프로젝트 목록">
             {sorted.length === 0 ? (
