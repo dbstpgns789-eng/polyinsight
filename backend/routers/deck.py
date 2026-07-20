@@ -81,7 +81,7 @@ async def deck_upload(
     # status 필터 없이 그대로 노출하므로 대시보드에 "PENDING"이 서버 재시작 전까지 영원히
     # 뜬다(recover_stale_jobs는 startup 1회뿐). 그래서 job_id를 만들기 전에 소비부터 한다.
     # 파이프라인이 ERROR로 끝나면 pipeline._log_done에서 환불한다(Task 4, 아하 보장).
-    if plans.plan_of(user) == "free":
+    if plans.should_consume_free_deck(user):
         if not await db.consume_free_deck(user["id"], plans.FREE_DECK_LIMIT):
             raise plans.author_gate_error()   # 레이스에서 진 요청
 

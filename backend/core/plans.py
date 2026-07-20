@@ -44,6 +44,17 @@ def can_export(user: dict) -> bool:
     return plan_of(user) in PAID_PLANS
 
 
+def should_consume_free_deck(user: dict) -> bool:
+    """무료 체험 카운터를 소비해야 하는 유저인가 — 서비스 롤·유료는 제외.
+
+    can_author/can_export와 같은 면제 규칙(_is_exempt)을 재사용한다. 호출부가
+    plan_of()만 보고 이 규칙을 다시 구현하면, plan 키가 없는 서비스 유저
+    (X-Render-Token, {"id","email","role"} 3키뿐)가 "free"로 폴백돼 원자적
+    소비 블록에서 잘못 402를 맞는다 — 이 함수가 그 불변식을 한 곳에 모은다.
+    """
+    return not _is_exempt(user) and plan_of(user) not in PAID_PLANS
+
+
 def author_gate_error() -> HTTPException:
     """생성 게이트 402. 읽기 판정(require_can_author)과 원자적 소비 실패가
     같은 응답을 내야 프론트가 한 가지 분기만 다루면 된다."""
