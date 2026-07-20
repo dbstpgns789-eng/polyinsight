@@ -771,6 +771,7 @@ type DegradeCode =
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-07-19 | v2.7 | 무료체험 export-gate 게이트 계약. `users` 테이블에 `plan`/`free_decks_used`/`onboarded_at` 3컬럼 추가(§2-8 신설). 인증 API 섹션(§1-8) 신설 — `GET /api/auth/me` 응답 확장, `POST /api/auth/onboarded` 신규. 에러 코드에 `ERR-PLAN-AUTHOR`/`ERR-PLAN-EXPORT`(402) 2건 추가. |
 | 2026-07-11 | v2.6 | `deck_manifest` 테이블 추가(§2-1a) — 저작 지문(PI_MANIFEST) 저장·반복이력 소프트 주입. `GET /api/deck/:jobId`의 `verify`에 `derived[]`(V2 파생수치 검산: value·kind·suspect·unresolved·verified·context) 추가 — 구 덱엔 없음(optional). |
 | 2026-06-24 | v2.5 | `CardSlot.visual_kind?`(사진/일러스트, 에디터 전용) 추가. `image_mode`(기존 코드에 있었으나 문서 누락) 문서화. `TemplateType` 14종 전체 반영(8→14, 드리프트 수정). |
 | 2026-06-08 | v2.4 | CardEditorData에 `bg_color?`/`accent_color?` 덱 오버라이드 추가. `--theme-*` 은퇴 명시. 상세: `docs/18_card_design_system.md §3 덱 단위 오버라이드`. |
