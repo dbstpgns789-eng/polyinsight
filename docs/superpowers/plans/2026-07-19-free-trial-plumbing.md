@@ -68,6 +68,12 @@ ssh -i ~/Downloads/polyinsight_key.pem azureuser@20.210.112.15 \
 
 이 확인 없이 배포하면 되돌리기 어렵다(누가 원래 `lab`이었는지 사후에 구분 불가).
 
+### 구멍 3: 소비 성공 직후 실패하면 무료 1회가 환불 없이 소실된다
+
+업로드 라우트는 `consume_free_deck` → `create_job` → `log_event` → `background_tasks.add_task` 순서다. 이들은 **서로 다른 트랜잭션**이라, 소비가 성공한 뒤 `create_job`이나 `log_event`가 예외를 던지면 무료 1회는 이미 차감됐는데 **파이프라인이 시작조차 안 돼서 환불 훅(`_log_done`, ERROR 상태에서만 동작)을 탈 수 없다.**
+
+**의도적으로 방어하지 않았다.** `create_job`은 단순 INSERT이고 WAL + `busy_timeout=5000`이 경합을 흡수하므로, 실패하려면 DB 장애 수준이어야 한다 — 그 상황이면 요청 자체가 이미 깨져 있다. 사실상 불가능한 케이스를 방어하는 건 이 레포의 코딩 규율(Karpathy 스타일)에 어긋난다. 실제로 이 경로로 민원이 들어오면 그때 대응한다.
+
 ---
 
 ## File Structure
@@ -661,15 +667,21 @@ from ..core import db, plans, ratelimit
 `backend/routers/deck.py:77`의 `await db.create_job(...)` **바로 뒤**에 선차감을 넣는다:
 
 ```python
-    await db.create_job(job_id, title=file.filename, user_id=user["id"])
-    # 무료 체험 선차감 — **원자적**으로 소비한다.
+    # 무료 체험 선차감 — **원자적**으로 소비한다. ★create_job **앞**이다.
     # require_can_author는 읽은 스냅샷 기반이라 동시 요청 2건이 둘 다 통과할 수 있다
     # (check-then-act). 실제 상한 강제는 이 UPDATE 한 문장이 담당한다.
     # 파이프라인이 ERROR로 끝나면 pipeline._log_done에서 환불한다(아하 보장).
-    if plans.plan_of(user) == "free":
+    if plans.should_consume_free_deck(user):
         if not await db.consume_free_deck(user["id"], plans.FREE_DECK_LIMIT):
             raise plans.author_gate_error()   # 레이스에서 진 요청
+
+    job_id = str(uuid.uuid4())
+    await db.create_job(job_id, title=file.filename, user_id=user["id"])
 ```
+
+**★소비는 `create_job` 앞에 온다** (구현 중 실측으로 정정 — 초안은 뒤였다). 뒤에 두면 레이스에서 진 요청이 만든 job 행이 고아로 남는데, `db.list_jobs()`는 status 필터 없이 반환하고 `recover_stale_jobs()`는 **서버 시작 시 1회만** 돌아서 그 job이 대시보드에 **재시작 전까지 영원히 PENDING**으로 뜨고 `/projects/stats`의 draft 카운트도 오염된다. `job_id`는 uuid라 DB가 필요 없어 순서를 앞당기는 데 제약이 없다.
+
+**★`should_consume_free_deck`을 쓴다** (`plan_of(user) == "free"` 아님). 서비스 롤(`X-Render-Token`) 유저는 `plan` 키가 없어서 `plan_of()`가 `"free"`로 폴백하는데, `id=0` 행이 DB에 없으니 소비가 항상 실패해 **내부 렌더 경로가 402로 죽는다.** 면제 규칙은 `plans.py` 한 곳에만 둔다 — 그래야 Task 5·6이 같은 실수를 반복하지 않는다.
 
 **주의:** `consume_free_deck`은 `bool`을 반환한다(Task 1에서 원자적 조건부 소비로 구현됨 — `WHERE ... AND free_decks_used < ?` + `rowcount`). 유료 유저에게는 호출하지 않는다(호출해도 `False`가 나오는데 그건 실패가 아니라 no-op이라 의미가 뒤섞인다).
 
