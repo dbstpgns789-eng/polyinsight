@@ -2474,3 +2474,79 @@ h1, h2, h3, h4, h5 {
   word-break: keep-all;
   max-width: 24ch;
 }
+
+/* ─── Export 페이월 (무료체험 export-gate, 402 ERR-PLAN-EXPORT) ──────
+   순수잠금 — 워터마크·타이머·닫기숨김 없음(루트 CLAUDE.md §1). 검증을 앞세우고
+   뒤의 덱이 계속 보이도록 오버레이는 기본 모달보다 옅게. flat by default —
+   그림자는 모달 껍데기(shadow-modal)에만. 에메랄드는 eyebrow·accent 컬럼·
+   primary 버튼뿐(≤10%). */
+.paywall-overlay {
+  background: oklch(20% 0.03 163 / 0.32);
+  backdrop-filter: blur(2px) saturate(105%);
+  -webkit-backdrop-filter: blur(2px) saturate(105%);
+}
+
+.paywall { display: flex; flex-direction: column; gap: var(--s4); }
+
+.paywall__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent-hover);
+  background: var(--accent-faint);
+  padding: 5px 11px;
+  border-radius: 999px;
+}
+
+.paywall__title {
+  font-size: var(--t-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.32;
+  color: var(--text-1);
+}
+
+.paywall__split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s3);
+}
+
+.paywall__col {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--s4);
+}
+.paywall__col--accent {
+  border-color: var(--accent-subtle);
+  background: var(--accent-faint);
+}
+
+.paywall__colhead {
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
+  margin-bottom: var(--s2);
+}
+.paywall__col--accent .paywall__colhead { color: var(--accent-hover); }
+
+.paywall__col ul { display: flex; flex-direction: column; gap: 6px; }
+.paywall__col li { font-size: var(--t-sm); color: var(--text-2); line-height: 1.5; }
+.paywall__col--accent li { color: var(--text-1); }
+
+.paywall__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: var(--s2);
+}
+.paywall__actions .btn { width: 100%; justify-content: center; text-decoration: none; }
+
+@media (max-width: 380px) {
+  .paywall__split { grid-template-columns: 1fr; }
+}
