@@ -10,6 +10,12 @@
   B. 한국어 만/억 표기 — 정확한 값인데 원문은 영어/과학표기
   C. 파생값(1.7배) — V2가 산수로 확인하는 값을 V1이 겹쳐서 flag
   D. 과학표기 재표현(3,640 ← 3.64E+03)
+
+2026-07-20 실측 추가 (덱 19개·claim 232건 전수 분석, 미확인 11건 중 ~7건이 오탐):
+  E. HTML 주석 누출 — 주석 속 '->'의 '>'가 태그 정규식을 조기 종료시켜
+     레이아웃 수치(막대 너비 83.6%)가 콘텐츠로 샌다. 원문에 있을 수 없는 유령 claim.
+  F. 연도 오분류 — _UNIT에 '년'이 있어 '2017년'이 claim이 된다. 정작 맨정수 '2017'은
+     정상 제외된다(★핵심 설계 2). 한국어 단위가 자기 서지 필터를 무력화한 사례.
 """
 from backend.core.fidelity import verify_deck, compute_verify_unverified, derived_claims
 
@@ -79,3 +85,45 @@ def test_scientific_notation_in_paper_matches_plain():
     paper = "GPT-3 175B  3.64E+03 PF-days  3.14E+23 flops"
     unv = {c.value for c in verify_deck(html, paper) if not c.verified}
     assert not any("3,640" in v for v in unv)
+
+
+# ── E. HTML 주석 누출 ─────────────────────────────────────────────
+def test_html_comment_with_arrow_does_not_leak_numbers():
+    """★실측: <!-- PP 199 -> 83.6% --> 의 '->'가 <[^>]+> 를 조기 종료시켜
+    막대그래프 너비(83.6%)가 콘텐츠 텍스트로 샜다. 레이아웃 값은 주장이 아니다."""
+    html = _card('<!-- PP 199 -> 83.6% --><p>셀룰로오스 구슬 238 MPa</p>')
+    vals = {c.value for c in verify_deck(html, "cellulose beads 238 MPa")}
+    assert "83.6%" not in vals
+    assert any("238" in v for v in vals)      # 진짜 수치는 그대로 잡혀야 한다
+
+
+def test_plain_html_comment_also_stripped():
+    html = _card('<!-- 디자인 메모: 여백 12% --><p>수율 88%</p>')
+    vals = {c.value for c in verify_deck(html, "yield 88%")}
+    assert "12%" not in vals
+
+
+def test_comment_leak_does_not_inflate_unverified_count():
+    html = _card('<!-- bar 199 -> 59.7% --><p>강도 199 MPa</p>')
+    assert compute_verify_unverified(html, "strength 199 MPa") == 0
+
+
+# ── F. 연도 오분류 ────────────────────────────────────────────────
+def test_korean_year_is_not_a_claim():
+    """'2017년'은 서지·시점 표기지 정량 주장이 아니다. 맨정수 '2017'은 이미 제외되는데
+    '년'이 단위 목록에 있어서 한국어 표기만 필터를 뚫었다."""
+    html = _card("2017년에 제안된 구조가 오늘의 AI를 만들었다")
+    vals = {c.value for c in verify_deck(html, "proposed in 2017")}
+    assert "2017년" not in vals
+
+
+def test_korean_duration_is_still_a_claim():
+    """과잉 억제 금지 — 기간 '3년'은 정당한 정량 수치다(연도가 아니다)."""
+    html = _card("3년간 추적 관찰했다")
+    vals = {c.value for c in verify_deck(html, "followed for 3 years")}
+    assert "3년" in vals
+
+
+def test_bare_year_still_excluded():
+    html = _card("2017 Vaswani et al.")
+    assert "2017" not in {c.value for c in verify_deck(html, "")}

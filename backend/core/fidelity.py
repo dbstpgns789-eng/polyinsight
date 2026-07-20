@@ -33,6 +33,11 @@ class NumberClaim:
 
 _STYLE_BLOCK = re.compile(r"<style[^>]*>.*?</style>", re.S | re.I)
 _STYLE_ATTR = re.compile(r'\sstyle="[^"]*"', re.I)
+# HTML 주석 — _TAG(<[^>]+>)보다 **먼저** 제거해야 한다. 주석 안에 '>'가 있으면
+# (예: <!-- PP 199 -> 83.6% -->) _TAG가 '<!-- PP 199 ->'까지만 먹고 끊겨서
+# 남은 ' 83.6% -->'가 콘텐츠로 샌다. 저작 모델이 막대 너비를 주석으로 메모하는 습관이 있어
+# 레이아웃 수치가 유령 claim이 됐다(원문에 있을 수 없으니 영구 '확인 필요').
+_COMMENT = re.compile(r"<!--.*?-->", re.S)
 _TAG = re.compile(r"<[^>]+>")
 _WS = re.compile(r"\s+")
 
@@ -61,6 +66,10 @@ _CARD_SPLIT = re.compile(r'(?=<div[^>]+data-screen-label=)', re.I)
 
 # 서지 식별자 — 수치 주장이 아니다(arXiv ID·DOI). "소수점=수치"라는 순진한 규칙에 뚫린다.
 _IDENTIFIER = re.compile(r"^(?:\d{4}\.\d{4,5}|10\.\d{4,}(?:/|$))")   # 2005.14165 / 10.1234/...
+# 연도 — 맨정수 '2017'은 ★핵심 설계 2가 이미 거르는데 '년'이 _UNIT에 있어서 '2017년'만
+# 필터를 뚫었다(한국어 단위가 자기 서지 필터를 무력화). 4자리 연도만 표적 제외한다 —
+# '3년간 추적'처럼 기간을 뜻하는 정당한 정량 수치는 살려야 하므로 '년'을 통째로 빼지 않는다.
+_YEAR_KO = re.compile(r"^(?:19|20)\d{2}\s*년$")
 # 과학표기(3.64E+03) — 원문이 이렇게 쓰면 카드의 "3,640"과 문자열이 안 맞는다.
 _SCI = re.compile(r"(\d(?:\.\d+)?)\s*[eE]\s*([+\-]?\d+)")
 # 한국어 큰수 접미사 → 10의 지수. "1,750억"=175 billion을 영어 원문과 잇는다.
@@ -110,6 +119,7 @@ def _korean_magnitude_reprs(tok: str) -> list[str]:
 def _content_text(html: str) -> str:
     """HTML에서 CSS(스타일 블록·style 속성)를 걷어내고 콘텐츠 텍스트만 추출."""
     h = _STYLE_BLOCK.sub(" ", html)
+    h = _COMMENT.sub(" ", h)             # 주석 먼저 — '>' 품은 주석이 _TAG를 뚫는 것 차단
     h = _STYLE_ATTR.sub(" ", h)          # 인라인 style="..." (OKLCH 토큰 등) 제거 — 오탐 차단
     h = _TAG.sub(" ", h)
     return _WS.sub(" ", h).strip()
@@ -134,6 +144,8 @@ def _is_meaningful(tok: str) -> bool:
     """정량 수치(단위 또는 소수점 동반)인가. 맨정수·서지식별자(권/연도/페이지/arXiv/DOI)는 제외."""
     t = tok.strip()
     if _IDENTIFIER.match(t):        # arXiv ID·DOI — 소수점이 있어도 수치 주장이 아니다
+        return False
+    if _YEAR_KO.match(t):           # 2017년 — 시점 표기지 정량 주장이 아니다
         return False
     if "." in t:
         return True
