@@ -48,6 +48,7 @@ export modal        내보내기·다운로드 오버레이 (별도 route 없음
   (v2 시절 "upload modal" 규칙 폐기, UploadModal.tsx 삭제됨 2026-07-03)
 - Export는 **modal (React Portal)** — 별도 page 금지
 - Export preflight는 CRITICAL/unreviewed 항목에 **경고**만, 하드블록 금지 — 최종 판단은 사용자
+- **플랜 게이트는 별개 축** — 무료 플랜의 export 잠금은 하드블록이 정상(결제로 열리는 벽). fidelity 경고와 섞지 말 것
 - 이미지 슬롯은 optional — 이미지 없이 export 허용
 - Auto-save 5초 idle
 
@@ -130,7 +131,8 @@ Backend:     8000
 NEVER  @theme 블록에 hex/rgb 색상값 직접 작성
 NEVER  "빌드 성공"을 이식 완료 기준으로 삼음
 NEVER  Export를 별도 페이지로 구현 (Upload는 v3부터 페이지가 정본 — /deck/new)
-NEVER  Export에 하드블록 구현 — 경고 후 진행만 허용
+NEVER  Export에 **fidelity 하드블록** 구현 (CRITICAL 리스크·미검토 항목) — 경고 후 진행만 허용, 최종 판단은 사용자
+NEVER  **플랜 게이트**(무료체험 export 잠금)를 fidelity 경고와 같은 UI로 취급 — 전자는 의도된 벽(결제로 열림), 후자는 사용자 판단권(막으면 안 됨)
 NEVER  토큰 매핑 테이블 없이 컴포넌트 이식 시작
 ```
 
@@ -144,3 +146,4 @@ NEVER  토큰 매핑 테이블 없이 컴포넌트 이식 시작
 | 2026-05-19 | CSS 이식 | frontend/ hex 토큰을 web/ OKLCH 시스템에 직접 복사 → 브랜드 색 불일치 | 이식 전 매핑 테이블 필수. 완료 기준 = 시각 검증 |
 | 2026-06-06 | Export UX | CRITICAL 리스크 항목 CTA 하드블록 구현 → 사용자 판단권 침해, 폐기 | export는 경고 후 진행. 최종 판단은 사용자 |
 | 2026-07-03 | /deck/new 이식 | globals.css의 무계층 `*` 리셋이 @layer utilities를 항상 이겨 Tailwind 여백 클래스가 앱 전체에서 죽어 있었음 (deck 화면 초라함의 근본 원인) | 전역 리셋은 반드시 `@layer base` 안에. CSS 주석에 `*/` 포함 문자열(`p-*/m-*` 등) 금지 — 주석 조기 종료. Turbopack이 낡은 에러를 물고 있으면 `.next` 삭제 후 재기동 |
+| 2026-07-19 | 무료체험 배관 | §7 NEVER "Export 하드블록 금지"가 fidelity 축 규칙인데 문구가 일반적이라, 결제 게이트 구현이 헌법 위반처럼 보였음 | 규칙을 쓸 땐 **어느 축에 대한 금지인지** 명시한다. "하드블록 금지"는 사용자 판단권(fidelity) 이야기지 비즈니스 게이트 금지가 아니다 |

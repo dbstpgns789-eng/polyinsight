@@ -415,6 +415,40 @@ iframe editorAgent가 요소 선택 시 부여하는 **불투명 난수 id**(예
 
 ---
 
+### 1-8. 인증 API (플랜 상태)
+
+---
+
+#### `GET /api/auth/me`
+로그인한 유저의 계정·플랜 상태를 반환한다. 무료체험 게이트(§2-8 참고)가 프론트 미터·잠금·페이월을 그리는 데 쓴다.
+
+**Response** `200 OK`
+```json
+{
+  "email": "user@example.com",
+  "role": "user",
+  "emailVerified": true,
+  "plan": "free",
+  "freeDecksUsed": 0,
+  "freeDeckLimit": 1,
+  "canAuthor": true,
+  "canExport": false,
+  "onboarded": false
+}
+```
+
+---
+
+#### `POST /api/auth/onboarded`
+환영 온보딩 시청 완료를 표시한다. 멱등 — 이미 표시됐으면 기존 시각을 유지한 채 그대로 `200`.
+
+**Response** `200 OK`
+```json
+{ "ok": true }
+```
+
+---
+
 ## 2. 핵심 데이터 모델
 
 ### 2-1. Project (SQLite: `jobs` + `card_data`)
@@ -680,6 +714,25 @@ type DegradeCode =
 
 ---
 
+### 2-8. User (SQLite: `users`)
+
+계정 + 플랜 상태. `plan`/`free_decks_used`/`onboarded_at`은 무료체험 게이트(2026-07-19, export-gate
+순수잠금)를 위해 추가됐다 — §1-8 참고.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `id` | INTEGER PK | AUTOINCREMENT |
+| `email` | TEXT | UNIQUE NOT NULL |
+| `password_hash` | TEXT | 해시된 비밀번호 |
+| `role` | TEXT | 기본값 `user` |
+| `email_verified` | INTEGER | 0=미인증, 1=인증 완료 |
+| `created_at` | TEXT | ISO 8601 |
+| `plan` | TEXT | `free` \| `pro` \| `lab`. 기본값 `free` |
+| `free_decks_used` | INTEGER | 무료 체험 소진 카운터. 평생 리셋 없음(월 리셋 없음). 기본값 0 |
+| `onboarded_at` | TEXT | ISO 8601. NULL이면 환영 온보딩 미시청 |
+
+---
+
 ## 3. 에러 코드 전체 목록
 
 | 코드 | 발생 조건 | HTTP 상태 | 사용자 메시지 |
@@ -699,8 +752,18 @@ type DegradeCode =
 | `ERR-JOB-001` | jobId 없음 | 404 | "프로젝트를 찾을 수 없습니다." |
 | `ERR-JOB-002` | RUNNING 중 재시도 요청 | 409 | "이미 처리 중입니다." |
 | `ERR-DB-001` | SQLite 쓰기 실패 | 500 | "저장 중 오류가 발생했습니다. 관리자에게 문의하세요." |
+| `ERR-PLAN-AUTHOR` | 무료 체험 1덱 소진 후 추가 생성 시도 | 402 | "무료 체험 1덱을 모두 사용했어요. 업그레이드하면 계속 만들 수 있어요." |
+| `ERR-PLAN-EXPORT` | 무료 플랜에서 파일 내보내기 시도 | 402 | "내보내기는 업그레이드 후 이용할 수 있어요. 만든 카드뉴스는 그대로 보관돼요." |
 
 > `ERR-S2-001`은 파이프라인을 중단하지 않으므로 HTTP 200 응답 후 status 폴링으로 degraded 상태 확인.
+
+---
+
+> **무료체험 게이트 (2026-07-19)** — 무료 = 1덱 "보기 전용". 생성·뷰어·편집·검증 배지는 전부 열려
+> 있고(아하 = 검증 완료 배지, 이것은 게이팅 금지), 파일이 실제로 나가는 export 경로만 잠근다.
+> 뷰어의 inline 카드 이미지 경로(`/api/cards/{job}/image/{n}`, `/api/deck/{job}/cards/{n}`)는
+> 화면 표시용이므로 게이트하지 않는다. 무료 1덱은 업로드 시 선차감하고, 파이프라인이 ERROR로
+> 끝나면 환불한다 — 실패로 아하를 못 본 유저가 영구히 막히는 것을 막기 위함.
 
 ---
 
