@@ -11,7 +11,11 @@ api.interceptors.response.use(
   (err) => {
     const detail = err.response?.data?.detail
     const message = typeof detail === 'object' ? detail.message : detail
-    return Promise.reject(new Error(message || err.message))
+    // ★status/code를 보존한다 — 402(플랜 벽)와 429(브루트포스)를 구분해야 페이월을 정확히 띄운다.
+    const wrapped = new Error(message || err.message) as Error & { status?: number; code?: string }
+    wrapped.status = err.response?.status
+    if (typeof detail === 'object' && detail?.code) wrapped.code = detail.code
+    return Promise.reject(wrapped)
   }
 )
 
