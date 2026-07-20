@@ -609,3 +609,56 @@ async def test_me_onboarded_true_after_marking(client):
     _as_user(dict(await _db.get_user_by_id(uid)))
 
     assert (await client.get("/api/auth/me")).json()["onboarded"] is True
+
+
+# ── 인라인 해상도 차등 ─────────────────────────────────────────────────────
+from PIL import Image
+
+
+def _png_size(raw: bytes) -> tuple[int, int]:
+    return Image.open(io.BytesIO(raw)).size
+
+
+async def _seed_card(job_id: str, uid: int) -> tuple[int, int]:
+    """1080×1350 카드 1장을 심고 원본 크기를 돌려준다."""
+    buf = io.BytesIO()
+    Image.new("RGB", (1080, 1350), (20, 120, 90)).save(buf, format="PNG")
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    await _db.save_card_image(job_id, card_num=1, png_bytes=buf.getvalue())
+    return (1080, 1350)
+
+
+@pytest.mark.asyncio
+async def test_free_user_gets_downscaled_inline_card(client):
+    """★무료 유저는 화면용 축소본을 받는다 — 원본이 나가면 export 벽이 무의미해진다."""
+    uid = await _mk_user("smallpng@test")
+    await _seed_card("job-small", uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.get("/api/cards/job-small/image/1")
+    assert r.status_code == 200
+    w, h = _png_size(r.content)
+    assert (w, h) < (1080, 1350)
+    assert w >= 400          # 화면에서 읽을 수는 있어야 한다(아하 보호)
+
+
+@pytest.mark.asyncio
+async def test_paid_user_gets_original_inline_card(client):
+    uid = await _mk_user("bigpng@test")
+    await _db.set_plan(uid, "pro")
+    await _seed_card("job-big", uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.get("/api/cards/job-big/image/1")
+    assert _png_size(r.content) == (1080, 1350)
+
+
+@pytest.mark.asyncio
+async def test_render_service_user_gets_original(client):
+    """★렌더 서비스 유저가 축소본을 받으면 산출물 품질이 통째로 망가진다."""
+    uid = await _mk_user("svc@test")
+    await _seed_card("job-svc", uid)
+    _as_user({"id": uid, "email": "__render__", "role": "service"})
+
+    r = await client.get("/api/cards/job-svc/image/1")
+    assert _png_size(r.content) == (1080, 1350)

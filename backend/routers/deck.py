@@ -15,6 +15,7 @@ from ..agents.deck.deck_renderer import render_deck
 from ..agents.deck.nl_patch import apply_nl_patch
 from ..agents.deck.pipeline import compute_verify, persist_edited_deck, run_authoring_pipeline
 from ..core import db, plans, ratelimit
+from ..core import images as images_util
 from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
 
@@ -267,10 +268,15 @@ async def get_deck_card(job_id: str, card_num: int, user: dict = Depends(get_cur
     images = await db.get_card_images(job_id)
     png = images.get(card_num)
     if png is None:
-        # 렌더 캐시 만료(24h) 또는 미존재 → 저장된 HTML에서 자가치유 재렌더.
+        # 렌더 캐시 만료(24h) 또는 미존재 → 저장된 HTML에서 자가치유 재렌더(원본을 DB에 저장).
         png = await _heal_card_images(job_id, card_num)
     if png is None:
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "카드 이미지가 없습니다."})
+
+    # 저장은 항상 원본(위 자가치유 포함) — 응답만 무료 유저에게 축소. 순서를 바꾸면
+    # 축소본이 DB에 영구 저장돼 유료 전환 후에도 저해상도가 남는다.
+    if not plans.can_export(user):
+        png = images_util.downscale_png(png)
     return Response(content=png, media_type="image/png")
 
 
