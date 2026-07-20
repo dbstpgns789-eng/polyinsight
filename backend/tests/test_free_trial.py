@@ -531,3 +531,81 @@ async def test_service_role_export_not_gated(client):
     _as_user({"id": 0, "email": "__render__", "role": "service"})
     r = await client.get("/api/cards/job-svc/download/1")
     assert r.status_code != 402
+
+
+# ── /me 확장 · 온보딩 ──────────────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_me_exposes_plan_state(client):
+    uid = await _mk_user("me@test")
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.get("/api/auth/me")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["plan"] == "free"
+    assert body["freeDecksUsed"] == 0
+    assert body["freeDeckLimit"] == 1
+    assert body["canAuthor"] is True
+    assert body["canExport"] is False
+    assert body["onboarded"] is False
+
+
+@pytest.mark.asyncio
+async def test_me_keeps_existing_fields(client):
+    """기존 프론트 3곳이 email/role/emailVerified를 쓴다 — 깨뜨리면 안 된다."""
+    uid = await _mk_user("keep@test")
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    body = (await client.get("/api/auth/me")).json()
+    assert body["email"] == "keep@test"
+    assert body["role"] == "user"
+    assert body["emailVerified"] is False
+
+
+@pytest.mark.asyncio
+async def test_me_reflects_exhausted_free_user(client):
+    uid = await _mk_user("used@test")
+    await _db.consume_free_deck(uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    body = (await client.get("/api/auth/me")).json()
+    assert body["freeDecksUsed"] == 1
+    assert body["canAuthor"] is False
+    assert body["canExport"] is False
+
+
+@pytest.mark.asyncio
+async def test_me_paid_user_can_export(client):
+    uid = await _mk_user("mepaid@test")
+    await _db.set_plan(uid, "pro")
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    body = (await client.get("/api/auth/me")).json()
+    assert body["plan"] == "pro"
+    assert body["canAuthor"] is True
+    assert body["canExport"] is True
+
+
+@pytest.mark.asyncio
+async def test_post_onboarded_marks_and_is_idempotent(client):
+    uid = await _mk_user("onb@test")
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.post("/api/auth/onboarded")
+    assert r.status_code == 200
+    first = (await _db.get_user_by_id(uid))["onboarded_at"]
+    assert first is not None
+
+    r2 = await client.post("/api/auth/onboarded")
+    assert r2.status_code == 200
+    # 멱등 — 처음 시각을 유지한다
+    assert (await _db.get_user_by_id(uid))["onboarded_at"] == first
+
+
+@pytest.mark.asyncio
+async def test_me_onboarded_true_after_marking(client):
+    uid = await _mk_user("onbflag@test")
+    await _db.mark_onboarded(uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    assert (await client.get("/api/auth/me")).json()["onboarded"] is True
