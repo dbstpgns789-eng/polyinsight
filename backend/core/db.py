@@ -210,15 +210,19 @@ async def migrate() -> None:
         async with conn.execute("PRAGMA table_info(users)") as cur:
             ucols2 = [row[1] for row in await cur.fetchall()]
         if "plan" not in ucols2:
+            # ALTER 단독은 SQLite 오토커밋으로 즉시 durable하고, 뒤따르는 UPDATE만
+            # 트랜잭션에 남는다 — "ALTER 이후 ~ UPDATE 이전" 창에서 크래시하면 컬럼만
+            # 남고 백필 UPDATE만 유실 → 재기동 시 "plan" in ucols2가 True가 되어
+            # 이 블록이 영원히 스킵된다. 명시적 BEGIN으로 DDL까지 트랜잭션에 묶어
+            # ALTER+UPDATE를 진짜 원자 단위(둘 다 있거나 둘 다 없거나)로 만든다.
+            await conn.execute("BEGIN")
             await conn.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
             await conn.execute("UPDATE users SET plan = 'lab'")
-            # ALTER는 즉시 durable, UPDATE는 파일 끝 commit()까지 pending이면
-            # 그 사이 크래시 시 컬럼만 남고 백필 UPDATE만 유실 → 재기동 시
-            # "plan" in ucols2가 True가 되어 이 블록이 영원히 스킵된다. 즉시 커밋해 닫는다.
             await conn.commit()
         if "free_decks_used" not in ucols2:
             await conn.execute("ALTER TABLE users ADD COLUMN free_decks_used INTEGER NOT NULL DEFAULT 0")
         if "onboarded_at" not in ucols2:
+            await conn.execute("BEGIN")
             await conn.execute("ALTER TABLE users ADD COLUMN onboarded_at TEXT")
             await conn.execute("UPDATE users SET onboarded_at = ?", (_utc_now_iso(),))
             await conn.commit()

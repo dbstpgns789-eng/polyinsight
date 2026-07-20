@@ -134,6 +134,35 @@ async def test_migrate_backfills_existing_users_to_lab_and_is_idempotent(tmp_pat
     assert new_user["onboarded_at"] is None
 
 
+@pytest.mark.asyncio
+async def test_migrate_backfill_survives_crash_between_alter_and_update(tmp_path, monkeypatch):
+    """ALTER 직후~UPDATE 커밋 이전 크래시를 재현 — BEGIN으로 묶었으니 둘 다(컬럼까지) 롤백되고,
+    재기동한 migrate()가 처음부터 다시 정상 백필해야 한다(영구 스킵 없음)."""
+    crash_db = str(tmp_path / "crash.db")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{crash_db}")
+    await _seed_old_users_schema(crash_db, "crashvictim@test")
+
+    # migrate()의 BEGIN+ALTER+UPDATE를 직접 재현하되 commit 없이 close.
+    # SQLite는 crash-safe라 pending 트랜잭션 중 close(=강제종료 동치)는 통째로 롤백된다.
+    conn = await aiosqlite.connect(crash_db)
+    await conn.execute("BEGIN")
+    await conn.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
+    await conn.execute("UPDATE users SET plan = 'lab'")
+    await conn.close()
+
+    # 크래시 직후: 컬럼 자체가 없어야 한다 — UPDATE만 유실되는 게 아니라 ALTER까지 롤백됨.
+    # (이게 안 되면 BEGIN 감싸기가 무의미: 컬럼만 남아 다음 migrate()가 영원히 스킵한다)
+    async with aiosqlite.connect(crash_db) as check_conn:
+        async with check_conn.execute("PRAGMA table_info(users)") as cur:
+            cols_after_crash = [row[1] for row in await cur.fetchall()]
+    assert "plan" not in cols_after_crash
+
+    # 재기동 — migrate()가 스킵하지 않고 처음부터 다시 정상 백필해야 한다
+    await _db.migrate()
+    user = await _db.get_user_by_id(1)
+    assert user["plan"] == "lab"
+
+
 # ── 게이트 판정 ────────────────────────────────────────────────────────────
 
 
