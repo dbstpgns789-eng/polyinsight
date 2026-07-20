@@ -212,11 +212,16 @@ async def migrate() -> None:
         if "plan" not in ucols2:
             await conn.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
             await conn.execute("UPDATE users SET plan = 'lab'")
+            # ALTER는 즉시 durable, UPDATE는 파일 끝 commit()까지 pending이면
+            # 그 사이 크래시 시 컬럼만 남고 백필 UPDATE만 유실 → 재기동 시
+            # "plan" in ucols2가 True가 되어 이 블록이 영원히 스킵된다. 즉시 커밋해 닫는다.
+            await conn.commit()
         if "free_decks_used" not in ucols2:
             await conn.execute("ALTER TABLE users ADD COLUMN free_decks_used INTEGER NOT NULL DEFAULT 0")
         if "onboarded_at" not in ucols2:
             await conn.execute("ALTER TABLE users ADD COLUMN onboarded_at TEXT")
             await conn.execute("UPDATE users SET onboarded_at = ?", (_utc_now_iso(),))
+            await conn.commit()
         # L1(2026-07-09): BLOB→파일시스템. 기존 DB에 storage_key 없으면 추가(멱등).
         for _tbl in ("card_images", "exports", "deck_assets"):
             async with conn.execute(f"PRAGMA table_info({_tbl})") as cur:
@@ -913,15 +918,21 @@ async def set_email_verified(user_id: int) -> None:
         await conn.commit()
 
 
-async def consume_free_deck(user_id: int) -> None:
-    """무료 체험 1회 선차감. free 플랜에만 적용(유료는 no-op)."""
+async def consume_free_deck(user_id: int, limit: int = 1) -> bool:
+    """무료 체험 1회를 원자적으로 소비. 성공하면 True.
+
+    UPDATE 한 문장 안에서 잔여 검사까지 하므로 check-then-act 레이스가 없다
+    (동시 업로드 2건이 둘 다 통과하면 원가 방어 벽이 뚫린다).
+    free 플랜이 아니거나 잔여가 없으면 아무 것도 바꾸지 않고 False.
+    """
     async with _connect() as conn:
-        await conn.execute(
+        cur = await conn.execute(
             "UPDATE users SET free_decks_used = free_decks_used + 1 "
-            "WHERE id = ? AND plan = 'free'",
-            (user_id,),
+            "WHERE id = ? AND plan = 'free' AND free_decks_used < ?",
+            (user_id, limit),
         )
         await conn.commit()
+        return cur.rowcount > 0
 
 
 async def refund_free_deck(user_id: int) -> None:
