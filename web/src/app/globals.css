@@ -2248,3 +2248,96 @@ h1, h2, h3, h4, h5 {
   background-size: 200% 100%;
   animation: pi-shimmer-move 1.4s ease-in-out infinite;
 }
+
+/* ── /onboarding 첫 방문 환영 화면 (2026-07-20, 무료체험 배관 Task 8) ─────
+   flat by default — 그림자는 상태 변화에만(정지 상태엔 없음). 에메랄드는
+   eyebrow·step 번호·primary 버튼에만 써서 화면의 10% 이하로 유지한다. */
+.onboarding {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--gutter);
+  background: var(--bg-subtle);
+}
+.onboarding__card {
+  width: 100%;
+  max-width: 560px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: clamp(28px, 5vw, 40px);
+}
+.onboarding__eyebrow {
+  display: inline-block;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: var(--s3);
+}
+.onboarding__title {
+  font-size: clamp(1.5rem, 2vw + 1rem, 2.05rem);
+  font-weight: 800;
+  color: var(--text-1);
+  letter-spacing: -0.03em;
+  line-height: 1.32;
+  word-break: keep-all;
+  margin-bottom: var(--s5);
+}
+.onboarding__lede {
+  font-size: var(--t-base);
+  color: var(--text-2);
+  line-height: 1.75;
+  margin-bottom: var(--s8);
+}
+.onboarding__lede strong { color: var(--text-1); font-weight: 700; }
+
+.onboarding__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  margin-bottom: var(--s8);
+}
+.onboarding__steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  font-size: var(--t-sm);
+  font-weight: 500;
+  color: var(--text-2);
+}
+.onboarding__steps span {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--surface);
+  font-size: var(--t-xs);
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.onboarding__note {
+  font-size: var(--t-sm);
+  color: var(--text-2);
+  line-height: 1.65;
+  background: var(--bg-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--s4);
+  margin-bottom: var(--s8);
+}
+.onboarding__note strong { color: var(--text-1); font-weight: 700; }
+
+.onboarding__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.onboarding__actions .btn { width: 100%; }
+
+@media (max-width: 480px) {
+  .onboarding__card { padding: var(--s6); }
+}
