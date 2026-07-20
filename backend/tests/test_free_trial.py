@@ -9,10 +9,12 @@ import pytest_asyncio
 from fastapi import HTTPException
 from httpx import ASGITransport, AsyncClient
 
+from backend.agents.deck import pipeline as _pipeline
 from backend.core import db as _db
 from backend.core import plans
 from backend.core.auth import get_current_user
 from backend.core.config import settings
+from backend.core.models import JobStatus
 from backend.main import app
 
 
@@ -234,6 +236,27 @@ def test_gate_error_factories_match_require_responses():
     assert exp.detail["code"] == "ERR-PLAN-EXPORT"
 
 
+def test_should_consume_free_deck_service_role_false():
+    """plan 키가 없는 서비스 유저도 can_author와 같은 면제를 받아야 한다.
+
+    호출부가 plan_of()만 보면 plan 키 없는 서비스 유저가 "free"로 폴백돼
+    소비 블록에서 잘못 402를 맞는다 — should_consume_free_deck이 그 불변식을 보존한다.
+    """
+    u = {"id": 0, "email": "__render__", "role": "service"}
+    assert plans.should_consume_free_deck(u) is False
+
+
+def test_should_consume_free_deck_free_user_true():
+    u = {"id": 1, "plan": "free", "free_decks_used": 0}
+    assert plans.should_consume_free_deck(u) is True
+
+
+def test_should_consume_free_deck_paid_user_false():
+    for plan in ("pro", "lab"):
+        u = {"id": 1, "plan": plan, "free_decks_used": 0}
+        assert plans.should_consume_free_deck(u) is False
+
+
 # ── 생성 게이트 (HTTP) ─────────────────────────────────────────────────────
 
 
@@ -319,3 +342,62 @@ async def test_race_loser_gets_same_402_as_read_gate(client, monkeypatch):
     assert r.json()["detail"]["code"] == "ERR-PLAN-AUTHOR"
     # 카운터가 2가 되면 안 된다(뚫린 것)
     assert (await _db.get_user_by_id(uid))["free_decks_used"] == 1
+
+
+@pytest.mark.asyncio
+async def test_service_role_upload_is_not_gated(client, monkeypatch):
+    """★X-Render-Token 서비스 유저는 plan 키가 없다 — 소비 블록에서 402 맞으면 안 된다.
+
+    can_author는 면제하는데 소비 블록만 안 하면 내부 렌더 경로가 죽는다.
+    """
+    _as_user({"id": 0, "email": "__render__", "role": "service"})
+    monkeypatch.setattr(
+        "backend.routers.deck.run_authoring_pipeline",
+        lambda *a, **k: None,
+    )
+    r = await client.post("/api/deck/upload", files={"file": _fake_pdf()})
+    assert r.status_code != 402
+
+
+# ── 실패 환불 ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_failed_pipeline_refunds_the_free_deck():
+    """실패로 아하를 못 본 유저가 영구히 막히면 안 된다."""
+    uid = await _mk_user("fail@test")
+    await _db.consume_free_deck(uid)
+    job_id = "job-fail"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    await _db.update_job(job_id, status=JobStatus.ERROR, stage="AUTHOR", progress=40)
+
+    await _pipeline._log_done(job_id, uid, 0.0, 7)
+
+    assert (await _db.get_user_by_id(uid))["free_decks_used"] == 0
+
+
+@pytest.mark.asyncio
+async def test_successful_pipeline_does_not_refund():
+    uid = await _mk_user("ok@test")
+    await _db.consume_free_deck(uid)
+    job_id = "job-ok"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    await _db.update_job(job_id, status=JobStatus.DONE, stage="S8", progress=100)
+
+    await _pipeline._log_done(job_id, uid, 0.0, 7)
+
+    assert (await _db.get_user_by_id(uid))["free_decks_used"] == 1
+
+
+@pytest.mark.asyncio
+async def test_refund_does_not_touch_paid_user():
+    """유료 유저는 애초에 소비하지 않았으므로 환불도 no-op이어야 한다."""
+    uid = await _mk_user("paidfail@test")
+    await _db.set_plan(uid, "pro")
+    job_id = "job-paidfail"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    await _db.update_job(job_id, status=JobStatus.ERROR, stage="AUTHOR", progress=40)
+
+    await _pipeline._log_done(job_id, uid, 0.0, 7)
+
+    assert (await _db.get_user_by_id(uid))["free_decks_used"] == 0

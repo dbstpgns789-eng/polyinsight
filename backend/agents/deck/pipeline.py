@@ -108,6 +108,11 @@ async def run_authoring_pipeline(
 async def _log_done(job_id: str, user_id: int | None, started: float, card_count: int) -> None:
     usage = get_usage() or {}
     final = await db.get_job(job_id)
+    # 무료 체험 환불 — 실패로 끝난 잡은 선차감을 되돌린다.
+    # 저작 실패(크레딧 소진·스캔본 등)로 아하를 못 본 유저가 영구히 막히면 안 된다.
+    # refund_free_deck은 plan='free'에만 적용되고 0 하한이라 유료·중복 호출에 안전하다.
+    if user_id and final and final["status"] == JobStatus.ERROR:
+        await db.refund_free_deck(user_id)
     try:
         await db.log_event(
             "deck_pipeline_complete",
