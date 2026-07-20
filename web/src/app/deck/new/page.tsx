@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
 import { uploadDeck } from '@/lib/api'
+import { planGateKind } from '@/lib/plan'
 
 // 칩 = 영감 팔레트(선택 강제 아님). 이름은 한국어 감각어만 — 비전공자가 읽고 느낌이 와야 함.
 // 클릭 시 풀 서술이 입력창에 들어가 "말로 지시" 문법을 가르친다.
@@ -80,6 +81,12 @@ function DeckNewInner() {
       const r = await uploadDeck(file, cardCount, undefined, style.trim() || undefined)
       router.push(`/deck/${r.data.jobId}`)
     } catch (e) {
+      // 무료체험 소진(402 ERR-PLAN-AUTHOR) → 업그레이드로. 그 외 에러는 화면에 그대로 표시.
+      const kind = planGateKind(e)
+      if (kind === 'author') {
+        router.push('/upgrade?from=author')
+        return
+      }
       setError(e instanceof Error ? e.message : '업로드 실패')
       setSubmitting(false)
     }

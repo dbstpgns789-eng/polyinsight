@@ -8,6 +8,7 @@ import {
   IconTrash, IconSearch,
 } from '@/components/ui/Icons';
 import AuthGuard from '@/components/auth/AuthGuard';
+import { trialLabel, type PlanState } from '@/lib/plan';
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true';
 
@@ -71,6 +72,15 @@ function DashboardPageInner() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading]  = useState(!USE_MOCK);
   const [error, setError]      = useState('');
+  // 무료체험 게이트 — 이 레포 관례대로 컴포넌트 단위 개별 fetch (전역 상태 미도입)
+  const [me, setMe] = useState<(PlanState & { canAuthor: boolean; canExport: boolean }) | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setMe(d))
+      .catch(() => {});
+  }, []);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -223,6 +233,30 @@ function DashboardPageInner() {
             {getResultCountText(filter, search, sorted.length)}
           </p>
 
+          {me && trialLabel(me) && (
+            <section className="trial-meter">
+              <div className="trial-meter__left">
+                <span className="trial-meter__badge">무료 체험</span>
+                <p className="trial-meter__usage">
+                  {me.freeDecksUsed}<span> / {me.freeDeckLimit} 덱 사용</span>
+                </p>
+                <div className="trial-meter__bar">
+                  <i style={{ width: `${Math.min(100, (me.freeDecksUsed / me.freeDeckLimit) * 100)}%` }} />
+                </div>
+              </div>
+              <div className="trial-meter__mid">
+                <p className="trial-meter__t">
+                  {me.canAuthor ? '카드뉴스 1덱을 무료로 만들어 보세요.' : '만들고 검증까지 무료로 다 봤어요.'}
+                </p>
+                <p className="trial-meter__d">
+                  <strong>내보내기</strong>와 <strong>다음 카드뉴스</strong>는 업그레이드 후 이용할 수 있어요.
+                  만든 덱은 그대로 보관돼요.
+                </p>
+              </div>
+              <a className="btn btn-primary" href="/upgrade">업그레이드 →</a>
+            </section>
+          )}
+
           <div className="dash-grid" role="list" aria-label="프로젝트 목록">
             {sorted.length === 0 ? (
               <p className="dash-filter-empty" role="status">
@@ -232,8 +266,20 @@ function DashboardPageInner() {
               </p>
             ) : (
               sorted.map(project => (
-                <ProjectCard key={project.id} project={project} onDeleted={fetchProjects} />
+                <ProjectCard
+                  key={project.id}
+                  project={project}
+                  onDeleted={fetchProjects}
+                  exportLocked={me?.canExport === false}
+                />
               ))
+            )}
+            {me && !me.canAuthor && (
+              <a className="new-deck-card new-deck-card--locked" href="/upgrade">
+                <span className="new-deck-card__lock">🔒</span>
+                <strong>다음 카드뉴스</strong>
+                <span>무료 체험 1덱을 다 썼어요. 업그레이드하면 계속 만들 수 있어요.</span>
+              </a>
             )}
           </div>
         </>
@@ -303,7 +349,7 @@ function ProjThumb({ project }: { project: Project }) {
   );
 }
 
-function ProjectCard({ project, onDeleted }: { project: Project; onDeleted: () => void }) {
+function ProjectCard({ project, onDeleted, exportLocked }: { project: Project; onDeleted: () => void; exportLocked: boolean }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   // v3 덱 잡은 /deck, 옛 파이프라인 잡(card_data 보유)은 기존 /editor 유지
   const base = project.kind === 'deck' ? '/deck' : '/editor';
@@ -353,12 +399,22 @@ function ProjectCard({ project, onDeleted }: { project: Project; onDeleted: () =
                   <Link href={`${base}/${project.id}`} className="proj-action proj-action--primary">
                     <IconEdit size={12} />수정하기
                   </Link>
-                  <Link
-                    href={project.kind === 'deck' ? `/deck/${project.id}` : `/editor/${project.id}?export=1`}
-                    className="proj-action"
-                  >
-                    <IconDownload size={12} />다운로드
-                  </Link>
+                  {exportLocked ? (
+                    <Link
+                      href="/upgrade"
+                      className="proj-action proj-action--locked"
+                      title="업그레이드 후 다운로드할 수 있어요"
+                    >
+                      <span aria-hidden="true">🔒</span>다운로드
+                    </Link>
+                  ) : (
+                    <Link
+                      href={project.kind === 'deck' ? `/deck/${project.id}` : `/editor/${project.id}?export=1`}
+                      className="proj-action"
+                    >
+                      <IconDownload size={12} />다운로드
+                    </Link>
+                  )}
                 </>
               )}
               {project.status === 'draft' && (

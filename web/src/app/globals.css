@@ -2341,3 +2341,136 @@ h1, h2, h3, h4, h5 {
 @media (max-width: 480px) {
   .onboarding__card { padding: var(--s6); }
 }
+
+/* ── 대시보드 무료 미터 + 잠금 배지 (2026-07-20, 무료체험 배관 Task 9) ────
+   flat by default — 그림자 없음. 에메랄드는 배지·바 채움·CTA 버튼에만 써서
+   화면 비중을 10% 이하로 유지한다. 유료 유저는 trialLabel()이 null을 반환해
+   섹션 자체가 렌더되지 않는다. */
+.trial-meter {
+  display: flex;
+  align-items: center;
+  gap: var(--s6);
+  padding: var(--s5) var(--s6);
+  margin-bottom: var(--s6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.trial-meter__left {
+  flex: 0 0 auto;
+  min-width: 148px;
+}
+.trial-meter__badge {
+  display: inline-block;
+  font-size: var(--t-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  padding: 3px var(--s2);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--s2);
+}
+.trial-meter__usage {
+  font-size: var(--t-lg);
+  font-weight: 800;
+  color: var(--text-1);
+  margin-bottom: var(--s2);
+}
+.trial-meter__usage span {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--text-3);
+  margin-left: 2px;
+}
+.trial-meter__bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--bg-subtle);
+  overflow: hidden;
+}
+.trial-meter__bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  font-style: normal;
+}
+.trial-meter__mid {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.trial-meter__t {
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 2px;
+}
+.trial-meter__d {
+  font-size: var(--t-xs);
+  color: var(--text-2);
+  line-height: 1.6;
+  word-break: keep-all;
+}
+.trial-meter__d strong { color: var(--text-1); font-weight: 700; }
+
+@media (max-width: 640px) {
+  .trial-meter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--s4);
+  }
+  .trial-meter__left { min-width: 0; }
+  .trial-meter .btn { width: 100%; justify-content: center; }
+}
+
+/* 덱 카드 내보내기 잠금 — 숨기지 않고 잠금 표시로 대체(벽이 보여야 전환된다) */
+.proj-action--locked {
+  color: var(--text-3);
+  border-style: dashed;
+}
+.proj-action--locked:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-faint);
+}
+
+/* 게이트 카드 — 기존 proj-card와 같은 자리(그리드 마지막 칸)를 차지하되
+   점선 테두리로 "비어 있음/막힘"을 표현. 채워진 카드처럼 그림자는 안 준다. */
+.new-deck-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--s2);
+  min-height: 280px;
+  padding: var(--s6);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-2);
+  text-decoration: none;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.new-deck-card:hover {
+  border-color: var(--accent);
+  background: var(--accent-faint);
+}
+.new-deck-card__lock {
+  font-size: 22px;
+  line-height: 1;
+  margin-bottom: var(--s1);
+}
+.new-deck-card strong {
+  font-size: var(--t-base);
+  font-weight: 700;
+  color: var(--text-1);
+}
+.new-deck-card span:last-child {
+  font-size: var(--t-xs);
+  color: var(--text-3);
+  line-height: 1.6;
+  word-break: keep-all;
+  max-width: 24ch;
+}
