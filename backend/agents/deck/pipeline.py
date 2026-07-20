@@ -111,8 +111,12 @@ async def _log_done(job_id: str, user_id: int | None, started: float, card_count
     # 무료 체험 환불 — 실패로 끝난 잡은 선차감을 되돌린다.
     # 저작 실패(크레딧 소진·스캔본 등)로 아하를 못 본 유저가 영구히 막히면 안 된다.
     # refund_free_deck은 plan='free'에만 적용되고 0 하한이라 유료·중복 호출에 안전하다.
+    # ★환불 실패가 아래 완료 이벤트 로깅(비용 추적)을 삼키면 안 된다 — 예외를 격리한다.
     if user_id and final and final["status"] == JobStatus.ERROR:
-        await db.refund_free_deck(user_id)
+        try:
+            await db.refund_free_deck(user_id)
+        except Exception:
+            logger.exception("무료 체험 환불 실패 (job=%s, user_id=%s)", job_id, user_id)
     try:
         await db.log_event(
             "deck_pipeline_complete",

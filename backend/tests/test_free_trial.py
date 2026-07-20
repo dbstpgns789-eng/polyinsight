@@ -401,3 +401,36 @@ async def test_refund_does_not_touch_paid_user():
     await _pipeline._log_done(job_id, uid, 0.0, 7)
 
     assert (await _db.get_user_by_id(uid))["free_decks_used"] == 0
+
+
+@pytest.mark.asyncio
+async def test_refund_failure_does_not_swallow_completion_event(monkeypatch):
+    """★환불이 터져도 비용 추적 이벤트는 남아야 한다."""
+    uid = await _mk_user("refundboom@test")
+    await _db.consume_free_deck(uid)
+    job_id = "job-boom"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    await _db.update_job(job_id, status=JobStatus.ERROR, stage="AUTHOR", progress=40)
+
+    calls = []
+
+    async def _boom(_uid):
+        calls.append(_uid)
+        raise RuntimeError("db locked")
+
+    monkeypatch.setattr(_db, "refund_free_deck", _boom)
+
+    # 예외가 새어나오면 안 된다
+    await _pipeline._log_done(job_id, uid, 0.0, 7)
+
+    # 패치가 실제로 먹었는지 확인 — 안 먹으면 이 테스트는 아무것도 검증 못 한다
+    assert calls == [uid]
+    # 환불이 실패했으니 free_decks_used는 원복되지 않고 그대로 1이어야 한다
+    assert (await _db.get_user_by_id(uid))["free_decks_used"] == 1
+    # 완료 이벤트(비용 추적)는 그래도 기록됐어야 한다
+    events = await _db.list_events(limit=10)
+    matching = [
+        e for e in events
+        if e["job_id"] == job_id and e["event_type"] == "deck_pipeline_complete"
+    ]
+    assert len(matching) == 1
