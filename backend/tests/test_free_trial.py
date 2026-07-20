@@ -4,8 +4,10 @@ from __future__ import annotations
 import aiosqlite
 import pytest
 import pytest_asyncio
+from fastapi import HTTPException
 
 from backend.core import db as _db
+from backend.core import plans
 from backend.core.config import settings
 
 
@@ -125,3 +127,74 @@ async def test_migrate_backfills_existing_users_to_lab_and_is_idempotent(tmp_pat
     new_user = await _db.get_user_by_id(new_uid)
     assert new_user["plan"] == "free"
     assert new_user["onboarded_at"] is None
+
+
+# ── 게이트 판정 ────────────────────────────────────────────────────────────
+
+
+def test_free_user_with_zero_used_can_author_but_cannot_export():
+    u = {"id": 1, "plan": "free", "free_decks_used": 0}
+    assert plans.can_author(u) is True
+    assert plans.can_export(u) is False
+
+
+def test_free_user_who_used_their_deck_cannot_author():
+    u = {"id": 1, "plan": "free", "free_decks_used": 1}
+    assert plans.can_author(u) is False
+
+
+def test_paid_user_can_do_both():
+    for plan in ("pro", "lab"):
+        u = {"id": 1, "plan": plan, "free_decks_used": 99}
+        assert plans.can_author(u) is True
+        assert plans.can_export(u) is True
+
+
+def test_render_service_user_is_exempt():
+    """X-Render-Token 서비스 유저는 plan 키 자체가 없다 — KeyError 나면 렌더가 죽는다."""
+    u = {"id": 0, "email": "__render__", "role": "service"}
+    assert plans.can_author(u) is True
+    assert plans.can_export(u) is True
+
+
+def test_missing_plan_key_defaults_to_free():
+    """DB row가 아닌 dict가 들어와도 터지지 않고 보수적으로 free 취급."""
+    u = {"id": 1}
+    assert plans.can_export(u) is False
+
+
+def test_require_can_export_raises_402_with_plan_code():
+    u = {"id": 1, "plan": "free", "free_decks_used": 1}
+    with pytest.raises(HTTPException) as ei:
+        plans.require_can_export(u)
+    assert ei.value.status_code == 402
+    assert ei.value.detail["code"] == "ERR-PLAN-EXPORT"
+
+
+def test_require_can_author_raises_402_with_plan_code():
+    u = {"id": 1, "plan": "free", "free_decks_used": 1}
+    with pytest.raises(HTTPException) as ei:
+        plans.require_can_author(u)
+    assert ei.value.status_code == 402
+    assert ei.value.detail["code"] == "ERR-PLAN-AUTHOR"
+
+
+def test_require_passes_silently_when_allowed():
+    u = {"id": 1, "plan": "pro", "free_decks_used": 0}
+    plans.require_can_author(u)   # 예외 없이 통과해야 함
+    plans.require_can_export(u)
+
+
+def test_gate_error_factories_match_require_responses():
+    """읽기 판정과 원자적 소비 실패가 같은 402 응답을 내야 한다.
+
+    Task 3에서 라우트가 두 경로로 같은 벽을 만든다 — 프론트가 한 가지 분기만
+    다루려면 code/status가 동일해야 한다.
+    """
+    err = plans.author_gate_error()
+    assert err.status_code == 402
+    assert err.detail["code"] == "ERR-PLAN-AUTHOR"
+
+    exp = plans.export_gate_error()
+    assert exp.status_code == 402
+    assert exp.detail["code"] == "ERR-PLAN-EXPORT"
