@@ -84,7 +84,7 @@ async def deck_upload(
     # 파이프라인이 ERROR로 끝나면 pipeline._log_done에서 환불한다(Task 4, 아하 보장).
     if plans.should_consume_free_deck(user):
         if not await db.consume_free_deck(user["id"], plans.FREE_DECK_LIMIT):
-            raise plans.author_gate_error()   # 레이스에서 진 요청
+            raise plans.author_gate_error(user)   # 레이스에서 진 요청
 
     job_id = str(uuid.uuid4())
     await db.create_job(job_id, title=file.filename, user_id=user["id"])

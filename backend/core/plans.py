@@ -55,33 +55,43 @@ def should_consume_free_deck(user: dict) -> bool:
     return not _is_exempt(user) and plan_of(user) not in PAID_PLANS
 
 
-def author_gate_error() -> HTTPException:
+class PlanGateError(HTTPException):
+    """플랜 벽. user_id를 실어 보내 main.py의 예외 핸들러가 벽 히트 이벤트를 남긴다.
+
+    request.state에 유저를 심지 않기 때문에 예외가 직접 들고 간다.
+    """
+
+    def __init__(self, gate_kind: str, code: str, message: str, user_id: int | None = None):
+        super().__init__(status_code=402, detail={"code": code, "message": message})
+        self.gate_kind = gate_kind
+        self.user_id = user_id
+
+
+def author_gate_error(user: dict | None = None) -> PlanGateError:
     """생성 게이트 402. 읽기 판정(require_can_author)과 원자적 소비 실패가
     같은 응답을 내야 프론트가 한 가지 분기만 다루면 된다."""
-    return HTTPException(
-        status_code=402,
-        detail={
-            "code": "ERR-PLAN-AUTHOR",
-            "message": "무료 체험 1덱을 모두 사용했어요. 업그레이드하면 계속 만들 수 있어요.",
-        },
+    return PlanGateError(
+        gate_kind="author",
+        code="ERR-PLAN-AUTHOR",
+        message="무료 체험 1덱을 모두 사용했어요. 업그레이드하면 계속 만들 수 있어요.",
+        user_id=(user or {}).get("id"),
     )
 
 
-def export_gate_error() -> HTTPException:
-    return HTTPException(
-        status_code=402,
-        detail={
-            "code": "ERR-PLAN-EXPORT",
-            "message": "내보내기는 업그레이드 후 이용할 수 있어요. 만든 카드뉴스는 그대로 보관돼요.",
-        },
+def export_gate_error(user: dict | None = None) -> PlanGateError:
+    return PlanGateError(
+        gate_kind="export",
+        code="ERR-PLAN-EXPORT",
+        message="내보내기는 업그레이드 후 이용할 수 있어요. 만든 카드뉴스는 그대로 보관돼요.",
+        user_id=(user or {}).get("id"),
     )
 
 
 def require_can_author(user: dict) -> None:
     if not can_author(user):
-        raise author_gate_error()
+        raise author_gate_error(user)
 
 
 def require_can_export(user: dict) -> None:
     if not can_export(user):
-        raise export_gate_error()
+        raise export_gate_error(user)

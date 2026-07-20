@@ -683,3 +683,67 @@ def test_downscale_is_absolute_not_relative():
     assert _png_size(iu.downscale_png(_png(1080, 1350))) == (540, 675)
     # 이미 작으면 그대로 둔다(확대 금지)
     assert _png_size(iu.downscale_png(_png(400, 500))) == (400, 500)
+
+
+# ── 퍼널 이벤트 ────────────────────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_export_gate_hit_is_logged(client):
+    """★벽 히트가 기록되지 않으면 T1 트리거(벽 히트 N명)를 판정할 수 없다."""
+    uid = await _mk_user("gatelog@test")
+    job_id = "job-log"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.post(f"/api/deck/{job_id}/export")
+    assert r.status_code == 402
+
+    evts = [e for e in await _db.list_events(limit=50) if e["event_type"] == "plan_gate_hit"]
+    assert len(evts) == 1
+    assert evts[0]["user_id"] == uid
+    assert evts[0]["payload"]["kind"] == "export"
+
+
+@pytest.mark.asyncio
+async def test_author_gate_hit_is_logged(client):
+    uid = await _mk_user("gatelog2@test")
+    await _db.consume_free_deck(uid, 1)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.post("/api/deck/upload", files={"file": _fake_pdf()})
+    assert r.status_code == 402
+
+    evts = [e for e in await _db.list_events(limit=50) if e["event_type"] == "plan_gate_hit"]
+    assert evts[0]["payload"]["kind"] == "author"
+
+
+@pytest.mark.asyncio
+async def test_logging_failure_does_not_break_the_response(client, monkeypatch):
+    """로깅이 죽어도 402는 정상적으로 나가야 한다 — 계측이 제품을 막으면 안 된다."""
+    uid = await _mk_user("logfail@test")
+    job_id = "job-lf"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    async def _boom(*a, **k):
+        raise RuntimeError("events table gone")
+
+    monkeypatch.setattr(_db, "log_event", _boom)
+    r = await client.post(f"/api/deck/{job_id}/export")
+    assert r.status_code == 402
+
+
+@pytest.mark.asyncio
+async def test_plain_http_errors_are_not_logged_as_gate_hits(client):
+    """★PlanGateError 핸들러가 일반 HTTPException(404 등)을 가로채면 안 된다.
+
+    핸들러를 HTTPException 전체에 걸면 모든 에러가 plan_gate_hit로 기록된다.
+    """
+    uid = await _mk_user("notgate@test")
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    # 존재하지 않는 잡 → 404 (플랜 벽 아님)
+    r = await client.get("/api/deck/does-not-exist-xyz")
+    assert r.status_code == 404
+
+    evts = [e for e in await _db.list_events(limit=50) if e["event_type"] == "plan_gate_hit"]
+    assert len(evts) == 0
