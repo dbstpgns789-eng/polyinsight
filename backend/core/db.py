@@ -102,7 +102,10 @@ async def migrate() -> None:
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'user',
                 email_verified INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                plan TEXT NOT NULL DEFAULT 'free',
+                free_decks_used INTEGER NOT NULL DEFAULT 0,
+                onboarded_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS auth_tokens (
@@ -200,6 +203,20 @@ async def migrate() -> None:
             ucols = [row[1] for row in await cur.fetchall()]
         if "email_verified" not in ucols:
             await conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+        # 무료체험 게이트(2026-07-19) — users에 plan/free_decks_used/onboarded_at 멱등 추가.
+        # ★기존 유저 백필: 이 컬럼들이 없던 DB = 게이트 도입 전부터 쓰던 계정(내부·테스트).
+        #   전원 plan='lab'(게이트 면제) + onboarded_at=now(환영 온보딩 안 뜸)로 백필한다.
+        #   안 하면 기존 유저가 전부 무료로 강등되고 온보딩을 다시 본다.
+        async with conn.execute("PRAGMA table_info(users)") as cur:
+            ucols2 = [row[1] for row in await cur.fetchall()]
+        if "plan" not in ucols2:
+            await conn.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
+            await conn.execute("UPDATE users SET plan = 'lab'")
+        if "free_decks_used" not in ucols2:
+            await conn.execute("ALTER TABLE users ADD COLUMN free_decks_used INTEGER NOT NULL DEFAULT 0")
+        if "onboarded_at" not in ucols2:
+            await conn.execute("ALTER TABLE users ADD COLUMN onboarded_at TEXT")
+            await conn.execute("UPDATE users SET onboarded_at = ?", (_utc_now_iso(),))
         # L1(2026-07-09): BLOB→파일시스템. 기존 DB에 storage_key 없으면 추가(멱등).
         for _tbl in ("card_images", "exports", "deck_assets"):
             async with conn.execute(f"PRAGMA table_info({_tbl})") as cur:
@@ -893,6 +910,44 @@ async def invalidate_auth_tokens(user_id: int, purpose: str) -> int:
 async def set_email_verified(user_id: int) -> None:
     async with _connect() as conn:
         await conn.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))
+        await conn.commit()
+
+
+async def consume_free_deck(user_id: int) -> None:
+    """무료 체험 1회 선차감. free 플랜에만 적용(유료는 no-op)."""
+    async with _connect() as conn:
+        await conn.execute(
+            "UPDATE users SET free_decks_used = free_decks_used + 1 "
+            "WHERE id = ? AND plan = 'free'",
+            (user_id,),
+        )
+        await conn.commit()
+
+
+async def refund_free_deck(user_id: int) -> None:
+    """파이프라인 실패 시 선차감 환불. 0 아래로 내려가지 않는다."""
+    async with _connect() as conn:
+        await conn.execute(
+            "UPDATE users SET free_decks_used = MAX(0, free_decks_used - 1) "
+            "WHERE id = ? AND plan = 'free'",
+            (user_id,),
+        )
+        await conn.commit()
+
+
+async def set_plan(user_id: int, plan: str) -> None:
+    async with _connect() as conn:
+        await conn.execute("UPDATE users SET plan = ? WHERE id = ?", (plan, user_id))
+        await conn.commit()
+
+
+async def mark_onboarded(user_id: int) -> None:
+    """환영 온보딩 시청 표시. 이미 표시됐으면 시각을 덮어쓰지 않는다(멱등)."""
+    async with _connect() as conn:
+        await conn.execute(
+            "UPDATE users SET onboarded_at = ? WHERE id = ? AND onboarded_at IS NULL",
+            (_utc_now_iso(), user_id),
+        )
         await conn.commit()
 
 
