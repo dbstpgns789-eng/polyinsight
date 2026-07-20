@@ -434,3 +434,77 @@ async def test_refund_failure_does_not_swallow_completion_event(monkeypatch):
         if e["job_id"] == job_id and e["event_type"] == "deck_pipeline_complete"
     ]
     assert len(matching) == 1
+
+
+# ── export 게이트 ──────────────────────────────────────────────────────────
+@pytest.mark.asyncio
+async def test_free_user_export_blocked_with_402(client):
+    uid = await _mk_user("noexport@test")
+    job_id = "job-x"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.post(f"/api/deck/{job_id}/export")
+    assert r.status_code == 402
+    assert r.json()["detail"]["code"] == "ERR-PLAN-EXPORT"
+
+
+@pytest.mark.asyncio
+async def test_free_user_single_card_download_blocked(client):
+    """★우회 구멍 — 단일 카드 첨부 다운로드도 막혀야 한다."""
+    uid = await _mk_user("nocard@test")
+    job_id = "job-y"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.get(f"/api/cards/{job_id}/download/1")
+    assert r.status_code == 402
+
+
+@pytest.mark.asyncio
+async def test_free_user_can_still_view_card_inline(client):
+    """★순수잠금 = 다 보이되 못 가져감. 뷰어 표시 경로는 402가 아니어야 한다.
+
+    이미지가 아직 없으니 404가 정상 — 중요한 건 402가 아니라는 것.
+    여기에 게이트를 걸면 무료 유저 뷰어가 빈 화면이 되고 아하가 죽는다.
+    """
+    uid = await _mk_user("canview@test")
+    job_id = "job-z"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.get(f"/api/cards/{job_id}/image/1")
+    assert r.status_code != 402
+
+
+@pytest.mark.asyncio
+async def test_free_user_can_still_view_deck_card(client):
+    """★뷰어 카드 피드도 열려 있어야 한다(get_deck_card)."""
+    uid = await _mk_user("canviewdeck@test")
+    job_id = "job-zz"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.get(f"/api/deck/{job_id}/cards/1")
+    assert r.status_code != 402
+
+
+@pytest.mark.asyncio
+async def test_paid_user_export_not_blocked_by_plan(client):
+    """유료는 플랜 게이트를 통과한다(그 뒤 단계에서 404가 나는 건 무방)."""
+    uid = await _mk_user("paidexp@test")
+    await _db.set_plan(uid, "pro")
+    job_id = "job-p"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.post(f"/api/deck/{job_id}/export")
+    assert r.status_code != 402
+
+
+@pytest.mark.asyncio
+async def test_service_role_export_not_gated(client):
+    """★내부 렌더(X-Render-Token)는 면제 — 자가치유 재렌더가 죽으면 안 된다."""
+    _as_user({"id": 0, "email": "__render__", "role": "service"})
+    r = await client.get("/api/cards/job-svc/download/1")
+    assert r.status_code != 402

@@ -34,7 +34,10 @@ async def use_memory_db(tmp_path, monkeypatch):
     from backend.core import ratelimit
     ratelimit.reset_all()
     await _db.migrate()
-    app.dependency_overrides[get_current_user] = lambda: {"id": 1, "email": "test@test", "role": "user"}
+    # plan='lab' — 이 스위트는 플랜 게이트가 아니라 API 동작을 검증한다(게이트 테스트는 test_free_trial.py).
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": 1, "email": "test@test", "role": "user", "plan": "lab", "free_decks_used": 0,
+    }
     yield
     app.dependency_overrides.pop(get_current_user, None)
 
@@ -531,7 +534,10 @@ async def test_get_deck_asset_public_no_auth(client):
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "image/png"
     finally:
-        app.dependency_overrides[get_current_user] = lambda: {"id": 1, "email": "test@test", "role": "user"}
+        # plan='lab' — 이 스위트는 플랜 게이트가 아니라 API 동작을 검증한다(게이트 테스트는 test_free_trial.py).
+        app.dependency_overrides[get_current_user] = lambda: {
+            "id": 1, "email": "test@test", "role": "user", "plan": "lab", "free_decks_used": 0,
+        }
 
 
 @pytest.mark.asyncio

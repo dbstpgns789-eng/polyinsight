@@ -277,6 +277,7 @@ async def get_deck_card(job_id: str, card_num: int, user: dict = Depends(get_cur
 @router.post("/deck/{job_id}/export")
 async def export_deck(job_id: str, user: dict = Depends(get_current_user)):
     """저장된 카드 PNG + HTML + 검증 결과를 ZIP으로. 다운로드는 /api/export/{id}/download 재사용."""
+    plans.require_can_export(user)
     await require_owned_job(job_id, user)
     deck = await db.get_authored_deck(job_id)
     if deck is None:
