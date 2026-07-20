@@ -165,6 +165,29 @@ async def test_migrate_backfill_survives_crash_between_alter_and_update(tmp_path
     assert user["plan"] == "lab"
 
 
+@pytest.mark.asyncio
+async def test_migrate_backfill_keeps_real_external_users_free(tmp_path, monkeypatch):
+    """운영 DB엔 게이트 도입 전 가입한 진짜 외부 유저(hoik0822@gmail.com 등)가 섞여 있었다
+    (로컬엔 없어 안 보였음) — '기존 유저=전원 내부' 전제가 운영에서만 깨진 사례.
+    이 두 이메일은 무료체험 정상 대상이라 free로 남아야 하고, 나머지 내부 계정은 lab 그대로여야 한다."""
+    prod_db = str(tmp_path / "prod.db")
+    monkeypatch.setattr(settings, "DATABASE_URL", f"sqlite:///{prod_db}")
+    await _seed_old_users_schema(prod_db, "admin@internal")
+    async with aiosqlite.connect(prod_db) as conn:
+        await conn.execute(
+            "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
+            ("hoik0822@gmail.com", "hash", "2026-07-14T00:00:00"),
+        )
+        await conn.commit()
+
+    await _db.migrate()
+
+    internal = await _db.get_user_by_email("admin@internal")
+    external = await _db.get_user_by_email("hoik0822@gmail.com")
+    assert internal["plan"] == "lab"
+    assert external["plan"] == "free"
+
+
 # ── 게이트 판정 ────────────────────────────────────────────────────────────
 
 

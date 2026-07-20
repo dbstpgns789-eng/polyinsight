@@ -218,6 +218,12 @@ async def migrate() -> None:
             await conn.execute("BEGIN")
             await conn.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
             await conn.execute("UPDATE users SET plan = 'lab'")
+            # ★운영 DB엔 게이트 도입 전에 가입한 실제 외부 유저가 섞여 있다(로컬엔 없다).
+            #   위 일괄 lab은 '기존=내부' 전제인데 그 전제가 운영에서만 깨진다.
+            #   이 둘은 정상 무료체험 대상이므로 free로 되돌린다(2026-07-20 사용자 결정).
+            await conn.execute(
+                "UPDATE users SET plan = 'free' WHERE email IN ('hoik0822@gmail.com','dhkdals14@gmail.com')"
+            )
             await conn.commit()
         if "free_decks_used" not in ucols2:
             await conn.execute("ALTER TABLE users ADD COLUMN free_decks_used INTEGER NOT NULL DEFAULT 0")
