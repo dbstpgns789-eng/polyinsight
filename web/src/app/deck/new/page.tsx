@@ -153,6 +153,13 @@ function DeckNewInner() {
           </>
         )}
 
+        {/* 미발표 원고를 올릴지 망설이는 순간이 여기다 — 처리방침을 읽지 않는 사람에게도 보여야 한다 */}
+        <p className="text-[12.5px] text-ink-3 mt-2 text-center leading-relaxed">
+          올린 논문은 카드뉴스를 만드는 데만 쓰이고 <strong className="font-semibold text-ink-2">AI 학습에는 사용되지 않습니다.</strong>{' '}
+          언제든 직접 삭제할 수 있습니다.{' '}
+          <a href="/privacy" className="underline underline-offset-2 hover:text-ink-2">처리방침</a>
+        </p>
+
         {/* 아트디렉터에게 한마디 */}
         <div className="bg-canvas border border-border rounded-[20px] p-6 mt-4" style={cardShadow}>
           <div className="flex items-baseline gap-2 mb-1.5">

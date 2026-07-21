@@ -117,21 +117,21 @@ export default function Home() {
                 논문 읽는 시간은 그대로.<br /><span className="hi">알리는 시간은 1/10</span>로.
               </h1>
               <p className="hero__sub">
-                PDF 하나를 올리면 AI가 원문 근거만으로 카드뉴스를 만듭니다.
-                모든 수치는 논문 원문에서 검증되고, 편집 가능한 형태로 제공됩니다.
+                PDF 하나를 올리면 원문 근거만으로 카드뉴스 초안을 만듭니다.
+                카드에 쓰인 모든 수치를 논문 원문과 대조해, 확인 결과를 함께 보여줍니다.
               </p>
               <div className="hero__actions hero__actions--row">
                 <a href="/dashboard" className="btn btn-primary btn-lg">카드뉴스 만들러 가기</a>
                 <a href="#how-it-works" className="btn btn-ghost btn-lg">작동 방식 보기</a>
               </div>
               <p className="hero__trust">
-                <span className="hero__trust-mark">✓ 원문 검증</span> 지어내지 않습니다. 논문이 근거입니다.
+                <span className="hero__trust-mark">✓ 원문 대조</span> 숫자 하나까지 원문과 맞춰봅니다. 확인 안 되면 표시합니다.
               </p>
             </div>
 
             <div className="hero__visual" aria-hidden="true">
               <div className="hero-stage">
-                <div className="hero-fstat"><b>6.8%</b><span>평균 저장률 (예시)</span></div>
+                <div className="hero-fstat"><b>3~7장</b><span>논문 1편 → 카드 1세트</span></div>
                 <div className="hero-card hero-card--a"><img src="/cards/attn_05.png" alt="" /></div>
                 <div className="hero-card hero-card--b"><img src="/cards/bert_03.png" alt="" /></div>
                 <div className="hero-card hero-card--c"><img src="/cards/attn_01.png" alt="" /></div>
@@ -223,10 +223,10 @@ export default function Home() {
             <div className="moat__card reveal">
               <div className="moat__lead">
                 <span className="moat__chip">우리만의 해자</span>
-                <h2 id="moat-title" className="moat__title">AI가 지어내지 않습니다.<br />원문이 근거입니다.</h2>
-                <p className="moat__desc">모든 수치와 주장에 논문 근거 배지가 붙습니다. 카드에 적힌 숫자가 원문 몇 페이지에서 왔는지 바로 확인됩니다.</p>
+                <h2 id="moat-title" className="moat__title">숫자 하나까지<br />원문과 맞춰봅니다.</h2>
+                <p className="moat__desc">카드에 쓰인 모든 수치를 논문 원문과 대조합니다. 어느 페이지에서 왔는지 바로 확인되고, <strong>대조에서 확인되지 않은 수치는 숨기지 않고 따로 표시합니다.</strong></p>
                 <div className="moat__stats">
-                  <div className="moat__stat moat__stat--g"><b>98.4%</b><span>수치 원문 일치율 (예시)</span></div>
+                  <div className="moat__stat moat__stat--g"><b>전 수치</b><span>원문 대조 · 미확인은 표시</span></div>
                   <div className="moat__stat moat__stat--w"><b>p.단위</b><span>페이지까지 추적</span></div>
                 </div>
               </div>
