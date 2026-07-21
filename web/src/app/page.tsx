@@ -327,6 +327,39 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ─── FAQ ─── */}
+        <section className="section section--surface" id="faq" aria-labelledby="faq-title">
+          <div className="container faq">
+            <h2 id="faq-title" className="section__title reveal">올리기 전에, 궁금한 것들</h2>
+            <div className="faq__list reveal reveal-delay-1">
+              <details className="faq__item">
+                <summary className="faq__q">어떤 논문을 올릴 수 있나요?</summary>
+                <p className="faq__a">PDF 형식의 학술 논문이면 됩니다. 분야 제한은 없고, 표·수치가 많은 실험 논문에 특히 잘 맞습니다. 텍스트가 살아 있는 PDF가 가장 정확하며, 스캔본(이미지 PDF)도 텍스트 추출을 시도합니다.</p>
+              </details>
+              <details className="faq__item">
+                <summary className="faq__q">만든 내용이 정확한가요? AI가 지어낸 건 아닌가요?</summary>
+                <p className="faq__a">카드에 쓰인 모든 수치를 논문 원문과 대조하고, 확인되지 않은 값은 따로 표시합니다. 없는 내용을 지어내지 않는 것이 이 서비스의 핵심입니다. 다만 원문 자체에 오류가 있을 수 있어, 게시 전 최종 확인은 직접 해주세요.</p>
+              </details>
+              <details className="faq__item">
+                <summary className="faq__q">얼마나 걸리나요?</summary>
+                <p className="faq__a">보통 2~3분입니다. 논문을 분석하고, 카드뉴스를 저작하고, 모든 수치를 원문과 대조한 뒤 이미지로 만드는 과정이 포함됩니다.</p>
+              </details>
+              <details className="faq__item">
+                <summary className="faq__q">올린 논문은 안전한가요?</summary>
+                <p className="faq__a">올린 논문은 카드뉴스를 만드는 데만 쓰이고 AI 학습에는 사용되지 않습니다. 언제든 직접 삭제할 수 있으며, 자세한 내용은 <a href="/privacy">개인정보 처리방침</a>에서 확인할 수 있습니다.</p>
+              </details>
+              <details className="faq__item">
+                <summary className="faq__q">결과를 수정할 수 있나요?</summary>
+                <p className="faq__a">네. 생성된 카드뉴스는 초안이며, 화면에서 문구·색·배치를 직접 고칠 수 있습니다. 원문에서 확인되지 않은 수치는 따로 표시되니, 게시 전에 검토하세요.</p>
+              </details>
+              <details className="faq__item">
+                <summary className="faq__q">무료로 어디까지 쓸 수 있나요?</summary>
+                <p className="faq__a">카드뉴스 1편을 무료로 만들어 생성·검증·편집까지 모두 볼 수 있습니다. 완성한 파일을 내보내는 것은 업그레이드 후 이용할 수 있으며, 만든 카드뉴스는 그대로 보관됩니다.</p>
+              </details>
+            </div>
+          </div>
+        </section>
+
         {/* ─── CTA ─── */}
         <section className="section section--dark cta-section" aria-labelledby="cta-title">
           <div className="container cta__inner">
