@@ -62,6 +62,18 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = False         # 프로덕션(HTTPS/터널)에서 True
     RENDER_TOKEN: str = ""              # 내부 렌더(Playwright) 서비스 우회 토큰. 프로덕션 필수.
 
+    # ── 스캔본 OCR (2026-07-21) — 텍스트 레이어 없는 PDF 폴백 ──────────
+    # 정상 추출(pymupdf4llm)이 단어를 거의 못 뽑으면(=스캔) fitz 내장 Tesseract로 재추출한다.
+    # 로컬 Tesseract라 비용 0·서버 밖 안 나감(미발표 논문 안전). 스캔일 때만 발동 → 정상 논문 무영향.
+    # ★엔진(Tesseract)은 PyMuPDF에 번들. 필요한 건 언어데이터뿐 → Docker에 tesseract-ocr-kor/eng.
+    OCR_ENABLED: bool = True
+    OCR_LANGUAGE: str = "kor+eng"       # 국내 학회지(국문)+영문 논문
+    OCR_DPI: int = 200                  # 200이 정확도/속도 균형(150은 작은 글자 뭉갬)
+    # 페이지 상한 — 스캔 OCR은 페이지당 1~3초라 대용량은 오래 걸린다. 게다가 180k자(Opus 61%)를
+    # 넘으면 어차피 source_trim이 중간을 생략한다. 이 지점을 넘는 뒤 페이지는 OCR하지 않고 로그로 알린다.
+    OCR_MAX_PAGES: int = 50
+    OCR_TESSDATA: str = ""              # 언어데이터 경로. 비우면 TESSDATA_PREFIX 환경변수 사용.
+
     # ── CORS (2026-07-02) — 쉼표구분 오리진. 비우면 개발용 로컬만 허용. 프로덕션=터널 도메인. ──
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
