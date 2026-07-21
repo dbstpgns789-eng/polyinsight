@@ -71,6 +71,12 @@ export const nlProposeDeck = (
 export const exportDeck = (jobId: string) =>
   api.post(`/deck/${jobId}/export`, {}, { timeout: 120_000 })
 
+// Phase 0 반자동 발행 — 계약면(스펙 2026-07-21). 실행 세션이 lazy+캐시로 생성.
+// 첫 GET은 생성(수 초), 이후는 캐시. regen=true면 재생성(백엔드가 cap).
+export interface DeckCaption { caption: string; hashtags: string[] }
+export const getDeckCaption = (jobId: string, regen = false) =>
+  api.get<DeckCaption>(`/deck/${jobId}/caption${regen ? '?regen=1' : ''}`, { timeout: 60_000 })
+
 // v: 편집 저장 후 재렌더된 PNG 캐시 무력화용 버전(보통 updatedAt/저장 카운트).
 export const getDeckCardUrl = (jobId: string, cardNum: number, v?: number | string) =>
   `/api/deck/${jobId}/cards/${cardNum}${v != null ? `?v=${v}` : ''}`
