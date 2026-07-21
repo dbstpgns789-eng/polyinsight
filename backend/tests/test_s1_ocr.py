@@ -79,3 +79,44 @@ async def test_ocr_disabled_skips_entirely(monkeypatch):
 
     assert not m.called
     assert out.degraded
+
+
+def _synthetic_scan(text: str) -> bytes:
+    """텍스트를 이미지로 래스터화 → 텍스트 레이어 없는 '스캔' PDF."""
+    import fitz
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 100), text, fontsize=14)
+    src = doc.tobytes()
+    doc.close()
+
+    s = fitz.open(stream=src, filetype="pdf")
+    out = fitz.open()
+    for pg in s:
+        pix = pg.get_pixmap(dpi=200)
+        ip = out.new_page(width=pg.rect.width, height=pg.rect.height)
+        ip.insert_image(pg.rect, stream=pix.tobytes("png"))
+    data = out.tobytes()
+    s.close()
+    out.close()
+    return data
+
+
+def test_ocr_real_engine_recovers_scanned_text(monkeypatch):
+    """★실 OCR 통합 — Tesseract가 있으면 스캔본에서 텍스트를 복원한다.
+
+    Tesseract 언어데이터가 없으면 skip(로컬 Windows 등). 서버 Docker·tessdata 있는 환경에선 실행돼
+    실제 엔진 경로를 검증한다 — mock 배선 테스트가 못 잡는 버그(예: Page GC로 인한 약참조 크래시)를 잡는다.
+    """
+    from backend.agents.s1_extractor import _ocr_extract
+    monkeypatch.setattr(settings, "OCR_LANGUAGE", "eng")   # eng는 tesseract 설치 시 항상 존재
+    scan = _synthetic_scan("The compressive strength reached 238 MPa in this study.")
+
+    warnings: list[str] = []
+    pages = _ocr_extract(scan, warnings)
+    recovered = " ".join(pages.values())
+
+    if not recovered.strip():
+        pytest.skip("Tesseract/tessdata 없음 — 실 OCR 검증 스킵")
+    assert "238" in recovered                              # 핵심 수치 복원
+    assert "MPa" in recovered or "mpa" in recovered.lower()

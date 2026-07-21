@@ -36,11 +36,12 @@ def _ocr_extract(pdf_bytes: bytes, warnings: list[str]) -> dict[int, str]:
         if n > cap:
             warnings.append(f"S1: OCR {cap}p까지만 (전체 {n}p) — 뒤 페이지는 스캔 OCR 안 함(길이 제한)")
         for i in range(min(n, cap)):
-            tp = doc[i].get_textpage_ocr(
-                flags=0, language=settings.OCR_LANGUAGE, dpi=settings.OCR_DPI,
+            page = doc[i]                        # ★한 Page 객체로 고정 — doc[i]를 두 번 부르면
+            tp = page.get_textpage_ocr(          #   서로 다른 Page가 생겨 textpage가 GC된 쪽을
+                flags=0, language=settings.OCR_LANGUAGE, dpi=settings.OCR_DPI,  # 약참조→"no longer exists"
                 full=True, tessdata=tessdata,
             )
-            page_map[i + 1] = _clean_text(doc[i].get_text(textpage=tp))
+            page_map[i + 1] = _clean_text(page.get_text(textpage=tp))
     except Exception as exc:                     # Tesseract 데이터 없음·엔진 오류 등
         logger.warning("S1: OCR failed (%s) — degraded로 폴백", exc)
         warnings.append(f"S1: OCR 사용 불가 -- {exc}")
