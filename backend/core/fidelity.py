@@ -76,6 +76,175 @@ _SCI = re.compile(r"(\d(?:\.\d+)?)\s*[eE]\s*([+\-]?\d+)")
 _KO_MAG = {"조": 12, "억": 8, "만": 4}
 
 
+# ── 대조 계층: 추출 → 정규화 → 수치 동등 비교 (스펙 2026-07-20) ────────────────
+# 기존 `core in paper_text`(정규화 없는 substring)는 양방향으로 틀렸다:
+#   오탐 — 0.0001mm↔100nm(단위), 1.63↔1.626(반올림), 99.7%←100−0.32(파생)
+#   미탐 — "5배"의 core "5"가 원문 아무 곳의 5에 걸려 통과 (근거 없는 주장이 배지를 닮)
+# 해결: 양쪽에서 (수치, 단위)를 뽑아 SI 접두어를 걷어내고 **차원**을 남긴 뒤 수치로 비교한다.
+# 차원 대조는 substring에 없던 **엄격함**이다(질량 주장이 압력 수치로 검증될 수 없다).
+
+# 단위 → (차원, 기준단위 환산계수). 무차원(%·배·개…)은 자기 자신이 차원이다.
+_DIM: dict[str, tuple[str, float]] = {
+    "Å": ("m", 1e-10), "nm": ("m", 1e-9), "μm": ("m", 1e-6), "µm": ("m", 1e-6),
+    "um": ("m", 1e-6), "mm": ("m", 1e-3), "cm": ("m", 1e-2), "km": ("m", 1e3),
+    "pg": ("g", 1e-12), "ng": ("g", 1e-9), "μg": ("g", 1e-6), "µg": ("g", 1e-6),
+    "mg": ("g", 1e-3), "g": ("g", 1.0), "kg": ("g", 1e3),
+    "μL": ("L", 1e-6), "µL": ("L", 1e-6), "mL": ("L", 1e-3), "ml": ("L", 1e-3),
+    "dL": ("L", 1e-1), "L": ("L", 1.0),
+    "Pa": ("Pa", 1.0), "kPa": ("Pa", 1e3), "MPa": ("Pa", 1e6), "GPa": ("Pa", 1e9),
+    "bar": ("Pa", 1e5),
+    "pM": ("M", 1e-12), "nM": ("M", 1e-9), "μM": ("M", 1e-6), "µM": ("M", 1e-6),
+    "mM": ("M", 1e-3), "M": ("M", 1.0),
+    "μmol": ("mol", 1e-6), "µmol": ("mol", 1e-6), "mmol": ("mol", 1e-3), "mol": ("mol", 1.0),
+    "μV": ("V", 1e-6), "µV": ("V", 1e-6), "mV": ("V", 1e-3), "V": ("V", 1.0), "kV": ("V", 1e3),
+    "nA": ("A", 1e-9), "μA": ("A", 1e-6), "µA": ("A", 1e-6), "mA": ("A", 1e-3), "A": ("A", 1.0),
+    "ns": ("s", 1e-9), "μs": ("s", 1e-6), "µs": ("s", 1e-6), "ms": ("s", 1e-3),
+    "min": ("s", 60.0), "h": ("s", 3600.0), "시간": ("s", 3600.0),
+    "Hz": ("Hz", 1.0), "kHz": ("Hz", 1e3), "MHz": ("Hz", 1e6),
+    "Da": ("Da", 1.0), "kDa": ("Da", 1e3),
+    "%": ("%", 1.0), "%p": ("%", 1.0), "‰": ("%", 0.1),
+    "배": ("배", 1.0), "점": ("점", 1.0), "개": ("개", 1.0), "층": ("층", 1.0),
+    "일": ("일", 1.0), "주": ("주", 1.0), "개월": ("개월", 1.0), "년": ("년", 1.0),
+    "rpm": ("rpm", 1.0), "℃": ("℃", 1.0), "°C": ("℃", 1.0), "Ω": ("Ω", 1.0),
+}
+# 크기 어휘 — 단위가 아니라 **배율**이다. 무차원 수를 키운다(1,750억 ↔ 175 billion).
+_MAG = {"만": 1e4, "억": 1e8, "조": 1e12,
+        "thousand": 1e3, "million": 1e6, "billion": 1e9, "trillion": 1e12}
+_UNIT_ALT = "|".join(sorted((*_DIM, *_MAG), key=len, reverse=True))
+# 원문 토큰: 숫자(콤마·과학표기) + 선택 ±오차 + 선택 크기어휘 + 선택 단위(복합 /cm² 허용).
+# ★±오차를 건너뛰어야 뒤따르는 단위가 붙는다("1.626 ± 0.16 μg/cm2" → 1.626 [g/cm2]).
+# ★대소문자 구분(re.I 금지) — 단위는 케이스가 의미다(mM≠mm, M≠m). re.I를 켜면
+#   단위 'A'(암페어)가 영문 관사 'a'에 매칭돼 오추출·KeyError가 난다.
+# ±오차(err)는 캡처한다 — 원문 "142 ± 22 MPa"에서 카드가 "±22 MPa"를 표시하므로 22도 fact여야 한다.
+_MEASURE = re.compile(
+    r"(?P<num>[+\-−]?\d[\d,]*(?:\.\d+)?)(?:\s*[eE]\s*(?P<sci>[+\-]?\d+))?"
+    r"(?:\s*±\s*(?P<err>\d[\d,]*(?:\.\d+)?))?"
+    r"(?:\s*(?P<mag>" + "|".join(_MAG) + r"))?"
+    r"(?:\s*(?P<unit>" + _UNIT_ALT + r")(?P<tail>(?:\s?/\s?[A-Za-zμµ0-9²³]+)|[²³])?(?![A-Za-z]))?",
+)
+
+
+def _norm_sup(s: str) -> str:
+    return s.replace("²", "2").replace("³", "3")
+
+
+def _dim_factor(unit: str | None, tail: str | None) -> tuple[str, float]:
+    """(차원, 기준단위 환산계수). 단위 없음/미등록 → 무차원."""
+    du = _DIM.get(unit) if unit else None
+    if du is None:
+        return "", 1.0
+    dim, factor = du
+    if tail:                                  # 복합 단위: 분자만 환산, 나머지는 차원 꼬리표
+        dim = dim + _norm_sup(_WS.sub("", tail))
+    return dim, factor
+
+
+def _parse_measure(text: str, m: "re.Match[str]") -> tuple[float, str, float, int] | None:
+    """매치 → (기준단위 환산값, 차원, 표시값, 표시 소수자리). 파싱 불가면 None.
+
+    표시 소수자리는 허용오차 밴드를 정한다 — 관대함의 근거는 '유저가 화면에서 본 자릿수'다.
+    """
+    raw = m.group("num")
+    try:
+        val = float(raw.replace(",", "").replace("−", "-"))
+    except (ValueError, TypeError):
+        return None
+    if m.group("sci"):
+        val *= 10 ** int(m.group("sci"))
+    decimals = len(raw.split(".")[1]) if "." in raw else 0
+    display = val
+    mag = m.group("mag")
+    if mag:                                   # 크기 어휘는 배율(차원 아님)
+        val *= _MAG.get(mag) or _MAG.get(mag.lower(), 1.0)
+        return val, "", display, decimals
+    dim, factor = _dim_factor(m.group("unit"), m.group("tail"))
+    return val * factor, dim, display, decimals
+
+
+def _paper_facts(text: str) -> list[tuple[float, str]]:
+    """원문에서 (환산값, 차원) 목록. 덱당 1회 추출해 재사용한다.
+
+    ±오차도 별도 fact로 뽑는다 — "142 ± 22 MPa"에서 카드가 "±22 MPa"를 표시하면 22도 대조돼야 한다.
+    """
+    out: list[tuple[float, str]] = []
+    for m in _MEASURE.finditer(text):
+        p = _parse_measure(text, m)
+        if not p:
+            continue
+        out.append((p[0], p[1]))
+        err = m.group("err")
+        if err and not m.group("mag"):        # 오차값 + (본값의) 단위
+            dim, factor = _dim_factor(m.group("unit"), m.group("tail"))
+            try:
+                out.append((float(err.replace(",", "")) * factor, dim))
+            except ValueError:
+                pass
+    return out
+
+
+# 관계형 단위 — 원문의 맨정수로 뒷받침되면 안 되는 파생/비율 표현. V2(카드 안 수치쌍)가 확인한다.
+#   "5배"는 카드에 5:1 쌍이 없으면 근거 없는 주장이다(→ 미확인 유지가 옳다).
+#   %는 관계형에서 뺐다 — "0.32%"↔원문 "0.32 wt%", "68% 세졌다" 같은 정당한 %가 너무 많고
+#   원문의 % 추출이 불안정하다(wt%). 이득(88% 우연매칭 차단)보다 부수피해(정당한 % 오탐)가 크다.
+_RELATIONAL = {"배"}
+# 물리 차원 base — 서로 다른 물리 차원끼리는 값이 우연히 같아도 매칭 금지(5mV ≠ 5mm).
+_HARD_BASES = {"m", "g", "L", "Pa", "M", "mol", "V", "A", "s", "Hz", "Da"}
+
+
+def _supported(claim: tuple[float, str, float, int], facts: list[tuple[float, str]]) -> bool:
+    """이 주장이 원문 수치로 뒷받침되나.
+
+    - 허용 밴드 = 표시 소수자리. "1.63" → ±0.005 → 원문 1.626은 근거, 1.70은 아니다.
+    - 관계형 단위(%·배)는 원문 맨정수로 검증 안 됨 — 같은 단위여야 한다.
+    - 서로 다른 물리 base 차원은 값이 같아도 매칭 금지(질량≠압력, mV≠mm).
+    - 그 외(개·일·점 같은 카운터, 무단위)는 값으로 매칭 — 원문이 영어/맨숫자로 써도(8 heads↔8개) 잡는다.
+    - ★차원은 base로만 본다: 원문 위첨자가 PDF 추출로 깨진다("μg/cm[2 ]" → g/cm). base 'g'만 보면
+      카드 'g/cm2'와 여전히 이어진다.
+    """
+    val, dim, display, decimals = claim
+    if val == 0:
+        return False
+    factor = abs(val / display) if display else 1.0
+    tol = 0.5 * (10 ** -decimals) * (factor or 1.0)
+    base = dim.split("/")[0]
+    for f_val, f_dim in facts:
+        if dim in _RELATIONAL:
+            if f_dim != dim:                    # % 는 %, 배 는 배 로만
+                continue
+        elif base in _HARD_BASES and f_dim.split("/")[0] in _HARD_BASES and base != f_dim.split("/")[0]:
+            continue                            # mg vs MPa, mV vs mm
+        if abs(f_val - val) <= tol:
+            return True
+    return False
+
+
+def _supported_card_values(content: str, facts: list[tuple[float, str]]) -> list[float]:
+    """이 카드 안에서 **원문으로 뒷받침되는** 수치들의 표시값.
+
+    여집합 유도의 근거 후보다. 근거 자체가 원문에 없으면(환각 수치) 유도도 허용하지 않는다.
+    """
+    out: list[float] = []
+    for m in _MEASURE.finditer(content):
+        p = _parse_measure(content, m)
+        if p and _supported(p, facts):
+            out.append(p[2])                   # 표시값(예: 0.32)
+    return out
+
+
+def _complement_supported(claim: tuple[float, str, float, int], card_vals: list[float]) -> bool:
+    """여집합 파생 — "0.32 wt% 섞었으니 나머지 99.7%는 원재료".
+
+    %  주장에 한정하고, 근거는 **같은 카드 안의 원문 검증된 수치**여야 한다(덱 전역 금지).
+    연산을 늘릴수록 '아무 숫자나 어떤 쌍에서 유도 가능'해져 미탐이 곱으로 늘기 때문에
+    관측된 사례가 있는 여집합 하나만 연다(스펙 §3).
+    """
+    _, dim, display, decimals = claim
+    if dim != "%":
+        return False
+    tol = 0.5 * (10 ** -decimals)
+    return any(abs((100.0 - base) - display) <= tol for base in card_vals if base != display)
+
+
 def _expand_scientific(text: str) -> str:
     """원문의 과학표기를 평문 정수로 확장해 붙인다(원본은 유지, 확장본을 뒤에 이어 검색 대상 확대).
 
@@ -171,22 +340,22 @@ def verify_deck(html: str, paper_text: str) -> list[NumberClaim]:
     팩트 패널이 '이 수치가 쓰인 카드'로 사용자를 데려갈 수 있게 하는 좌표다.
     dedup은 덱 전역(seen)으로 유지한다 — 원장 카운트를 바꾸지 않는다(위치만 덧붙이는 작업).
     """
-    paper_exp = _expand_scientific(paper_text)      # 3.64E+03 → 3640 도 검색 대상에 포함
-    paper_flat = _flat(paper_exp)
+    facts = _paper_facts(paper_text)                # 원문 수치 인덱스(덱당 1회)
     seen: set[str] = set()
     claims: list[NumberClaim] = []
 
     for card_idx, content in _card_contents(html):
+        card_vals = _supported_card_values(content, facts)   # 여집합 유도의 근거 후보
         for m in _NUM.finditer(content):
             tok = m.group().strip()
             if not _is_meaningful(tok) or tok in seen:
                 continue
             seen.add(tok)
-            cm = _CORE.search(tok)
-            core = cm.group().replace(",", "") if cm else ""
-            verified = bool(core) and (core in paper_exp or core in paper_flat)
-            if not verified:                        # 한국어 만/억 표기 → 영어/과학표기 원문과 대조
-                verified = any(r in paper_flat for r in _korean_magnitude_reprs(tok))
+            mm = _MEASURE.match(tok)
+            parsed = _parse_measure(tok, mm) if mm else None
+            verified = bool(parsed) and _supported(parsed, facts)
+            if not verified and parsed:
+                verified = _complement_supported(parsed, card_vals)
             claims.append(NumberClaim(
                 value=tok,
                 context=_clean_context(content, m.start(), m.end()),
@@ -201,7 +370,11 @@ def verify_deck(html: str, paper_text: str) -> list[NumberClaim]:
 # 못 잡는 내부 모순이다(142·238·170 다 원문에 있으면 V1은 전부 VERIFIED로 통과시킨다).
 # 카드 단위로 파생표현(N% 증가·N배)을 찾아 같은 카드의 수치쌍과 검산한다.
 
-_PCT_CHANGE = re.compile(r"(\d[\d,]*\.?\d*)\s*%\s*(증가|감소|향상|개선|절감|상승|하락)")
+# 증감 동사 — "68% 세졌다"(강해졌다)처럼 형용사형 증감도 파생 검산 대상이다(실측 오탐).
+_PCT_CHANGE = re.compile(
+    r"(\d[\d,]*\.?\d*)\s*%\s*"
+    r"(증가|감소|향상|개선|절감|상승|하락|세|커|강|단단|약|높|낮|늘|줄|빨라|가벼워|무거워)"
+)
 _FOLD = re.compile(r"(\d[\d,]*\.?\d*)\s*배")
 # 퍼센트 '차이'(%p) — "2.8% 더 정확", "3.5% 낮췄다". 증가율이 아니라 뺄셈이다.
 _PCT_POINT = re.compile(r"(\d[\d,]*\.?\d*)\s*%\s*(?:더|덜|만큼)?\s*(정확|낮|높|줄|늘|개선|앞서|우수|나빠)")
