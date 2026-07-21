@@ -479,6 +479,22 @@ const AGENT_BODY = `
       t.style.height = Math.ceil(r.height) + 'px';
     }
   }
+  // ★ 부모가 inline 흐름 자식을 가지면(마커펜 하이라이트용 display:inline 제목 등) 그 형제도 승격 금지.
+  // inline은 승격에서 제외(display:inline continue)되므로, 형제 block만 흐름에서 빠지면 inline이 빈자리로
+  // 밀려 겹친다(치약 표지 카드: eyebrow block 승격 → inline 제목이 27px 상승 겹침). hasBareText(맨 텍스트
+  // mixed)와 같은 원리 — 대상만 '맨 텍스트'에서 'inline 요소'로 확장. mixed 컨테이너는 통째 프리즈한다.
+  function hasInlineFlowChild(parent) {
+    if (!parent) return false;
+    var ch = parent.children;
+    for (var i = 0; i < ch.length; i++) {
+      var c = ch[i];
+      if (isPiArtifact(c)) continue;
+      var cs = getComputedStyle(c);
+      if (cs.position === 'absolute' || cs.position === 'fixed') continue;
+      if (cs.display === 'inline') return true;
+    }
+    return false;
+  }
   function freezeCard(card) {
     if (!card || card.getAttribute('data-pi-frozen') === '1') return;
     if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
@@ -489,8 +505,9 @@ const AGENT_BODY = `
       var cs = getComputedStyle(el);
       if (cs.position === 'absolute' || cs.position === 'fixed') continue;
       if (cs.display === 'inline') continue;
-      // ★ 부모가 mixed content(맨 텍스트 포함)면 승격 금지 — 부모를 통째 프리즈해 내부 레이아웃(dot+텍스트) 보존.
-      if (hasBareText(el.parentElement)) continue;
+      // ★ 부모가 mixed content(맨 텍스트 or inline 요소 포함)면 승격 금지 — 부모를 통째 프리즈해 내부
+      // 레이아웃(dot+텍스트, eyebrow+마커제목) 보존. 일부만 흐름에서 빼면 남은 것이 밀려 겹친다.
+      if (hasBareText(el.parentElement) || hasInlineFlowChild(el.parentElement)) continue;
       els.push(el);
     }
     pinCollapsingContainers(els, card);  // ★ 붕괴할 컨테이너 박스 고정 → 자식 겹침 방지(마감 크레딧 카드)
