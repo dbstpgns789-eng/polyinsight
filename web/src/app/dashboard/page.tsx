@@ -205,7 +205,7 @@ function DashboardPageInner() {
             <path d="M37.5 41h7M41 37.5v7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
           </svg>
           <h2 className="dash-empty__title">첫 논문을 업로드하세요</h2>
-          <p className="dash-empty__desc">PDF를 올리면 카드뉴스를 자동으로 만들어 드립니다.</p>
+          <p className="dash-empty__desc">PDF를 올리면 카드뉴스 초안을 만들어 드립니다.</p>
           <Link href="/deck/new" className="btn btn-primary">
             새 카드뉴스 만들기
           </Link>

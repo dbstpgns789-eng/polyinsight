@@ -160,8 +160,8 @@ export default function Home() {
               <li className="step reveal reveal-delay-2">
                 <div className="step__num" aria-hidden="true">2</div>
                 <div className="step__content">
-                  <h3 className="step__title">AI 자동 분석</h3>
-                  <p className="step__desc">AI가 논문의 연구 목적, 방법론, 핵심 수치, 결론을 원문에서 직접 추출합니다. 수치가 포함된 모든 항목에는 출처(섹션명, 페이지)가 자동으로 표기됩니다.</p>
+                  <h3 className="step__title">원문 분석</h3>
+                  <p className="step__desc">AI가 논문의 연구 목적, 방법론, 핵심 수치, 결론을 원문에서 직접 추출합니다. 수치가 포함된 모든 항목에는 출처(섹션명, 페이지)가 함께 표기됩니다.</p>
                 </div>
               </li>
               <li className="step reveal reveal-delay-3">
