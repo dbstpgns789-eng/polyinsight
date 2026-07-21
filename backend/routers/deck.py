@@ -11,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Re
 
 from pydantic import BaseModel, Field
 
+from ..agents.deck.caption import generate_caption
 from ..agents.deck.deck_renderer import render_deck
 from ..agents.deck.nl_patch import apply_nl_patch
 from ..agents.deck.pipeline import compute_verify, persist_edited_deck, run_authoring_pipeline
@@ -278,6 +279,28 @@ async def get_deck_card(job_id: str, card_num: int, user: dict = Depends(get_cur
     if not plans.can_export(user):
         png = images_util.downscale_png(png)
     return Response(content=png, media_type="image/png")
+
+
+@router.get("/deck/{job_id}/caption")
+async def get_deck_caption(job_id: str, user: dict = Depends(get_current_user)):
+    """인스타 게시용 캡션 → {caption, hashtags}. lazy 생성 + 캐시.
+
+    ★게이트 없음(export 게이트 안 걸림): 캡션 미리보기는 무료 아하다(순수잠금은 파일만).
+    비용 방어는 게이트가 아니라 캐시로 — 첫 요청만 LLM(덱당 1회로 바운드), 이후는 캐시 read.
+    편집 시 save_authored_deck이 캡션을 무효화(NULL)해 다음 요청에 재생성(staleness 처리).
+    """
+    await require_owned_job(job_id, user)
+    deck = await db.get_authored_deck(job_id)
+    if deck is None:
+        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
+
+    cached = deck.get("caption_json")
+    if cached:
+        return json.loads(cached)
+
+    result = await generate_caption(deck["html"] or "", deck.get("paper_text") or "")
+    await db.set_deck_caption(job_id, json.dumps(result, ensure_ascii=False))
+    return result
 
 
 @router.post("/deck/{job_id}/export")

@@ -515,6 +515,34 @@ def compute_verify_unverified(html: str, paper_text: str) -> int:
     return sum(not c.verified for c in verify_claims_with_derived(html, paper_text))
 
 
+def verified_number_strings(html: str, paper_text: str) -> set[str]:
+    """이 덱에서 **검증을 통과한** 수치 토큰 집합 (예: {"238 MPa", "99.7%", "1.63"}).
+
+    캡션 생성기의 제약용 — 캡션은 이 집합 안의 수치만 인용해야 한다.
+    ★'원문에 있는 수치'가 아니라 '덱이 보여줬고 검증된 수치'다: 덱이 이미 큐레이션한 것만
+    공개 발행(캡션)에 나가야 한다. 원문엔 있지만 덱엔 없는 수치를 캡션이 쓰면 유저가 화면에서
+    보지 않은 것을 발행하는 것.
+    """
+    return {c.value for c in verify_claims_with_derived(html, paper_text) if c.verified}
+
+
+def caption_numbers_ok(caption: str, verified: set[str]) -> tuple[bool, list[str]]:
+    """캡션의 수치가 모두 검증집합에 있나. (통과, 위반토큰들).
+
+    캡션에서 정량 수치를 뽑아(verify_deck과 같은 추출기) 검증집합과 대조한다. 검증집합의 어떤
+    토큰의 코어(숫자부)와도 안 맞는 수치가 있으면 위반 — 캡션에서 빼야 한다.
+    """
+    ver_cores = {_core_of(v) for v in verified}
+    violations: list[str] = []
+    for m in _NUM.finditer(caption):
+        tok = m.group().strip()
+        if not _is_meaningful(tok):
+            continue
+        if _core_of(tok) not in ver_cores:
+            violations.append(tok)
+    return (not violations), violations
+
+
 def report(claims: list[NumberClaim]) -> str:
     """사람이 읽는 검증 리포트. UNVERIFIED는 사용자 판단용으로 맥락과 함께 노출."""
     ok = [c for c in claims if c.verified]

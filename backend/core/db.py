@@ -158,7 +158,8 @@ async def migrate() -> None:
                 verify_json TEXT,
                 card_count INT,
                 paper_text TEXT,
-                updated_at TEXT
+                updated_at TEXT,
+                caption_json TEXT
             );
 
             -- 저작 지문(2026-07-11): 모델이 <!-- PI_MANIFEST --> 로 선언한 편집 결정.
@@ -193,6 +194,9 @@ async def migrate() -> None:
             cols = [row[1] for row in await cur.fetchall()]
         if "paper_text" not in cols:
             await conn.execute("ALTER TABLE authored_deck ADD COLUMN paper_text TEXT")
+        # 인스타 캡션(2026-07-21) — lazy 생성 캡션 캐시(첫 요청 시 채움, 편집 시 무효화).
+        if "caption_json" not in cols:
+            await conn.execute("ALTER TABLE authored_deck ADD COLUMN caption_json TEXT")
         # 유저별 격리(2026-07-02) — 기존 jobs에 user_id 없으면 추가(backfill은 별도 스크립트).
         async with conn.execute("PRAGMA table_info(jobs)") as cur:
             jcols = [row[1] for row in await cur.fetchall()]
@@ -456,7 +460,8 @@ async def save_authored_deck(
                 verify_json = excluded.verify_json,
                 card_count = excluded.card_count,
                 paper_text = COALESCE(excluded.paper_text, authored_deck.paper_text),
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                caption_json = NULL
             """,
             (job_id, html, verify_json, card_count, paper_text, now),
         )
@@ -467,12 +472,22 @@ async def get_authored_deck(job_id: str) -> dict | None:
     async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            "SELECT html, verify_json, card_count, paper_text, updated_at "
+            "SELECT html, verify_json, card_count, paper_text, updated_at, caption_json "
             "FROM authored_deck WHERE job_id = ?",
             (job_id,),
         ) as cursor:
             row = await cursor.fetchone()
             return dict(row) if row else None
+
+
+async def set_deck_caption(job_id: str, caption_json: str) -> None:
+    """생성된 캡션을 캐시. 덱이 없으면 no-op(캡션은 덱의 부속)."""
+    async with _connect() as conn:
+        await conn.execute(
+            "UPDATE authored_deck SET caption_json = ? WHERE job_id = ?",
+            (caption_json, job_id),
+        )
+        await conn.commit()
 
 
 # ── 덱 이미지 자산 (스펙 2026-07-01) ─────────────────────────────────────────
