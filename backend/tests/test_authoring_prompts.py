@@ -64,10 +64,24 @@ def test_user_prompt_has_history_slot():
     assert "{history_block}" in P.AUTHORING_USER
 
 
-def test_refs_header_declares_used_directions():
-    """고정 refs(수만 토큰 시연)가 이력(3줄 텍스트)을 이긴다 — refs가 쓴 방향을 명시해 반복을 막는다."""
+def test_refs_header_declares_used_directions(tmp_path, monkeypatch):
+    """refs가 주입될 때 헤더가 '이미 보여준 방향'을 명시하는지(동질화 가드).
+
+    실제 ref 덱(output/cardnews_*)은 레포에 커밋 안 된 로컬 아티팩트라 CI엔 없다.
+    임시 ref 파일로 hermetic하게 검증한다(외부 파일 의존 제거).
+    """
+    ref = tmp_path / "ref.html"
+    ref.write_text("<div>ref deck</div>", encoding="utf-8")
+    monkeypatch.setattr(P, "_ROOT", tmp_path)
+    monkeypatch.setattr(P, "REF_LIBRARY", [
+        {"path": "ref.html", "genre": "x", "mood": "무드A", "arc": "아크A"},
+        {"path": "ref.html", "genre": "y", "mood": "무드B", "arc": "아크B"},
+    ])
+    P.few_shot_refs.cache_clear()
     refs = P.few_shot_refs(2)
+    P.few_shot_refs.cache_clear()          # 가짜 데이터가 다른 테스트로 새지 않게
     assert "이미 보여준 방향" in refs
+    assert "아크A" in refs and "무드B" in refs   # 헤더가 실제 arc·mood를 선언
 
 
 def test_no_aesthetic_recipes():
