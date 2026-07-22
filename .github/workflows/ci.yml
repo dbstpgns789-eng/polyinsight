@@ -1,6 +1,6 @@
-# CI 테스트 게이트 — push(main)·모든 PR에서 백엔드·프론트 테스트 자동 실행.
-# 프로덕션 무접촉: 테스트만 돌린다. 배포(CD)는 별도 워크플로.
-name: CI
+# CI/CD — push·PR에서 테스트, main push에서 (테스트 통과 시) 자동 배포.
+# 배포는 A방식(SSH): Actions가 서버에 접속해 백업→pull→재빌드→스모크.
+name: CI / CD
 
 on:
   push:                   # 모든 브랜치 — 개발 중에도 게이트 피드백
@@ -53,3 +53,32 @@ jobs:
 
       - name: 테스트
         run: npm test
+
+  # ── CD: main에 push되고 위 테스트가 모두 통과했을 때만 배포 ──────────────
+  deploy:
+    name: deploy · SSH to Azure
+    needs: [backend, web]                 # 테스트 통과가 전제(게이트)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH 배포 (DB 백업 → pull → 재빌드 → 스모크)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/polyinsight
+            echo "▸ DB 백업 (도커 볼륨 안, 온라인 백업)"
+            docker compose exec -T backend python3 -c "import sqlite3,time; s=sqlite3.connect('/data/polyinsight.db'); d=sqlite3.connect('/data/backup-%d.db'%int(time.time())); s.backup(d); d.close(); s.close(); print('backed up')"
+            docker compose exec -T backend sh -c 'ls -1t /data/backup-*.db 2>/dev/null | tail -n +11 | xargs -r rm -f' || true   # 최근 10개만 보관
+            echo "▸ 최신 코드"
+            git pull --ff-only origin main
+            echo "▸ 재빌드·재기동"
+            docker compose up -d --build
+            echo "▸ 스모크 — 3서비스(backend·web·caddy) 기동 확인"
+            sleep 12
+            running=$(docker compose ps --services --filter status=running | wc -l)
+            if [ "$running" -lt 3 ]; then echo "smoke FAIL: $running/3 running"; docker compose ps; exit 1; fi
+            echo "smoke OK: $running services running"
