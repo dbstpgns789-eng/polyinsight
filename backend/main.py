@@ -3,7 +3,8 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
 
 
 # Windows에서 Playwright subprocess 실행에 ProactorEventLoop 필요
@@ -11,10 +12,11 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.core import ratelimit
+from backend.core import db, ratelimit
 from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.db import cleanup_expired_blobs, migrate, recover_stale_jobs
+from backend.core.plans import PlanGateError
 from backend.routers import auth, deck, export, images, jobs, projects
 
 
@@ -72,6 +74,20 @@ async def _ttl_cleaner():
 
 
 app = FastAPI(title="PolyInsight", version="2.0.0", lifespan=lifespan)
+
+
+@app.exception_handler(PlanGateError)
+async def _plan_gate_hit(request: Request, exc: PlanGateError):
+    """벽 히트 계측 — 게이트가 몇 개로 늘어나든 기록은 여기 한 곳(무료체험 T1 트리거 판정용)."""
+    try:
+        await db.log_event(
+            "plan_gate_hit",
+            user_id=exc.user_id,
+            payload={"kind": exc.gate_kind, "path": request.url.path},
+        )
+    except Exception:
+        pass  # 계측 실패가 응답을 막으면 안 된다(제품 > 측정)
+    return await http_exception_handler(request, exc)
 
 
 @app.middleware("http")

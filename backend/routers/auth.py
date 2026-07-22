@@ -12,6 +12,7 @@ from ..core import auth as auth_core
 from ..core import db
 from ..core import email as email_mod
 from ..core import oauth as oauth_core
+from ..core import plans
 from ..core import ratelimit
 from ..core.config import settings
 
@@ -162,7 +163,21 @@ async def me(user: dict = Depends(auth_core.get_current_user)):
         "email": user["email"],
         "role": user["role"],
         "emailVerified": bool(user.get("email_verified")),
+        # 플랜 상태 — 프론트가 미터·잠금·페이월·진입 라우팅을 그리는 데 쓴다.
+        "plan": plans.plan_of(user),
+        "freeDecksUsed": plans.free_decks_used(user),
+        "freeDeckLimit": plans.FREE_DECK_LIMIT,
+        "canAuthor": plans.can_author(user),
+        "canExport": plans.can_export(user),
+        "onboarded": user.get("onboarded_at") is not None,
     }
+
+
+@router.post("/onboarded")
+async def mark_onboarded(user: dict = Depends(auth_core.get_current_user)):
+    """환영 온보딩 시청 완료. 멱등 — 두 번 불러도 처음 시각을 유지한다."""
+    await db.mark_onboarded(user["id"])
+    return {"ok": True}
 
 
 # ── 이메일 인증 (grace 모드 — 비차단) ──────────────────────────────────────

@@ -10,9 +10,44 @@ import pymupdf4llm
 import fitz
 
 from .base import BaseAgent
+from ..core.config import settings
 from ..core.models import DegradeCode, DegradeEvent, PaperMetadata, S1Input, S1Output
 
 logger = logging.getLogger(__name__)
+
+
+def _ocr_extract(pdf_bytes: bytes, warnings: list[str]) -> dict[int, str]:
+    """스캔본 폴백 — fitz 내장 Tesseract로 페이지별 OCR. {page_no: text}.
+
+    엔진은 PyMuPDF에 번들, 언어데이터만 있으면 된다(Docker의 tesseract-ocr-kor/eng).
+    Tesseract 데이터 미설치·OCR 실패 시 빈/부분 결과를 돌려 호출부가 안전하게 degraded로 폴백한다
+    (여기서 크래시하면 스캔 업로드가 500이 된다 — OCR은 '있으면 좋은' 폴백이지 필수 경로가 아니다).
+    """
+    tessdata = settings.OCR_TESSDATA or None
+    page_map: dict[int, str] = {}
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    except Exception as exc:
+        warnings.append(f"S1: OCR open failed -- {exc}")
+        return {}
+    try:
+        n = len(doc)
+        cap = settings.OCR_MAX_PAGES
+        if n > cap:
+            warnings.append(f"S1: OCR {cap}p까지만 (전체 {n}p) — 뒤 페이지는 스캔 OCR 안 함(길이 제한)")
+        for i in range(min(n, cap)):
+            page = doc[i]                        # ★한 Page 객체로 고정 — doc[i]를 두 번 부르면
+            tp = page.get_textpage_ocr(          #   서로 다른 Page가 생겨 textpage가 GC된 쪽을
+                flags=0, language=settings.OCR_LANGUAGE, dpi=settings.OCR_DPI,  # 약참조→"no longer exists"
+                full=True, tessdata=tessdata,
+            )
+            page_map[i + 1] = _clean_text(page.get_text(textpage=tp))
+    except Exception as exc:                     # Tesseract 데이터 없음·엔진 오류 등
+        logger.warning("S1: OCR failed (%s) — degraded로 폴백", exc)
+        warnings.append(f"S1: OCR 사용 불가 -- {exc}")
+    finally:
+        doc.close()
+    return page_map
 
 
 def build_s1_degrade_events(
@@ -263,6 +298,22 @@ class S1Extractor(BaseAgent[S1Input, S1Output]):
         raw_text = "\n".join(parts)
 
         word_count = len(raw_text.split())
+
+        # 스캔본 OCR 폴백 — 텍스트 레이어가 없어 단어를 거의 못 뽑았으면 Tesseract로 재추출.
+        # 스캔일 때만 발동(정상 논문은 여기 안 옴). OCR이 더 많이 뽑으면 그걸 채택한다.
+        if settings.OCR_ENABLED and word_count < self._MIN_WORD_COUNT:
+            ocr_map = _ocr_extract(pdf_bytes, warnings)
+            ocr_words = sum(len(t.split()) for t in ocr_map.values())
+            if ocr_words > word_count:
+                page_map = ocr_map
+                parts = []
+                for n in sorted(page_map):
+                    parts.append(f"<!-- PAGE {n} -->")
+                    parts.append(page_map[n])
+                raw_text = "\n".join(parts)
+                warnings.append(f"S1: 스캔 감지 → OCR 재추출 ({word_count} → {ocr_words} words)")
+                word_count = ocr_words
+
         degraded = word_count < self._MIN_WORD_COUNT
         if degraded:
             warnings.append(f"S1: low word count ({word_count}) -- degraded mode")

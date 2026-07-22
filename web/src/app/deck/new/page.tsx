@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
 import { uploadDeck } from '@/lib/api'
+import { planGateKind } from '@/lib/plan'
 
 // 칩 = 영감 팔레트(선택 강제 아님). 이름은 한국어 감각어만 — 비전공자가 읽고 느낌이 와야 함.
 // 클릭 시 풀 서술이 입력창에 들어가 "말로 지시" 문법을 가르친다.
@@ -80,6 +81,12 @@ function DeckNewInner() {
       const r = await uploadDeck(file, cardCount, undefined, style.trim() || undefined)
       router.push(`/deck/${r.data.jobId}`)
     } catch (e) {
+      // 무료체험 소진(402 ERR-PLAN-AUTHOR) → 업그레이드로. 그 외 에러는 화면에 그대로 표시.
+      const kind = planGateKind(e)
+      if (kind === 'author') {
+        router.push('/upgrade?from=author')
+        return
+      }
       setError(e instanceof Error ? e.message : '업로드 실패')
       setSubmitting(false)
     }
@@ -145,6 +152,13 @@ function DeckNewInner() {
             <p className="text-[12.5px] text-ink-3 mt-3 text-center">PDF 파일만 올릴 수 있습니다.</p>
           </>
         )}
+
+        {/* 미발표 원고를 올릴지 망설이는 순간이 여기다 — 처리방침을 읽지 않는 사람에게도 보여야 한다 */}
+        <p className="text-[12.5px] text-ink-3 mt-2 text-center leading-relaxed">
+          올린 논문은 카드뉴스를 만드는 데만 쓰이고 <strong className="font-semibold text-ink-2">AI 학습에는 사용되지 않습니다.</strong>{' '}
+          언제든 직접 삭제할 수 있습니다.{' '}
+          <a href="/privacy" className="underline underline-offset-2 hover:text-ink-2">처리방침</a>
+        </p>
 
         {/* 아트디렉터에게 한마디 */}
         <div className="bg-canvas border border-border rounded-[20px] p-6 mt-4" style={cardShadow}>

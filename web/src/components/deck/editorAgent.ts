@@ -402,6 +402,19 @@ const AGENT_BODY = `
   }
 
   // ── transform: 하이브리드 드래그 이동 + 리사이즈 ──────────────────────────────
+  // ★ 절대배치의 실제 기준(containing block) = 부모 체인에서 가장 가까운 positioned 조상.
+  // el.offsetParent를 쓰면 안 되는 이유: SVG 등은 offsetParent가 null이라 '|| card' 폴백이
+  // 걸리는데, SVG의 실제 containing block이 중첩된 absolute 래퍼면 card 기준으로 계산한 top/left이
+  // 래퍼 오프셋만큼(예:150px) 어긋난다(구슬이 제목을 덮는 편집진입 변형의 근본원인). 부모 체인을
+  // 직접 걸어 올라가면 SVG·HTML 모두 정확 — HTML은 offsetParent와 동일 결과라 무회귀.
+  function posAncestor(el, card) {
+    var p = el.parentElement;
+    while (p && p !== card) {
+      if (getComputedStyle(p).position !== 'static') return p;
+      p = p.parentElement;
+    }
+    return card;
+  }
   // R2 방지: 여러 요소 승격 시 '전원 rect를 먼저 캡처 → 그 다음 전원 promote → 캡처값으로 배치'.
   function promoteAll(els, card) {
     if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
@@ -419,9 +432,10 @@ const AGENT_BODY = `
         // (margin은 LAYOUT_PROPS라 undo/revertFlow가 원복. margin 있는 요소 grab 점프·가장자리 못 닿음 수정)
         el.style.margin = '0';
         el.style.position = 'absolute';
-        // ★ left/top은 카드가 아니라 '실제 offsetParent' 기준이어야 제자리 유지(중첩 요소 좌표 붕괴 수정).
-        // (positioned 조상이 있으면 offsetParent=그 조상 → 카드 상대값을 그대로 쓰면 어긋남/반전)
-        var op = el.offsetParent || card, opr = op.getBoundingClientRect();
+        // ★ left/top은 카드가 아니라 '실제 containing block'(가장 가까운 positioned 조상) 기준이어야
+        // 제자리 유지. offsetParent 대신 posAncestor를 쓴다 — SVG는 offsetParent가 null이라 card로
+        // 폴백되며 래퍼 오프셋만큼 어긋난다(구슬 겹침 버그).
+        var op = posAncestor(el, card), opr = op.getBoundingClientRect();
         el.style.left = (r.left - opr.left) + 'px'; el.style.top = (r.top - opr.top) + 'px';
       }
     }
@@ -465,6 +479,22 @@ const AGENT_BODY = `
       t.style.height = Math.ceil(r.height) + 'px';
     }
   }
+  // ★ 부모가 inline 흐름 자식을 가지면(마커펜 하이라이트용 display:inline 제목 등) 그 형제도 승격 금지.
+  // inline은 승격에서 제외(display:inline continue)되므로, 형제 block만 흐름에서 빠지면 inline이 빈자리로
+  // 밀려 겹친다(치약 표지 카드: eyebrow block 승격 → inline 제목이 27px 상승 겹침). hasBareText(맨 텍스트
+  // mixed)와 같은 원리 — 대상만 '맨 텍스트'에서 'inline 요소'로 확장. mixed 컨테이너는 통째 프리즈한다.
+  function hasInlineFlowChild(parent) {
+    if (!parent) return false;
+    var ch = parent.children;
+    for (var i = 0; i < ch.length; i++) {
+      var c = ch[i];
+      if (isPiArtifact(c)) continue;
+      var cs = getComputedStyle(c);
+      if (cs.position === 'absolute' || cs.position === 'fixed') continue;
+      if (cs.display === 'inline') return true;
+    }
+    return false;
+  }
   function freezeCard(card) {
     if (!card || card.getAttribute('data-pi-frozen') === '1') return;
     if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
@@ -475,8 +505,9 @@ const AGENT_BODY = `
       var cs = getComputedStyle(el);
       if (cs.position === 'absolute' || cs.position === 'fixed') continue;
       if (cs.display === 'inline') continue;
-      // ★ 부모가 mixed content(맨 텍스트 포함)면 승격 금지 — 부모를 통째 프리즈해 내부 레이아웃(dot+텍스트) 보존.
-      if (hasBareText(el.parentElement)) continue;
+      // ★ 부모가 mixed content(맨 텍스트 or inline 요소 포함)면 승격 금지 — 부모를 통째 프리즈해 내부
+      // 레이아웃(dot+텍스트, eyebrow+마커제목) 보존. 일부만 흐름에서 빼면 남은 것이 밀려 겹친다.
+      if (hasBareText(el.parentElement) || hasInlineFlowChild(el.parentElement)) continue;
       els.push(el);
     }
     pinCollapsingContainers(els, card);  // ★ 붕괴할 컨테이너 박스 고정 → 자식 겹침 방지(마감 크레딧 카드)

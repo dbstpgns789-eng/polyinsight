@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from ..agents.s7_renderer import S7Renderer
-from ..core import db
+from ..core import db, plans
 from ..core.auth import get_current_user, require_owned_job
 from ..core.models import CardEditorData
 
@@ -112,6 +112,7 @@ async def trigger_export(job_id: str, user: dict = Depends(get_current_user)):
     import zipfile as zf_mod
     from ..core.models import S7Input
 
+    plans.require_can_export(user)
     await require_owned_job(job_id, user)
     raw = await db.get_card_data(job_id)
     if raw is None:

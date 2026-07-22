@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 
 from ..agents.s7_renderer import _playwright_pool, _playwright_render_via_url_sync
-from ..core import db
+from ..core import db, plans
+from ..core import images as images_util
 from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
 
@@ -24,6 +25,7 @@ def _safe_filename(name: str | None) -> str:
 @router.get("/export/{export_job_id}/download")
 async def download_zip(export_job_id: str, user: dict = Depends(get_current_user)):
     """완료된 ZIP 다운로드."""
+    plans.require_can_export(user)
     row = await db.get_export(export_job_id)
     if row is None:
         raise HTTPException(410, detail={"code": "ERR-EXP-004", "message": "파일이 만료되었습니다. 다시 내보내기를 실행해 주세요."})
@@ -45,6 +47,10 @@ async def get_card_image(job_id: str, card_num: int, user: dict = Depends(get_cu
     if png is None:
         raise HTTPException(404, detail={"code": "ERR-EXP-001", "message": "이미지를 찾을 수 없습니다."})
 
+    # 무료 유저에게는 화면용 축소본. can_export가 True면(유료·서비스 롤) 원본 그대로.
+    if not plans.can_export(user):
+        png = images_util.downscale_png(png)
+
     return Response(
         content=png,
         media_type="image/png",
@@ -55,6 +61,7 @@ async def get_card_image(job_id: str, card_num: int, user: dict = Depends(get_cu
 @router.get("/cards/{job_id}/download/{card_num}")
 async def download_card_png(job_id: str, card_num: int, user: dict = Depends(get_current_user)):
     """단일 카드를 즉석 렌더(S7 React goto)해서 PNG 첨부 다운로드. 항상 현재 저장 상태 반영."""
+    plans.require_can_export(user)
     job = await require_owned_job(job_id, user)
     if await db.get_card_data(job_id) is None:
         raise HTTPException(404, detail={"code": "ERR-JOB-002", "message": "카드 데이터가 없습니다."})

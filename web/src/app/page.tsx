@@ -117,21 +117,21 @@ export default function Home() {
                 논문 읽는 시간은 그대로.<br /><span className="hi">알리는 시간은 1/10</span>로.
               </h1>
               <p className="hero__sub">
-                PDF 하나를 올리면 AI가 원문 근거만으로 카드뉴스를 만듭니다.
-                모든 수치는 논문 원문에서 검증되고, 편집 가능한 형태로 제공됩니다.
+                PDF 하나를 올리면 원문 근거만으로 카드뉴스 초안을 만듭니다.
+                카드에 쓰인 모든 수치를 논문 원문과 대조해, 확인 결과를 함께 보여줍니다.
               </p>
               <div className="hero__actions hero__actions--row">
                 <a href="/dashboard" className="btn btn-primary btn-lg">카드뉴스 만들러 가기</a>
                 <a href="#how-it-works" className="btn btn-ghost btn-lg">작동 방식 보기</a>
               </div>
               <p className="hero__trust">
-                <span className="hero__trust-mark">✓ 원문 검증</span> 지어내지 않습니다. 논문이 근거입니다.
+                <span className="hero__trust-mark">✓ 원문 대조</span> 숫자 하나까지 원문과 맞춰봅니다. 확인 안 되면 표시합니다.
               </p>
             </div>
 
             <div className="hero__visual" aria-hidden="true">
               <div className="hero-stage">
-                <div className="hero-fstat"><b>6.8%</b><span>평균 저장률 (예시)</span></div>
+                <div className="hero-fstat"><b>3~7장</b><span>논문 1편 → 카드 1세트</span></div>
                 <div className="hero-card hero-card--a"><img src="/cards/attn_05.png" alt="" /></div>
                 <div className="hero-card hero-card--b"><img src="/cards/bert_03.png" alt="" /></div>
                 <div className="hero-card hero-card--c"><img src="/cards/attn_01.png" alt="" /></div>
@@ -160,8 +160,8 @@ export default function Home() {
               <li className="step reveal reveal-delay-2">
                 <div className="step__num" aria-hidden="true">2</div>
                 <div className="step__content">
-                  <h3 className="step__title">AI 자동 분석</h3>
-                  <p className="step__desc">AI가 논문의 연구 목적, 방법론, 핵심 수치, 결론을 원문에서 직접 추출합니다. 수치가 포함된 모든 항목에는 출처(섹션명, 페이지)가 자동으로 표기됩니다.</p>
+                  <h3 className="step__title">원문 분석</h3>
+                  <p className="step__desc">AI가 논문의 연구 목적, 방법론, 핵심 수치, 결론을 원문에서 직접 추출합니다. 수치가 포함된 모든 항목에는 출처(섹션명, 페이지)가 함께 표기됩니다.</p>
                 </div>
               </li>
               <li className="step reveal reveal-delay-3">
@@ -223,10 +223,10 @@ export default function Home() {
             <div className="moat__card reveal">
               <div className="moat__lead">
                 <span className="moat__chip">우리만의 해자</span>
-                <h2 id="moat-title" className="moat__title">AI가 지어내지 않습니다.<br />원문이 근거입니다.</h2>
-                <p className="moat__desc">모든 수치와 주장에 논문 근거 배지가 붙습니다. 카드에 적힌 숫자가 원문 몇 페이지에서 왔는지 바로 확인됩니다.</p>
+                <h2 id="moat-title" className="moat__title">숫자 하나까지<br />원문과 맞춰봅니다.</h2>
+                <p className="moat__desc">카드에 쓰인 모든 수치를 논문 원문과 대조합니다. 어느 페이지에서 왔는지 바로 확인되고, <strong>대조에서 확인되지 않은 수치는 숨기지 않고 따로 표시합니다.</strong></p>
                 <div className="moat__stats">
-                  <div className="moat__stat moat__stat--g"><b>98.4%</b><span>수치 원문 일치율 (예시)</span></div>
+                  <div className="moat__stat moat__stat--g"><b>전 수치</b><span>원문 대조 · 미확인은 표시</span></div>
                   <div className="moat__stat moat__stat--w"><b>p.단위</b><span>페이지까지 추적</span></div>
                 </div>
               </div>
@@ -324,6 +324,39 @@ export default function Home() {
                 <p>다수의 논문을 정기적으로 카드뉴스로 제작해야 하는 <strong>연구소·학술기관 팀</strong></p>
               </li>
             </ul>
+          </div>
+        </section>
+
+        {/* ─── FAQ ─── */}
+        <section className="section section--surface" id="faq" aria-labelledby="faq-title">
+          <div className="container faq">
+            <h2 id="faq-title" className="section__title reveal">올리기 전에, 궁금한 것들</h2>
+            <div className="faq__list reveal reveal-delay-1">
+              <details className="faq__item">
+                <summary className="faq__q">어떤 논문을 올릴 수 있나요?</summary>
+                <p className="faq__a">PDF 형식의 학술 논문이면 됩니다. 분야 제한은 없고, 표·수치가 많은 실험 논문에 특히 잘 맞습니다. 텍스트가 살아 있는 PDF가 가장 정확하며, 스캔본(이미지 PDF)도 텍스트 추출을 시도합니다.</p>
+              </details>
+              <details className="faq__item">
+                <summary className="faq__q">만든 내용이 정확한가요? AI가 지어낸 건 아닌가요?</summary>
+                <p className="faq__a">카드에 쓰인 모든 수치를 논문 원문과 대조하고, 확인되지 않은 값은 따로 표시합니다. 없는 내용을 지어내지 않는 것이 이 서비스의 핵심입니다. 다만 원문 자체에 오류가 있을 수 있어, 게시 전 최종 확인은 직접 해주세요.</p>
+              </details>
+              <details className="faq__item">
+                <summary className="faq__q">얼마나 걸리나요?</summary>
+                <p className="faq__a">보통 2~3분입니다. 논문을 분석하고, 카드뉴스를 저작하고, 모든 수치를 원문과 대조한 뒤 이미지로 만드는 과정이 포함됩니다.</p>
+              </details>
+              <details className="faq__item">
+                <summary className="faq__q">올린 논문은 안전한가요?</summary>
+                <p className="faq__a">올린 논문은 카드뉴스를 만드는 데만 쓰이고 AI 학습에는 사용되지 않습니다. 언제든 직접 삭제할 수 있으며, 자세한 내용은 <a href="/privacy">개인정보 처리방침</a>에서 확인할 수 있습니다.</p>
+              </details>
+              <details className="faq__item">
+                <summary className="faq__q">결과를 수정할 수 있나요?</summary>
+                <p className="faq__a">네. 생성된 카드뉴스는 초안이며, 화면에서 문구·색·배치를 직접 고칠 수 있습니다. 원문에서 확인되지 않은 수치는 따로 표시되니, 게시 전에 검토하세요.</p>
+              </details>
+              <details className="faq__item">
+                <summary className="faq__q">무료로 어디까지 쓸 수 있나요?</summary>
+                <p className="faq__a">카드뉴스 1편을 무료로 만들어 생성·검증·편집까지 모두 볼 수 있습니다. 완성한 파일을 내보내는 것은 업그레이드 후 이용할 수 있으며, 만든 카드뉴스는 그대로 보관됩니다.</p>
+              </details>
+            </div>
           </div>
         </section>
 

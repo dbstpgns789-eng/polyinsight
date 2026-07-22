@@ -11,10 +11,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Re
 
 from pydantic import BaseModel, Field
 
+from ..agents.deck.caption import generate_caption
 from ..agents.deck.deck_renderer import render_deck
 from ..agents.deck.nl_patch import apply_nl_patch
 from ..agents.deck.pipeline import compute_verify, persist_edited_deck, run_authoring_pipeline
-from ..core import db, ratelimit
+from ..core import db, plans, ratelimit
+from ..core import images as images_util
 from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
 
@@ -61,7 +63,8 @@ async def deck_upload(
 
     style_direction: 아트 디렉션(미감 방향, 선택). 비우면 모델 자유 선택.
     """
-    ratelimit.enforce_upload_quota(user)  # 유저별 일일 쿼터(미인증 낮은 상한) — 재정 DoS 차단
+    plans.require_can_author(user)         # 플랜 게이트 — 무료 1덱 상한(원가 방어)
+    ratelimit.enforce_upload_quota(user)   # 유저별 일일 쿼터(재정 DoS) — 플랜과 별개 축
     if file.content_type not in ("application/pdf", "application/octet-stream"):
         if not (file.filename or "").lower().endswith(".pdf"):
             raise HTTPException(400, detail={"code": "ERR-INP-001", "message": "PDF 파일만 업로드 가능합니다."})
@@ -72,6 +75,17 @@ async def deck_upload(
 
     # 티어 상한으로 클램프(base=Sonnet/AUTHOR_MAX_CARDS, 추후 premium 확장)
     card_count = max(3, min(card_count, settings.AUTHOR_MAX_CARDS))
+
+    # 무료 체험 선차감 — **원자적**으로 소비한다. job 생성보다 먼저 해야 한다:
+    # require_can_author는 읽은 스냅샷 기반이라 동시 요청 2건이 둘 다 통과할 수 있고
+    # (check-then-act), 실제 상한 강제는 이 UPDATE 한 문장이 담당한다. create_job **뒤에**
+    # 두면 레이스에서 진 요청이 이미 만든 job 행을 고아로 남긴다 — list_jobs/list_projects는
+    # status 필터 없이 그대로 노출하므로 대시보드에 "PENDING"이 서버 재시작 전까지 영원히
+    # 뜬다(recover_stale_jobs는 startup 1회뿐). 그래서 job_id를 만들기 전에 소비부터 한다.
+    # 파이프라인이 ERROR로 끝나면 pipeline._log_done에서 환불한다(Task 4, 아하 보장).
+    if plans.should_consume_free_deck(user):
+        if not await db.consume_free_deck(user["id"], plans.FREE_DECK_LIMIT):
+            raise plans.author_gate_error(user)   # 레이스에서 진 요청
 
     job_id = str(uuid.uuid4())
     await db.create_job(job_id, title=file.filename, user_id=user["id"])
@@ -139,6 +153,7 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
     응답에 수정된 html 동봉 → 프론트가 에디터를 갱신본으로 재마운트.
     """
     await require_owned_job(job_id, user)
+    plans.require_can_ai_designer(user)   # AI 디자이너 = 유료 (호출마다 LLM 원가 방어)
     deck = await db.get_authored_deck(job_id)
     if deck is None or not deck.get("html"):
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
@@ -175,6 +190,7 @@ async def nlpatch_propose(job_id: str, body: DeckNLPropose, user: dict = Depends
     """AI 편집 제안 — 미저장·미렌더. 라이브 캔버스 html + target으로 최소 변경 수정본을
     만들어 verify와 함께 반환한다. 실제 반영은 PATCH /deck/{id}(commit)에서만."""
     await require_owned_job(job_id, user)
+    plans.require_can_ai_designer(user)   # AI 디자이너 = 유료 (호출마다 LLM 원가 방어)
     deck = await db.get_authored_deck(job_id)
     if deck is None or not deck.get("html"):
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
@@ -255,16 +271,44 @@ async def get_deck_card(job_id: str, card_num: int, user: dict = Depends(get_cur
     images = await db.get_card_images(job_id)
     png = images.get(card_num)
     if png is None:
-        # 렌더 캐시 만료(24h) 또는 미존재 → 저장된 HTML에서 자가치유 재렌더.
+        # 렌더 캐시 만료(24h) 또는 미존재 → 저장된 HTML에서 자가치유 재렌더(원본을 DB에 저장).
         png = await _heal_card_images(job_id, card_num)
     if png is None:
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "카드 이미지가 없습니다."})
+
+    # 저장은 항상 원본(위 자가치유 포함) — 응답만 무료 유저에게 축소. 순서를 바꾸면
+    # 축소본이 DB에 영구 저장돼 유료 전환 후에도 저해상도가 남는다.
+    if not plans.can_export(user):
+        png = images_util.downscale_png(png)
     return Response(content=png, media_type="image/png")
+
+
+@router.get("/deck/{job_id}/caption")
+async def get_deck_caption(job_id: str, user: dict = Depends(get_current_user)):
+    """인스타 게시용 캡션 → {caption, hashtags}. lazy 생성 + 캐시.
+
+    ★게이트 없음(export 게이트 안 걸림): 캡션 미리보기는 무료 아하다(순수잠금은 파일만).
+    비용 방어는 게이트가 아니라 캐시로 — 첫 요청만 LLM(덱당 1회로 바운드), 이후는 캐시 read.
+    편집 시 save_authored_deck이 캡션을 무효화(NULL)해 다음 요청에 재생성(staleness 처리).
+    """
+    await require_owned_job(job_id, user)
+    deck = await db.get_authored_deck(job_id)
+    if deck is None:
+        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
+
+    cached = deck.get("caption_json")
+    if cached:
+        return json.loads(cached)
+
+    result = await generate_caption(deck["html"] or "", deck.get("paper_text") or "")
+    await db.set_deck_caption(job_id, json.dumps(result, ensure_ascii=False))
+    return result
 
 
 @router.post("/deck/{job_id}/export")
 async def export_deck(job_id: str, user: dict = Depends(get_current_user)):
     """저장된 카드 PNG + HTML + 검증 결과를 ZIP으로. 다운로드는 /api/export/{id}/download 재사용."""
+    plans.require_can_export(user)
     await require_owned_job(job_id, user)
     deck = await db.get_authored_deck(job_id)
     if deck is None:

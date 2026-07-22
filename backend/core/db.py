@@ -102,7 +102,10 @@ async def migrate() -> None:
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'user',
                 email_verified INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                plan TEXT NOT NULL DEFAULT 'free',
+                free_decks_used INTEGER NOT NULL DEFAULT 0,
+                onboarded_at TEXT
             );
 
             CREATE TABLE IF NOT EXISTS auth_tokens (
@@ -155,7 +158,8 @@ async def migrate() -> None:
                 verify_json TEXT,
                 card_count INT,
                 paper_text TEXT,
-                updated_at TEXT
+                updated_at TEXT,
+                caption_json TEXT
             );
 
             -- 저작 지문(2026-07-11): 모델이 <!-- PI_MANIFEST --> 로 선언한 편집 결정.
@@ -190,6 +194,9 @@ async def migrate() -> None:
             cols = [row[1] for row in await cur.fetchall()]
         if "paper_text" not in cols:
             await conn.execute("ALTER TABLE authored_deck ADD COLUMN paper_text TEXT")
+        # 인스타 캡션(2026-07-21) — lazy 생성 캡션 캐시(첫 요청 시 채움, 편집 시 무효화).
+        if "caption_json" not in cols:
+            await conn.execute("ALTER TABLE authored_deck ADD COLUMN caption_json TEXT")
         # 유저별 격리(2026-07-02) — 기존 jobs에 user_id 없으면 추가(backfill은 별도 스크립트).
         async with conn.execute("PRAGMA table_info(jobs)") as cur:
             jcols = [row[1] for row in await cur.fetchall()]
@@ -200,6 +207,39 @@ async def migrate() -> None:
             ucols = [row[1] for row in await cur.fetchall()]
         if "email_verified" not in ucols:
             await conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+        # 무료체험 게이트(2026-07-19) — users에 plan/free_decks_used/onboarded_at 멱등 추가.
+        # ★기존 유저 백필: 이 컬럼들이 없던 DB = 게이트 도입 전부터 쓰던 계정(내부·테스트).
+        #   전원 plan='lab'(게이트 면제) + onboarded_at=now(환영 온보딩 안 뜸)로 백필한다.
+        #   안 하면 기존 유저가 전부 무료로 강등되고 온보딩을 다시 본다.
+        async with conn.execute("PRAGMA table_info(users)") as cur:
+            ucols2 = [row[1] for row in await cur.fetchall()]
+        if "plan" not in ucols2:
+            # ALTER 단독은 SQLite 오토커밋으로 즉시 durable하고, 뒤따르는 UPDATE만
+            # 트랜잭션에 남는다 — "ALTER 이후 ~ UPDATE 이전" 창에서 크래시하면 컬럼만
+            # 남고 백필 UPDATE만 유실 → 재기동 시 "plan" in ucols2가 True가 되어
+            # 이 블록이 영원히 스킵된다. 명시적 BEGIN으로 DDL까지 트랜잭션에 묶어
+            # ALTER+UPDATE를 진짜 원자 단위(둘 다 있거나 둘 다 없거나)로 만든다.
+            await conn.execute("BEGIN")
+            await conn.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
+            await conn.execute("UPDATE users SET plan = 'lab'")
+            # ★운영 DB엔 게이트 도입 전에 가입한 실제 외부 유저가 섞여 있다(로컬엔 없다).
+            #   위 일괄 lab은 '기존=내부' 전제인데 그 전제가 운영에서만 깨진다.
+            #   신원 매핑(2026-07-20 사용자 확정):
+            #     - hoik0822@gmail.com = 박사님·동업자 → lab 유지(벽 면제, 위 일괄 lab 그대로 둠)
+            #     - dhkdals14@gmail.com = 지인 → free(정상 무료체험 대상, 벽 적용)
+            #     - dbstpgns789@gmail.com = 관리자 → 내부 계정이라 위 일괄 lab에 이미 포함
+            #   즉 free로 되돌리는 건 지인 한 명뿐. 동업자·관리자는 면제(lab).
+            await conn.execute(
+                "UPDATE users SET plan = 'free' WHERE email IN ('dhkdals14@gmail.com')"
+            )
+            await conn.commit()
+        if "free_decks_used" not in ucols2:
+            await conn.execute("ALTER TABLE users ADD COLUMN free_decks_used INTEGER NOT NULL DEFAULT 0")
+        if "onboarded_at" not in ucols2:
+            await conn.execute("BEGIN")
+            await conn.execute("ALTER TABLE users ADD COLUMN onboarded_at TEXT")
+            await conn.execute("UPDATE users SET onboarded_at = ?", (_utc_now_iso(),))
+            await conn.commit()
         # L1(2026-07-09): BLOB→파일시스템. 기존 DB에 storage_key 없으면 추가(멱등).
         for _tbl in ("card_images", "exports", "deck_assets"):
             async with conn.execute(f"PRAGMA table_info({_tbl})") as cur:
@@ -420,7 +460,8 @@ async def save_authored_deck(
                 verify_json = excluded.verify_json,
                 card_count = excluded.card_count,
                 paper_text = COALESCE(excluded.paper_text, authored_deck.paper_text),
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                caption_json = NULL
             """,
             (job_id, html, verify_json, card_count, paper_text, now),
         )
@@ -431,12 +472,22 @@ async def get_authored_deck(job_id: str) -> dict | None:
     async with _connect() as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            "SELECT html, verify_json, card_count, paper_text, updated_at "
+            "SELECT html, verify_json, card_count, paper_text, updated_at, caption_json "
             "FROM authored_deck WHERE job_id = ?",
             (job_id,),
         ) as cursor:
             row = await cursor.fetchone()
             return dict(row) if row else None
+
+
+async def set_deck_caption(job_id: str, caption_json: str) -> None:
+    """생성된 캡션을 캐시. 덱이 없으면 no-op(캡션은 덱의 부속)."""
+    async with _connect() as conn:
+        await conn.execute(
+            "UPDATE authored_deck SET caption_json = ? WHERE job_id = ?",
+            (caption_json, job_id),
+        )
+        await conn.commit()
 
 
 # ── 덱 이미지 자산 (스펙 2026-07-01) ─────────────────────────────────────────
@@ -893,6 +944,50 @@ async def invalidate_auth_tokens(user_id: int, purpose: str) -> int:
 async def set_email_verified(user_id: int) -> None:
     async with _connect() as conn:
         await conn.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))
+        await conn.commit()
+
+
+async def consume_free_deck(user_id: int, limit: int = 1) -> bool:
+    """무료 체험 1회를 원자적으로 소비. 성공하면 True.
+
+    UPDATE 한 문장 안에서 잔여 검사까지 하므로 check-then-act 레이스가 없다
+    (동시 업로드 2건이 둘 다 통과하면 원가 방어 벽이 뚫린다).
+    free 플랜이 아니거나 잔여가 없으면 아무 것도 바꾸지 않고 False.
+    """
+    async with _connect() as conn:
+        cur = await conn.execute(
+            "UPDATE users SET free_decks_used = free_decks_used + 1 "
+            "WHERE id = ? AND plan = 'free' AND free_decks_used < ?",
+            (user_id, limit),
+        )
+        await conn.commit()
+        return cur.rowcount > 0
+
+
+async def refund_free_deck(user_id: int) -> None:
+    """파이프라인 실패 시 선차감 환불. 0 아래로 내려가지 않는다."""
+    async with _connect() as conn:
+        await conn.execute(
+            "UPDATE users SET free_decks_used = MAX(0, free_decks_used - 1) "
+            "WHERE id = ? AND plan = 'free'",
+            (user_id,),
+        )
+        await conn.commit()
+
+
+async def set_plan(user_id: int, plan: str) -> None:
+    async with _connect() as conn:
+        await conn.execute("UPDATE users SET plan = ? WHERE id = ?", (plan, user_id))
+        await conn.commit()
+
+
+async def mark_onboarded(user_id: int) -> None:
+    """환영 온보딩 시청 표시. 이미 표시됐으면 시각을 덮어쓰지 않는다(멱등)."""
+    async with _connect() as conn:
+        await conn.execute(
+            "UPDATE users SET onboarded_at = ? WHERE id = ? AND onboarded_at IS NULL",
+            (_utc_now_iso(), user_id),
+        )
         await conn.commit()
 
 
