@@ -1,0 +1,55 @@
+# CI 테스트 게이트 — push(main)·모든 PR에서 백엔드·프론트 테스트 자동 실행.
+# 프로덕션 무접촉: 테스트만 돌린다. 배포(CD)는 별도 워크플로.
+name: CI
+
+on:
+  push:                   # 모든 브랜치 — 개발 중에도 게이트 피드백
+  pull_request:
+  workflow_dispatch:      # 수동 트리거(검증용)
+
+concurrency:              # 같은 브랜치에 새 push 오면 이전 런 취소(분·비용 절약)
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend · pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'   # 프로덕션 컨테이너(playwright/python:v1.44.0-jammy)와 동일
+
+      - name: 의존성 설치
+        run: pip install --no-cache-dir -r backend/requirements.txt
+
+      - name: Chromium 설치 (S7 렌더 테스트가 실제 브라우저 사용)
+        run: python -m playwright install --with-deps chromium
+
+      - name: 테스트 (반드시 경로 지정 — bare pytest는 죽은 스위트 실행)
+        run: pytest backend/tests/
+        env:
+          PYTHONUTF8: '1'
+
+  web:
+    name: web · vitest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'        # 프로덕션 web/Dockerfile과 동일
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 테스트
+        run: npm test
