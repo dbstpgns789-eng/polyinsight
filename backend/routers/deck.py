@@ -7,6 +7,7 @@ import uuid
 import zipfile
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Response, UploadFile
 
 from pydantic import BaseModel, Field
@@ -47,7 +48,9 @@ _MAX_PDF_BYTES = 50 * 1024 * 1024  # 50 MB
 _MAX_ASSET_BYTES = 8 * 1024 * 1024  # 8 MB — 덱 이미지 자산
 # SVG 제외(XSS/SSRF 축소, 스펙 §7). 저작 덱의 raster 삽입만 허용.
 _ASSET_MIME_WHITELIST = {"image/png", "image/jpeg", "image/webp", "image/gif"}
-_ASSET_SOURCE_TYPES = {"upload-owned", "upload-data", "paper-figure"}
+_ASSET_SOURCE_TYPES = {"upload-owned", "upload-data", "paper-figure", "stock-pexels", "stock-unsplash"}
+# 스톡 URL 임포트 SSRF 방어 — provider CDN 호스트만 허용(내부/사설 URL·리다이렉트 차단, 스펙 §7 SSRF 축소).
+_STOCK_IMPORT_HOSTS = {"images.pexels.com", "images.unsplash.com", "plus.unsplash.com"}
 
 
 @router.post("/deck/upload", status_code=202)
@@ -262,6 +265,55 @@ async def get_deck_asset(job_id: str, asset_id: str):
                     "message": "이미지를 찾을 수 없습니다(만료되었을 수 있습니다)."},
         )
     return Response(content=asset["bytes"], media_type=asset["mime"] or "image/png")
+
+
+class AssetFromUrl(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+    source_type: str = "stock-pexels"
+
+
+@router.post("/deck/{job_id}/assets/from-url", status_code=201)
+async def import_deck_asset_from_url(
+    job_id: str, body: AssetFromUrl, user: dict = Depends(get_current_user),
+):
+    """스톡 검색 결과(외부 URL)를 서버가 받아 deck_asset으로 저장 → {assetId, url}.
+
+    덱 자립성: 저장 자산은 렌더 시 data URI로 인라인돼 외부 pexels/unsplash 의존이 사라진다
+    (직접 <img src=외부URL>은 export가 CDN 가용성에 묶임). ★SSRF 방어 = provider CDN 호스트
+    allowlist + 리다이렉트 미추적(내부/사설 URL 임포트 차단, 스펙 §7). 게이트는 소유권만
+    (이미지 삽입 = 편집, LLM 안 씀 → 무료. export 게이트 아님).
+    """
+    await require_owned_job(job_id, user)
+
+    from urllib.parse import urlparse
+    parsed = urlparse(body.url)
+    if parsed.scheme not in ("http", "https") or parsed.hostname not in _STOCK_IMPORT_HOSTS:
+        raise HTTPException(400, detail={"code": "ERR-IMG-005", "message": "허용되지 않은 이미지 소스입니다."})
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0), follow_redirects=False) as client:
+            resp = await client.get(body.url)
+            resp.raise_for_status()
+            data = resp.content
+            mime = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(502, detail={"code": "ERR-IMG-006", "message": "이미지를 가져오지 못했습니다."})
+
+    if mime not in _ASSET_MIME_WHITELIST:
+        raise HTTPException(400, detail={"code": "ERR-IMG-001", "message": "지원하지 않는 이미지 형식입니다(PNG·JPEG·WebP·GIF)."})
+    if not data:
+        raise HTTPException(400, detail={"code": "ERR-IMG-003", "message": "빈 이미지입니다."})
+    if len(data) > _MAX_ASSET_BYTES:
+        raise HTTPException(400, detail={"code": "ERR-IMG-002", "message": "이미지 크기가 8MB를 초과합니다."})
+
+    st = body.source_type if body.source_type in _ASSET_SOURCE_TYPES else "stock-pexels"
+    asset_id = uuid.uuid4().hex[:16]
+    await db.save_deck_asset(job_id, asset_id, data, mime, source_type=st, source_url=body.url)
+    await db.log_event("deck_asset_import", user_id=user["id"], job_id=job_id,
+                       payload={"asset_id": asset_id, "mime": mime, "source_type": st})
+    return {"assetId": asset_id, "url": f"/api/deck/{job_id}/assets/{asset_id}"}
 
 
 @router.get("/deck/{job_id}/cards/{card_num}")

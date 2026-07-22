@@ -838,3 +838,87 @@ async def test_plain_http_errors_are_not_logged_as_gate_hits(client):
 
     evts = [e for e in await _db.list_events(limit=50) if e["event_type"] == "plan_gate_hit"]
     assert len(evts) == 0
+
+
+# ── 스톡 자산 URL 임포트 (P0-4) ────────────────────────────────────────────
+import httpx as _httpx
+
+
+def _tiny_png() -> bytes:
+    b = io.BytesIO()
+    Image.new("RGB", (4, 4), (10, 120, 90)).save(b, format="PNG")
+    return b.getvalue()
+
+
+class _FakeResp:
+    def __init__(self, content: bytes, ctype: str):
+        self.content = content
+        self.headers = {"content-type": ctype}
+
+    def raise_for_status(self):
+        pass
+
+
+def _fake_httpx(content: bytes, ctype: str):
+    class _FakeClient:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, **k): return _FakeResp(content, ctype)
+    return _FakeClient
+
+
+@pytest.mark.asyncio
+async def test_import_stock_asset_saves_deck_asset(client, monkeypatch):
+    """스톡 URL을 서버가 받아 deck_asset으로 저장 → {assetId, url}. 렌더 인라인용 소유 자산."""
+    uid = await _mk_user("stock@test")
+    job_id = "job-stock"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    monkeypatch.setattr(_httpx, "AsyncClient", _fake_httpx(_tiny_png(), "image/png"))
+
+    r = await client.post(f"/api/deck/{job_id}/assets/from-url",
+                          json={"url": "https://images.pexels.com/photos/1/x.jpg", "source_type": "stock-pexels"})
+    assert r.status_code == 201
+    asset_id = r.json()["assetId"]
+    asset = await _db.get_deck_asset(job_id, asset_id)
+    assert asset is not None and asset["bytes"] == _tiny_png()
+
+
+@pytest.mark.asyncio
+async def test_import_stock_rejects_ssrf_host(client, monkeypatch):
+    """★SSRF — allowlist 밖 호스트(내부/사설)는 fetch 전에 400. 서버가 내부로 요청 못 감."""
+    uid = await _mk_user("ssrf@test")
+    job_id = "job-ssrf"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    called = []
+
+    class _Boom:
+        def __init__(self, *a, **k): called.append("init")
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, *a, **k): called.append("get"); return _FakeResp(b"x", "image/png")
+
+    monkeypatch.setattr(_httpx, "AsyncClient", _Boom)
+
+    r = await client.post(f"/api/deck/{job_id}/assets/from-url",
+                          json={"url": "http://localhost:8000/api/auth/me"})
+    assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "ERR-IMG-005"
+    assert called == []   # fetch 자체를 안 함
+
+
+@pytest.mark.asyncio
+async def test_import_stock_rejects_non_image(client, monkeypatch):
+    """이미지 아닌 응답(text/html)은 거부 — 임의 파일 임포트 차단."""
+    uid = await _mk_user("badmime@test")
+    job_id = "job-bm"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    monkeypatch.setattr(_httpx, "AsyncClient", _fake_httpx(b"<html>", "text/html"))
+
+    r = await client.post(f"/api/deck/{job_id}/assets/from-url",
+                          json={"url": "https://images.unsplash.com/photo-1/x"})
+    assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "ERR-IMG-001"
