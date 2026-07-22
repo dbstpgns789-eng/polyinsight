@@ -2587,7 +2587,7 @@ h1, h2, h3, h4, h5 {
 }
 .upgrade__wrap {
   width: 100%;
-  max-width: 980px;
+  max-width: 1140px;
   margin-inline: auto;
   padding-inline: var(--gutter);
 }
@@ -2752,7 +2752,7 @@ h1, h2, h3, h4, h5 {
   color: var(--text-2);
 }
 
-.upgrade__cta { width: 100%; justify-content: center; margin-top: var(--s5); text-decoration: none; }
+.upgrade__cta { width: 100%; justify-content: center; margin-top: auto; text-decoration: none; }
 
 .upgrade__feats {
   list-style: none;
@@ -2801,3 +2801,141 @@ h1, h2, h3, h4, h5 {
   color: var(--text-2);
   letter-spacing: 0;
 }
+
+/* ── 크레딧제 4티어 (2026-07-22) ── */
+
+.upgrade__tiers--four { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 1080px) {
+  .upgrade__tiers--four { grid-template-columns: repeat(2, 1fr); max-width: 640px; margin-inline: auto; }
+}
+@media (max-width: 560px) {
+  .upgrade__tiers--four { grid-template-columns: 1fr; max-width: 400px; }
+}
+
+.upgrade__price-won {
+  align-self: flex-end;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-2);
+  margin-bottom: 5px;
+}
+
+.upgrade__rollover {
+  margin-top: var(--s3);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--accent);
+}
+.upgrade__rollover--free { color: var(--text-3); font-weight: 500; }
+
+.upgrade__feats li.upgrade__feat--plus {
+  color: var(--text-2);
+  font-weight: 700;
+}
+.upgrade__feats li.upgrade__feat--plus::before { content: '＋'; color: var(--accent); }
+
+/* 플랜 비교 */
+.upgrade__compare { margin-top: var(--s10); }
+.upgrade__compare-title {
+  font-size: clamp(1.3rem, 1.5vw + 1rem, 1.6rem);
+  font-weight: 800;
+  color: var(--text-1);
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+.upgrade__compare-sub {
+  font-size: var(--t-sm);
+  color: var(--text-3);
+  text-align: center;
+  margin-top: 4px;
+  margin-bottom: var(--s6);
+}
+.upgrade__table-scroll { overflow-x: auto; }
+.upgrade__table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 640px;
+  font-size: var(--t-sm);
+}
+.upgrade__table th,
+.upgrade__table td {
+  padding: var(--s3) var(--s4);
+  text-align: center;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.upgrade__table th:first-child,
+.upgrade__table td:first-child {
+  text-align: left;
+  color: var(--text-2);
+  font-weight: 500;
+}
+.upgrade__table thead th {
+  font-weight: 800;
+  color: var(--text-1);
+  border-bottom: 1.5px solid var(--border);
+}
+.upgrade__th-price {
+  display: block;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+.upgrade__th--hl { color: var(--accent); }
+.upgrade__cell-val { font-weight: 700; color: var(--text-1); }
+.upgrade__ck { color: var(--accent); font-weight: 800; }
+.upgrade__no { color: var(--text-3); }
+
+/* FAQ */
+.upgrade__faq { margin-top: var(--s10); max-width: 720px; margin-inline: auto; }
+.upgrade__faq-title {
+  font-size: clamp(1.3rem, 1.5vw + 1rem, 1.6rem);
+  font-weight: 800;
+  color: var(--text-1);
+  text-align: center;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--s6);
+}
+.upgrade__faq details {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--s2);
+  background: var(--surface);
+}
+.upgrade__faq summary {
+  list-style: none;
+  cursor: pointer;
+  padding: var(--s4);
+  font-size: var(--t-sm);
+  font-weight: 700;
+  color: var(--text-1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s3);
+}
+.upgrade__faq summary::-webkit-details-marker { display: none; }
+.upgrade__faq summary::after {
+  content: '+';
+  color: var(--accent);
+  font-size: 1.1rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.upgrade__faq details[open] summary::after { content: '−'; }
+.upgrade__faq details p {
+  padding: 0 var(--s4) var(--s4);
+  font-size: var(--t-sm);
+  color: var(--text-2);
+  line-height: 1.65;
+}
+
+/* 팀 문의 */
+.upgrade__team {
+  text-align: center;
+  margin-top: var(--s8);
+  font-size: var(--t-sm);
+  color: var(--text-3);
+}
+.upgrade__team a { color: var(--accent); font-weight: 700; text-decoration: none; }
+.upgrade__team a:hover { text-decoration: underline; }
