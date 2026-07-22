@@ -2732,9 +2732,9 @@ h1, h2, h3, h4, h5 {
 
 .upgrade__quota {
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--s2);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
   margin-top: var(--s4);
   padding: var(--s3) var(--s4);
   background: var(--bg-subtle);
@@ -2834,57 +2834,77 @@ h1, h2, h3, h4, h5 {
 }
 .upgrade__feats li.upgrade__feat--plus::before { content: '＋'; color: var(--accent); }
 
-/* 플랜 비교 */
-.upgrade__compare { margin-top: var(--s10); }
-.upgrade__compare-title {
-  font-size: clamp(1.3rem, 1.5vw + 1rem, 1.6rem);
+/* 크레딧 보너스 뱃지 */
+.upgrade__quota-bonus {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: oklch(99% 0.003 163);
+  background: var(--accent);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+/* 작업별 크레딧 (고정 단가) */
+.upgrade__costs {
+  margin-top: var(--s10);
+  max-width: 560px;
+  margin-inline: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--s6);
+}
+.upgrade__costs-title {
+  font-size: var(--t-lg);
   font-weight: 800;
-  color: var(--text-1);
   text-align: center;
+  color: var(--text-1);
   letter-spacing: -0.02em;
 }
-.upgrade__compare-sub {
-  font-size: var(--t-sm);
+.upgrade__costs-sub {
+  font-size: var(--t-xs);
   color: var(--text-3);
   text-align: center;
   margin-top: 4px;
-  margin-bottom: var(--s6);
+  margin-bottom: var(--s5);
 }
-.upgrade__table-scroll { overflow-x: auto; }
-.upgrade__table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 640px;
-  font-size: var(--t-sm);
-}
-.upgrade__table th,
-.upgrade__table td {
-  padding: var(--s3) var(--s4);
-  text-align: center;
+.upgrade__costrow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s3) 0;
   border-bottom: 1px solid var(--border-subtle);
 }
-.upgrade__table th:first-child,
-.upgrade__table td:first-child {
-  text-align: left;
-  color: var(--text-2);
-  font-weight: 500;
-}
-.upgrade__table thead th {
-  font-weight: 800;
+.upgrade__costrow:last-of-type { border-bottom: none; }
+.upgrade__costrow-name {
+  font-size: var(--t-sm);
   color: var(--text-1);
-  border-bottom: 1.5px solid var(--border);
+  font-weight: 600;
 }
-.upgrade__th-price {
+.upgrade__costrow-name span {
   display: block;
   font-size: var(--t-xs);
-  font-weight: 600;
   color: var(--text-3);
-  margin-top: 2px;
+  font-weight: 400;
+  margin-top: 1px;
 }
-.upgrade__th--hl { color: var(--accent); }
-.upgrade__cell-val { font-weight: 700; color: var(--text-1); }
-.upgrade__ck { color: var(--accent); font-weight: 800; }
-.upgrade__no { color: var(--text-3); }
+.upgrade__costrow-amt {
+  font-size: var(--t-base);
+  font-weight: 800;
+  color: var(--accent-hover);
+  white-space: nowrap;
+}
+.upgrade__costrow-amt small { font-size: var(--t-xs); font-weight: 600; color: var(--text-3); }
+.upgrade__costnote {
+  margin-top: var(--s4);
+  font-size: var(--t-xs);
+  color: var(--text-3);
+  text-align: center;
+}
+.upgrade__costnote strong { color: var(--accent); font-weight: 700; }
 
 /* FAQ */
 .upgrade__faq { margin-top: var(--s10); max-width: 720px; margin-inline: auto; }
