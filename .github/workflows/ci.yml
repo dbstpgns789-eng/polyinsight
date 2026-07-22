@@ -28,8 +28,8 @@ jobs:
       - name: Chromium 설치 (S7 렌더 테스트가 실제 브라우저 사용)
         run: python -m playwright install --with-deps chromium
 
-      - name: 테스트 (반드시 경로 지정 — bare pytest는 죽은 스위트 실행)
-        run: pytest backend/tests/
+      - name: 테스트 (python -m: 레포 루트를 sys.path에 넣어 `import backend` 되게)
+        run: python -m pytest backend/tests/
         env:
           PYTHONUTF8: '1'
 
