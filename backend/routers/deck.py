@@ -153,6 +153,7 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
     응답에 수정된 html 동봉 → 프론트가 에디터를 갱신본으로 재마운트.
     """
     await require_owned_job(job_id, user)
+    plans.require_can_ai_designer(user)   # AI 디자이너 = 유료 (호출마다 LLM 원가 방어)
     deck = await db.get_authored_deck(job_id)
     if deck is None or not deck.get("html"):
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
@@ -189,6 +190,7 @@ async def nlpatch_propose(job_id: str, body: DeckNLPropose, user: dict = Depends
     """AI 편집 제안 — 미저장·미렌더. 라이브 캔버스 html + target으로 최소 변경 수정본을
     만들어 verify와 함께 반환한다. 실제 반영은 PATCH /deck/{id}(commit)에서만."""
     await require_owned_job(job_id, user)
+    plans.require_can_ai_designer(user)   # AI 디자이너 = 유료 (호출마다 LLM 원가 방어)
     deck = await db.get_authored_deck(job_id)
     if deck is None or not deck.get("html"):
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})

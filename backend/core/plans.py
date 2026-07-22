@@ -1,9 +1,11 @@
 """플랜 게이트 — 무료체험(export-gate 순수잠금)의 판정 단일 소스.
 
-무료 = 1덱 "보기 전용". 생성·뷰어·편집·검증 배지는 전부 열려 있고(아하),
-파일이 실제로 나가는 export 경로만 잠근다. 벽은 두 겹이고 역할이 다르다:
-  - export 게이트   = 가치 벽 (WTP가 최고조인 지점)
-  - 생성 1회 상한   = 원가 방어 (덱 1건 ≈ $1)
+무료 = 1덱 "보기 전용". 생성·뷰어·직접 편집(PATCH)·검증 배지는 열려 있고(아하),
+파일이 나가는 export와 LLM 원가가 드는 AI 디자이너(자연어 편집)만 잠근다.
+벽은 세 겹이고 역할이 다르다:
+  - export 게이트        = 가치 벽 (WTP가 최고조인 지점)
+  - 생성 1회 상한        = 원가 방어 (덱 1건 ≈ $1)
+  - AI 디자이너 게이트   = 원가 방어 (자연어 편집 호출마다 LLM)
 
 주의: 유저 dict는 항상 DB row라고 가정하지 않는다. X-Render-Token 서비스 유저
 (backend/core/auth.py:71)는 {"id","email","role"} 3키뿐이라 plan 키가 없다.
@@ -95,3 +97,30 @@ def require_can_author(user: dict) -> None:
 def require_can_export(user: dict) -> None:
     if not can_export(user):
         raise export_gate_error(user)
+
+
+def can_use_ai_designer(user: dict) -> bool:
+    """AI 디자이너(자연어 편집)를 쓸 수 있나 — 유료(pro/lab)만.
+
+    자연어 편집(nlpatch·propose)은 호출마다 LLM 원가가 발생한다. 무료가 이걸
+    무제한 쓰면 지출이 샌다(export 벽과 같은 원리 — 무료가 무한히 태우는 지출 차단).
+    직접 편집(PATCH)은 LLM을 안 써 무료로 열어 둔다. 판정은 can_export와 같지만
+    (유료만) gate_kind/code가 달라 벽 히트가 분류되고 프론트가 별도 메시지를 그린다.
+    """
+    if _is_exempt(user):
+        return True
+    return plan_of(user) in PAID_PLANS
+
+
+def ai_designer_gate_error(user: dict | None = None) -> PlanGateError:
+    return PlanGateError(
+        gate_kind="ai_designer",
+        code="ERR-PLAN-AI-DESIGNER",
+        message="AI 디자이너는 업그레이드 후 이용할 수 있어요. 직접 편집은 무료로 계속 쓸 수 있어요.",
+        user_id=(user or {}).get("id"),
+    )
+
+
+def require_can_ai_designer(user: dict) -> None:
+    if not can_use_ai_designer(user):
+        raise ai_designer_gate_error(user)

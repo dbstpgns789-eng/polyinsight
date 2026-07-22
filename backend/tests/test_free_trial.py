@@ -537,6 +537,93 @@ async def test_service_role_export_not_gated(client):
     assert r.status_code != 402
 
 
+# ── AI 디자이너 게이트 (자연어 편집 = 유료, 2026-07-22) ──────────────────────
+
+
+def test_free_user_cannot_use_ai_designer():
+    u = {"id": 1, "plan": "free", "free_decks_used": 0}
+    assert plans.can_use_ai_designer(u) is False
+
+
+def test_paid_user_can_use_ai_designer():
+    for plan in ("pro", "lab"):
+        u = {"id": 1, "plan": plan, "free_decks_used": 0}
+        assert plans.can_use_ai_designer(u) is True
+
+
+def test_service_role_can_use_ai_designer():
+    """내부 렌더 서비스는 plan 키가 없다 — 면제(KeyError 나면 안 됨)."""
+    u = {"id": 0, "email": "__render__", "role": "service"}
+    assert plans.can_use_ai_designer(u) is True
+
+
+def test_require_can_ai_designer_raises_402_with_plan_code():
+    u = {"id": 1, "plan": "free", "free_decks_used": 0}
+    with pytest.raises(HTTPException) as ei:
+        plans.require_can_ai_designer(u)
+    assert ei.value.status_code == 402
+    assert ei.value.detail["code"] == "ERR-PLAN-AI-DESIGNER"
+
+
+@pytest.mark.asyncio
+async def test_free_user_nlpatch_blocked_with_402(client):
+    """★무료는 AI 디자이너(자연어 편집) 불가 — 호출마다 LLM 원가가 새는 구멍.
+    게이트는 덱 조회·LLM 호출 앞에서 막아 지출을 원천 차단한다."""
+    uid = await _mk_user("noai@test")
+    job_id = "job-ai"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.post(f"/api/deck/{job_id}/nlpatch", json={"instruction": "제목 키워"})
+    assert r.status_code == 402
+    assert r.json()["detail"]["code"] == "ERR-PLAN-AI-DESIGNER"
+
+
+@pytest.mark.asyncio
+async def test_free_user_nlpatch_propose_blocked_with_402(client):
+    """★propose(미커밋 제안)도 LLM을 태우므로 같이 막힌다."""
+    uid = await _mk_user("noaipropose@test")
+    job_id = "job-aip"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.post(
+        f"/api/deck/{job_id}/nlpatch/propose",
+        json={"instruction": "제목 키워", "html": "<div data-screen-label='1'>x</div>"},
+    )
+    assert r.status_code == 402
+    assert r.json()["detail"]["code"] == "ERR-PLAN-AI-DESIGNER"
+
+
+@pytest.mark.asyncio
+async def test_paid_user_nlpatch_not_blocked_by_plan(client):
+    """유료는 플랜 게이트를 통과한다(덱이 없어 뒤에서 404 나는 건 무방 — LLM은 안 탄다)."""
+    uid = await _mk_user("paidai@test")
+    await _db.set_plan(uid, "pro")
+    job_id = "job-paidai"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.post(f"/api/deck/{job_id}/nlpatch", json={"instruction": "제목 키워"})
+    assert r.status_code != 402
+
+
+@pytest.mark.asyncio
+async def test_ai_designer_gate_hit_is_logged(client):
+    """벽 히트가 기록돼야 'AI 디자이너 원해서 벽 맞음'을 전환 데이터에서 판정할 수 있다."""
+    uid = await _mk_user("aigatelog@test")
+    job_id = "job-ailog"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+
+    r = await client.post(f"/api/deck/{job_id}/nlpatch", json={"instruction": "x"})
+    assert r.status_code == 402
+
+    evts = [e for e in await _db.list_events(limit=50) if e["event_type"] == "plan_gate_hit"]
+    assert len(evts) == 1
+    assert evts[0]["payload"]["kind"] == "ai_designer"
+
+
 # ── /me 확장 · 온보딩 ──────────────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_me_exposes_plan_state(client):

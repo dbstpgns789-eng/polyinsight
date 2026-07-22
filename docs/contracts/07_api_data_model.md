@@ -403,7 +403,7 @@ source_type: string  (선택, 기본 upload-owned) — upload-owned | upload-dat
 - `verify`: 수정본을 원문(`paper_text`)과 대조한 결과. 원문 없으면 `{verified:0, unverified:0, claims:[], skipped:true}`.
 - **DB·PNG 불변**(저장/렌더는 commit 전용).
 
-**에러**: 잡/덱 없음 404(ERR-JOB-001) · 수정 결과가 카드 구조 이탈(`data-screen-label` 소실) 422(ERR-EDIT-001, 원본 보존).
+**에러**: 무료 플랜 402(ERR-PLAN-AI-DESIGNER, 유료 전용) · 잡/덱 없음 404(ERR-JOB-001) · 수정 결과가 카드 구조 이탈(`data-screen-label` 소실) 422(ERR-EDIT-001, 원본 보존).
 
 #### `PATCH /api/deck/:jobId` (commit — 기재 보강)
 
@@ -754,16 +754,26 @@ type DegradeCode =
 | `ERR-DB-001` | SQLite 쓰기 실패 | 500 | "저장 중 오류가 발생했습니다. 관리자에게 문의하세요." |
 | `ERR-PLAN-AUTHOR` | 무료 체험 1덱 소진 후 추가 생성 시도 | 402 | "무료 체험 1덱을 모두 사용했어요. 업그레이드하면 계속 만들 수 있어요." |
 | `ERR-PLAN-EXPORT` | 무료 플랜에서 파일 내보내기 시도 | 402 | "내보내기는 업그레이드 후 이용할 수 있어요. 만든 카드뉴스는 그대로 보관돼요." |
+| `ERR-PLAN-AI-DESIGNER` | 무료 플랜에서 AI 디자이너(자연어 편집) 시도 | 402 | "AI 디자이너는 업그레이드 후 이용할 수 있어요. 직접 편집은 무료로 계속 쓸 수 있어요." |
 
 > `ERR-S2-001`은 파이프라인을 중단하지 않으므로 HTTP 200 응답 후 status 폴링으로 degraded 상태 확인.
 
 ---
 
-> **무료체험 게이트 (2026-07-19)** — 무료 = 1덱 "보기 전용". 생성·뷰어·편집·검증 배지는 전부 열려
-> 있고(아하 = 검증 완료 배지, 이것은 게이팅 금지), 파일이 실제로 나가는 export 경로만 잠근다.
+> **무료체험 게이트 (2026-07-19 · AI 디자이너 게이트 추가 2026-07-22)** — 무료 = 1덱 "보기 전용".
+> 생성·뷰어·**직접 편집(WYSIWYG)**·검증 배지는 열려 있고(아하 = 검증 완료 배지, 이것은 게이팅 금지),
+> 파일이 실제로 나가는 export 경로만 잠근다.
 > 뷰어의 inline 카드 이미지 경로(`/api/cards/{job}/image/{n}`, `/api/deck/{job}/cards/{n}`)는
 > 화면 표시용이므로 게이트하지 않는다. 무료 1덱은 업로드 시 선차감하고, 파이프라인이 ERROR로
 > 끝나면 환불한다 — 실패로 아하를 못 본 유저가 영구히 막히는 것을 막기 위함.
+>
+> **AI 디자이너(자연어 편집) = 유료 (2026-07-22 정책 전환).** `POST /deck/{job}/nlpatch`·
+> `/nlpatch/propose`는 호출마다 LLM 원가가 발생한다(직접 편집 `PATCH`는 LLM을 안 써 무료 유지).
+> v2.7은 "편집 전부 열림"이었으나, 무료 유저가 자기 1덱을 무제한 AI 편집하면 지출이 새는 구멍이라
+> 유료(pro/lab)로 게이트한다 — export 벽과 같은 원리다. 벽은 이제 세 겹:
+>   - export 게이트     = 가치 벽 (WTP 최고조)
+>   - 생성 1회 상한     = 원가 방어 (덱 1건 ≈ $1)
+>   - AI 디자이너 게이트 = 원가 방어 (편집 호출마다 LLM)
 
 ---
 
@@ -771,6 +781,7 @@ type DegradeCode =
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-07-22 | v2.8 | **AI 디자이너 유료 게이트.** 무료체험 정책 전환: "편집 전부 열림"(v2.7) → 직접 편집(`PATCH`)은 무료 유지, **자연어 편집(`nlpatch`·`propose`, LLM 원가)만 유료(pro/lab)**. 무료 유저의 무제한 AI 편집 = 지출 구멍 봉합(export 벽과 동일 원리). 에러 코드 `ERR-PLAN-AI-DESIGNER`(402) 추가. BM 확정=충전형 크레딧제, `/upgrade` 4티어 화면은 [WEB] 커밋. |
 | 2026-07-19 | v2.7 | 무료체험 export-gate 게이트 계약. `users` 테이블에 `plan`/`free_decks_used`/`onboarded_at` 3컬럼 추가(§2-8 신설). 인증 API 섹션(§1-8) 신설 — `GET /api/auth/me` 응답 확장, `POST /api/auth/onboarded` 신규. 에러 코드에 `ERR-PLAN-AUTHOR`/`ERR-PLAN-EXPORT`(402) 2건 추가. |
 | 2026-07-11 | v2.6 | `deck_manifest` 테이블 추가(§2-1a) — 저작 지문(PI_MANIFEST) 저장·반복이력 소프트 주입. `GET /api/deck/:jobId`의 `verify`에 `derived[]`(V2 파생수치 검산: value·kind·suspect·unresolved·verified·context) 추가 — 구 덱엔 없음(optional). |
 | 2026-06-24 | v2.5 | `CardSlot.visual_kind?`(사진/일러스트, 에디터 전용) 추가. `image_mode`(기존 코드에 있었으나 문서 누락) 문서화. `TemplateType` 14종 전체 반영(8→14, 드리프트 수정). |
