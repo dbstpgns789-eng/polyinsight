@@ -22,8 +22,8 @@ jobs:
         with:
           python-version: '3.10'   # 프로덕션 컨테이너(playwright/python:v1.44.0-jammy)와 동일
 
-      - name: 의존성 설치
-        run: pip install --no-cache-dir -r backend/requirements.txt
+      - name: 의존성 설치 (런타임 + 테스트)
+        run: pip install --no-cache-dir -r backend/requirements-dev.txt
 
       - name: Chromium 설치 (S7 렌더 테스트가 실제 브라우저 사용)
         run: python -m playwright install --with-deps chromium
