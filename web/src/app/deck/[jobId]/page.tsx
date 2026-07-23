@@ -11,8 +11,9 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
 import { getStatus, getDeck, patchDeck, nlProposeDeck } from '@/lib/api'
-import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState, type PageState } from '@/components/deck/DeckEditor'
+import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState, type PageState, type LayerItem } from '@/components/deck/DeckEditor'
 import DeckElementPanel from '@/components/deck/DeckElementPanel'
+import DeckLayersPanel from '@/components/deck/DeckLayersPanel'
 import DeckMediaPanel from '@/components/deck/DeckMediaPanel'
 import DeckAIAssistant from '@/components/deck/DeckAIAssistant'
 import { extractEidText } from '@/lib/deckDiff'
@@ -138,6 +139,7 @@ function DeckPageInner() {
   const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [saving, setSaving] = useState(false)
   const [selected, setSelected] = useState<SelectedInfo | null>(null)
+  const [layers, setLayers] = useState<LayerItem[]>([])   // 현재 카드 원자 요소 목록(레이어 패널)
   const [ver, setVer] = useState(0)            // PNG 캐시 무력화 버전
   const [pngStale, setPngStale] = useState(false)   // 자동저장으로 html은 바뀌었는데 PNG는 아직 안 받은 상태
   const [editWarnings, setEditWarnings] = useState<string[]>([])
@@ -510,6 +512,7 @@ function DeckPageInner() {
                 onDirty={handleDirty}
                 onHistory={setHistory}
                 onPage={handlePage}
+                onLayers={(info) => setLayers(info.items)}
                 onHighlighted={(info) => { if (info.value === activeHLRef.current) setJumpFound(info.found > 0) }}
               />
               {(proposing || !!pending) && (
@@ -588,6 +591,12 @@ function DeckPageInner() {
               }
               inspector={
                 <div className="flex flex-col gap-5">
+                  <DeckLayersPanel
+                    items={layers}
+                    selectedEid={selected?.count && selected.count > 1 ? undefined : selected?.eid}
+                    onSelect={(eid) => editorRef.current?.selectEid(eid)}
+                  />
+                  <div className="h-px bg-border" />
                   <DeckMediaPanel jobId={jobId} onInsert={(p) => { editorRef.current?.insertImage(p); handleDirty() }} />
                   <div className="h-px bg-border" />
                   <DeckElementPanel

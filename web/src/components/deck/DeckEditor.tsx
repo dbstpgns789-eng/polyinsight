@@ -35,6 +35,10 @@ export interface HistoryState { canUndo: boolean; canRedo: boolean }
 
 export interface PageState { index: number; count: number }
 
+export type LayerKind = 'text' | 'image' | 'graphic' | 'shape'
+export interface LayerItem { eid: string; kind: LayerKind; label: string }
+export interface LayersInfo { items: LayerItem[]; cardIndex: number }
+
 export type AlignAxis = 'left' | 'hcenter' | 'right' | 'top' | 'vcenter' | 'bottom'
 
 export interface DeckEditorHandle {
@@ -51,6 +55,7 @@ export interface DeckEditorHandle {
   distribute: (axis: 'h' | 'v') => void
   setRect: (r: { left?: number; top?: number; width?: number; height?: number }) => void
   setPage: (index: number) => void
+  selectEid: (eid: string) => void       // 레이어 패널 목록 클릭 → eid로 선택(클릭 가림 우회)
   highlight: (value: string) => void
   clearHighlight: () => void
   zoomBy: (factor: number) => void       // 중앙 기준 확대/축소
@@ -69,6 +74,7 @@ interface Props {
   onDirty?: () => void
   onHistory?: (state: HistoryState) => void
   onPage?: (state: PageState) => void
+  onLayers?: (info: LayersInfo) => void
   onHighlighted?: (info: { value: string; found: number }) => void
   onScaleChange?: (effective: number, fit: number) => void
   className?: string                                    // 스크롤 뷰포트 배치(예: absolute inset-0)
@@ -83,7 +89,7 @@ function buildSrcDoc(html: string): string {
 }
 
 const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
-  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage, onHighlighted, onScaleChange, className, initialPage }, ref,
+  { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage, onLayers, onHighlighted, onScaleChange, className, initialPage }, ref,
 ) {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -139,6 +145,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     distribute: (axis) => send('DISTRIBUTE', { axis }),
     setRect: (r) => send('SET_RECT', r),
     setPage: (index) => send('SET_PAGE', { index }),
+    selectEid: (eid) => send('SELECT_EID', { eid }),
     highlight: (value) => send('HIGHLIGHT', { value }),
     clearHighlight: () => send('CLEAR_HIGHLIGHT'),
     zoomBy: (factor) => zoomByCenter(factor),
@@ -162,6 +169,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
         case 'DIRTY': onDirty?.(); break
         case 'HISTORY_STATE': onHistory?.({ canUndo: !!d.canUndo, canRedo: !!d.canRedo }); break
         case 'PAGE': onPage?.({ index: Number(d.index) || 0, count: Number(d.count) || 0 }); break
+        case 'LAYERS': onLayers?.({ items: (d.items as LayerItem[]) || [], cardIndex: Number(d.cardIndex) || 0 }); break
         case 'HIGHLIGHTED': onHighlighted?.({ value: String(d.value), found: Number(d.found) || 0 }); break
         case 'VIEWPORT': {
           const wrap = wrapRef.current; if (!wrap) break
@@ -189,7 +197,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
-  }, [mode, send, onSelected, onDeselected, onDirty, onHistory, onPage, onHighlighted, initialPage, zoomAt])
+  }, [mode, send, onSelected, onDeselected, onDirty, onHistory, onPage, onLayers, onHighlighted, initialPage, zoomAt])
 
   // 모드 변경을 iframe에 반영
   useEffect(() => { send('SET_MODE', { mode }) }, [mode, send])
