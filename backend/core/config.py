@@ -106,6 +106,14 @@ class Settings(BaseSettings):
     # dev=http://localhost:3000 (Next rewrite가 /api를 백엔드로 프록시 → 세션쿠키 동일 오리진).
     OAUTH_REDIRECT_BASE: str = ""
 
+    # ── 인스타 자동 발행 (Instagram Login, 2026-07-23) ──────────
+    # 비우면 dormant. Meta 앱 크레덴셜 + 토큰 암호화키 + 공개 카드URL 서명키.
+    INSTAGRAM_CLIENT_ID: str = ""
+    INSTAGRAM_CLIENT_SECRET: str = ""
+    SOCIAL_TOKEN_KEY: str = ""            # Fernet 키(urlsafe base64 32B). 비면 IG 연동 dormant
+    PUBLIC_CARD_URL_SECRET: str = ""      # 공개 카드URL HMAC 서명키. 비면 발행 dormant(위조 방지)
+    PUBLISH_CREDIT_COST: int = 5          # 발행 1회 크레딧(튜닝값)
+
     # ── 이메일 인증 (Resend, 2026-07-02) ──────────────────────
     RESEND_API_KEY: str = ""             # 비우면 발송 no-op(dormant). https://resend.com
     EMAIL_FROM: str = "onboarding@resend.dev"   # 도메인 DKIM 검증 전엔 이걸로 본인 메일함 테스트
