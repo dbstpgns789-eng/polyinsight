@@ -17,6 +17,7 @@ export interface SelectedInfo {
   absolute: boolean
   styles: {
     color: string; fontSize: string; textAlign: string; fontWeight: string; background: string
+    letterSpacing: string; lineHeight: string; textShadow: string   // 텍스트 세밀
     borderRadius: string; objectFit: string; opacity: string   // 이미지 트리트먼트
   }
   text: string

@@ -403,7 +403,8 @@ source_type: string  (선택, 기본 upload-owned) — upload-owned | upload-dat
 - `verify`: 수정본을 원문(`paper_text`)과 대조한 결과. 원문 없으면 `{verified:0, unverified:0, claims:[], skipped:true}`.
 - **DB·PNG 불변**(저장/렌더는 commit 전용).
 
-**에러**: 무료 플랜 402(ERR-PLAN-AI-DESIGNER, 유료 전용) · 잡/덱 없음 404(ERR-JOB-001) · 수정 결과가 카드 구조 이탈(`data-screen-label` 소실) 422(ERR-EDIT-001, 원본 보존).
+**에러**: 무료 플랜 402(ERR-PLAN-AI-DESIGNER, 유료 전용) · 유료 잔액부족 402(ERR-CREDIT-LOW) · 잡/덱 없음 404(ERR-JOB-001) · 수정 결과가 카드 구조 이탈(`data-screen-label` 소실) 422(ERR-EDIT-001, 원본 보존).
+**과금**(v2.9): `AIEDIT_COST`(=2) 차감은 **계약 통과(`data-screen-label` 존재) 후**에만 — 422/LLM예외면 무과금(§2-9).
 
 #### `PATCH /api/deck/:jobId` (commit — 기재 보강)
 
@@ -429,6 +430,7 @@ iframe editorAgent가 요소 선택 시 부여하는 **불투명 난수 id**(예
   "role": "user",
   "emailVerified": true,
   "plan": "free",
+  "credits": 0,
   "freeDecksUsed": 0,
   "freeDeckLimit": 1,
   "canAuthor": true,
@@ -436,6 +438,7 @@ iframe editorAgent가 요소 선택 시 부여하는 **불투명 난수 id**(예
   "onboarded": false
 }
 ```
+> `credits`(2026-07-23, v2.9)는 유료 크레딧 잔액. 프론트 잔액 위젯(P1-2)이 읽을 자리. 전용 폴링 엔드포인트는 미제공(YAGNI).
 
 ---
 
@@ -730,6 +733,27 @@ type DegradeCode =
 | `plan` | TEXT | `free` \| `pro` \| `lab`. 기본값 `free` |
 | `free_decks_used` | INTEGER | 무료 체험 소진 카운터. 평생 리셋 없음(월 리셋 없음). 기본값 0 |
 | `onboarded_at` | TEXT | ISO 8601. NULL이면 환영 온보딩 미시청 |
+| `credits` | INTEGER | 유료 크레딧 잔액(B1, 2026-07-23). 기본값 0. 잔액만 저장(거래내역 테이블 없음 — P1-2) |
+
+---
+
+### 2-9. 크레딧제(B1, 2026-07-23 · v2.9)
+
+충전형 크레딧제. 기능 차등 없음 — 작업이 크레딧을 소모한다(고정 단가 = 예측 가능).
+
+**두 화폐 공존**: 무료체험(`plan=free`)은 `free_decks_used` 카운터로 평생 1덱(크레딧 0). 충전팩 구매 → `plan='pro'` + `credits += 양` → 이후 작업이 크레딧 소모. `plan='lab'`·`role='service'`는 면제(차감·게이트 모두 통과).
+
+**차감 단가**(상수, `plans.py` — 값은 튜닝 가능):
+
+| 작업 | 크레딧 | 훅 |
+|---|---|---|
+| 덱 생성 | `DECK_COST`(=10) | 업로드 선차감 + `jobs.charged_credits` 각인(환불 근거). 파이프라인 ERROR·재시작 소실 시 멱등 환불 |
+| AI 편집(`nlpatch`·`propose`) | `AIEDIT_COST`(=2) | 결과 계약(`data-screen-label`) 통과 후 차감 — 422/LLM예외는 무과금 |
+| export | 0(무과금) | plan 게이트만(`can_export`) |
+
+- `jobs.charged_credits`(INTEGER, 기본 0) = 잡별 선차감액. 환불근거를 DB에 남겨 서버 재시작 후에도 복구(`recover_stale_jobs`·`_log_done` 두 경로가 멱등 환불).
+- 부분 렌더(요청 카드 중 일부만 성공, `status=DONE`)는 전달 산출물로 보고 **전액 과금**. 0장(ERROR)만 전액 환불.
+- 충전 함수 `add_credits`(pro 승격·lab 강등금지·음수 no-op). 실결제(Creem)·거래내역·발행 크레딧은 이 계약 밖.
 
 ---
 
@@ -755,6 +779,7 @@ type DegradeCode =
 | `ERR-PLAN-AUTHOR` | 무료 체험 1덱 소진 후 추가 생성 시도 | 402 | "무료 체험 1덱을 모두 사용했어요. 업그레이드하면 계속 만들 수 있어요." |
 | `ERR-PLAN-EXPORT` | 무료 플랜에서 파일 내보내기 시도 | 402 | "내보내기는 업그레이드 후 이용할 수 있어요. 만든 카드뉴스는 그대로 보관돼요." |
 | `ERR-PLAN-AI-DESIGNER` | 무료 플랜에서 AI 디자이너(자연어 편집) 시도 | 402 | "AI 디자이너는 업그레이드 후 이용할 수 있어요. 직접 편집은 무료로 계속 쓸 수 있어요." |
+| `ERR-CREDIT-LOW` | 유료(pro) 잔액 부족(생성·AI편집) | 402 | "크레딧이 부족해요. 충전하면 계속 만들 수 있어요." |
 
 > `ERR-S2-001`은 파이프라인을 중단하지 않으므로 HTTP 200 응답 후 status 폴링으로 degraded 상태 확인.
 
@@ -781,6 +806,7 @@ type DegradeCode =
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-07-23 | v2.9 | **크레딧 백엔드(B1).** `users.credits`·`jobs.charged_credits` 컬럼 추가(§2-8·2-9 신설). 유료(pro) 게이트를 binary→**크레딧 차감**으로 재배선(덱 10·AI편집 2, export 무과금). `ERR-CREDIT-LOW`(402) 추가. `GET /api/auth/me`에 `credits` 필드. **적대검증 5렌즈**로 봉합: 재시작 소실 잡 멱등 환불(`jobs.charged_credits` 각인·`recover_stale_jobs`+`_log_done`), AI편집 422 무과금(검증 후 차감), 부분렌더 전액과금 명문화. 설계: `docs/superpowers/specs/2026-07-23-credit-backend-b1-design.md`. Creem 결제·거래내역·프론트 위젯은 P1-2+. |
 | 2026-07-22 | v2.8 | **AI 디자이너 유료 게이트.** 무료체험 정책 전환: "편집 전부 열림"(v2.7) → 직접 편집(`PATCH`)은 무료 유지, **자연어 편집(`nlpatch`·`propose`, LLM 원가)만 유료(pro/lab)**. 무료 유저의 무제한 AI 편집 = 지출 구멍 봉합(export 벽과 동일 원리). 에러 코드 `ERR-PLAN-AI-DESIGNER`(402) 추가. BM 확정=충전형 크레딧제, `/upgrade` 4티어 화면은 [WEB] 커밋. |
 | 2026-07-19 | v2.7 | 무료체험 export-gate 게이트 계약. `users` 테이블에 `plan`/`free_decks_used`/`onboarded_at` 3컬럼 추가(§2-8 신설). 인증 API 섹션(§1-8) 신설 — `GET /api/auth/me` 응답 확장, `POST /api/auth/onboarded` 신규. 에러 코드에 `ERR-PLAN-AUTHOR`/`ERR-PLAN-EXPORT`(402) 2건 추가. |
 | 2026-07-11 | v2.6 | `deck_manifest` 테이블 추가(§2-1a) — 저작 지문(PI_MANIFEST) 저장·반복이력 소프트 주입. `GET /api/deck/:jobId`의 `verify`에 `derived[]`(V2 파생수치 검산: value·kind·suspect·unresolved·verified·context) 추가 — 구 덱엔 없음(optional). |
