@@ -18,10 +18,24 @@ from fastapi import HTTPException
 FREE_DECK_LIMIT = 1
 PAID_PLANS = ("pro", "lab")
 
+# 크레딧 단가(B1, 2026-07-23) — 고정 단가 = 예측 가능(작업량 미터 불안 해소).
+# 값은 자리표시자, 나중 튜닝(Mirra 실측 참고). export는 무과금(plan 게이트만).
+DECK_COST = 10       # 덱 1건 생성
+AIEDIT_COST = 2      # 자연어 편집 1회(nlpatch·propose)
+
 
 def _is_exempt(user: dict) -> bool:
     """내부 렌더 서비스 — 게이트 대상 아님."""
     return user.get("role") == "service"
+
+
+def credits_of(user: dict) -> int:
+    return int(user.get("credits") or 0)
+
+
+def author_charges_credits(user: dict) -> bool:
+    """생성이 크레딧을 차감하는 유저인가 — 유료(pro)이고 면제 아님. lab/service/free는 False."""
+    return not _is_exempt(user) and plan_of(user) == "pro"
 
 
 def plan_of(user: dict) -> str:
@@ -33,10 +47,12 @@ def free_decks_used(user: dict) -> int:
 
 
 def can_author(user: dict) -> bool:
-    """새 덱을 만들 수 있나 — 무료는 평생 FREE_DECK_LIMIT회."""
-    if _is_exempt(user) or plan_of(user) in PAID_PLANS:
+    """새 덱을 만들 수 있나 — 면제/lab 무제한, 무료는 평생 FREE_DECK_LIMIT회, 유료는 잔액≥DECK_COST."""
+    if _is_exempt(user) or plan_of(user) == "lab":
         return True
-    return free_decks_used(user) < FREE_DECK_LIMIT
+    if plan_of(user) == "free":
+        return free_decks_used(user) < FREE_DECK_LIMIT
+    return credits_of(user) >= DECK_COST   # pro
 
 
 def can_export(user: dict) -> bool:
@@ -89,9 +105,28 @@ def export_gate_error(user: dict | None = None) -> PlanGateError:
     )
 
 
+def credit_low_error(user: dict | None = None) -> PlanGateError:
+    """유료(pro) 잔액 부족. 무료 소진(author_gate_error)과 다른 코드 — 프론트가
+    '업그레이드'(무료)와 '충전'(유료 잔액부족)을 다르게 그린다. 'credit balance' 같은
+    내부어 금지(test_credit_error 교훈)."""
+    return PlanGateError(
+        gate_kind="credits",
+        code="ERR-CREDIT-LOW",
+        message="크레딧이 부족해요. 충전하면 계속 만들 수 있어요.",
+        user_id=(user or {}).get("id"),
+    )
+
+
 def require_can_author(user: dict) -> None:
-    if not can_author(user):
-        raise author_gate_error(user)
+    """접근 게이트(1층) — regime별로 에러를 다르게 낸다. 원자 소비(2층)는 라우터가 별도 강제."""
+    if _is_exempt(user) or plan_of(user) == "lab":
+        return
+    if plan_of(user) == "free":
+        if free_decks_used(user) >= FREE_DECK_LIMIT:
+            raise author_gate_error(user)         # 무료 소진 → 업그레이드 유도
+        return
+    if credits_of(user) < DECK_COST:              # pro
+        raise credit_low_error(user)              # 잔액 부족 → 충전 유도
 
 
 def require_can_export(user: dict) -> None:
@@ -122,5 +157,11 @@ def ai_designer_gate_error(user: dict | None = None) -> PlanGateError:
 
 
 def require_can_ai_designer(user: dict) -> None:
-    if not can_use_ai_designer(user):
+    """접근 게이트(1층). 무료=접근 자체 차단(ERR-PLAN-AI-DESIGNER), 유료=잔액 부족이면 ERR-CREDIT-LOW.
+    실제 차감(2층)은 라우터가 검증 통과 후 consume_credits로 강제(§13-②, no-op 과금 방지)."""
+    if _is_exempt(user) or plan_of(user) == "lab":
+        return
+    if plan_of(user) != "pro":                    # free → 접근 차단
         raise ai_designer_gate_error(user)
+    if credits_of(user) < AIEDIT_COST:            # pro → 잔액 부족
+        raise credit_low_error(user)

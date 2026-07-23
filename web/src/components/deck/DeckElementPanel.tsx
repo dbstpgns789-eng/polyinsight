@@ -6,6 +6,7 @@
 
 import { useState } from 'react'
 import type { SelectedInfo, AlignAxis } from './DeckEditor'
+import { parseLetterSpacingPx, parseLineHeightRatio, nearestWeightStep, hasTextShadow } from '@/lib/textStyle'
 
 interface Props {
   selected: SelectedInfo | null
@@ -105,6 +106,19 @@ function activeRadiusKey(px: number): string {
   return px >= 1000 ? '9999px' : px >= 22 ? '28px' : px >= 8 ? '16px' : '0px'
 }
 
+// 굵기 스케일 — 볼드 토글 대신 4단(평범한 말). 폰트(Pretendard)가 전 웨이트 지원.
+const WEIGHTS = [
+  { w: 400, label: '보통' }, { w: 600, label: '약간' }, { w: 700, label: '굵게' }, { w: 800, label: '매우' },
+] as const
+const WEIGHT_VALUES = WEIGHTS.map((x) => x.w)
+// 그림자 프리셋 — 사진 위 글자 가독성용. '번짐'=사방 헤일로(테두리 대체). 값은 인라인으로 정확매칭.
+const SHADOWS = [
+  { key: 'none', label: '없음' },
+  { key: '0px 1px 3px rgba(0,0,0,0.28)', label: '옅게' },
+  { key: '0px 2px 8px rgba(0,0,0,0.5)', label: '진하게' },
+  { key: '0px 0px 4px rgba(0,0,0,0.9)', label: '번짐' },
+] as const
+
 export default function DeckElementPanel({
   selected, onStyle, onDelete, onMove, onRevertFlow, onSetBackground, onAlign, onDistribute, onSetRect,
 }: Props) {
@@ -122,7 +136,10 @@ export default function DeckElementPanel({
   const multi = count > 1
   const rect = selected.rect ?? null
   const fontPx = parseFloat(selected.styles.fontSize) || 16
-  const isBold = (parseInt(selected.styles.fontWeight, 10) || 400) >= 600
+  const weightStep = nearestWeightStep(selected.styles.fontWeight, WEIGHT_VALUES)
+  const trackingPx = parseLetterSpacingPx(selected.styles.letterSpacing)
+  const leadRatio = parseLineHeightRatio(selected.styles.lineHeight, selected.styles.fontSize)
+  const shadowKey = hasTextShadow(selected.styles.textShadow) ? selected.styles.textShadow : 'none'
   const align = selected.styles.textAlign
   const isImage = !multi && !!selected.isImage
   const isBg = !!selected.isBackground
@@ -233,8 +250,40 @@ export default function DeckElementPanel({
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[12.5px] text-ink-2">굵기</span>
-            <button onClick={() => onStyle('fontWeight', isBold ? '400' : '700')}
-              className={`px-3.5 h-8 rounded-lg border text-[13px] font-bold transition-colors ${isBold ? 'border-forest-green text-forest-green-deep bg-forest-green-wash' : 'border-deck-line text-ink-3 hover:text-ink-2'}`}>가나 B</button>
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-bg-subtle border border-deck-line">
+              {WEIGHTS.map((x) => (
+                <button key={x.w} onClick={() => onStyle('fontWeight', String(x.w))}
+                  style={{ fontWeight: x.w }}
+                  className={`px-2.5 h-7 rounded-md text-[11.5px] transition-colors ${weightStep === x.w ? 'bg-surface shadow-card text-forest-green-deep' : 'text-ink-3 hover:text-ink-2'}`}>{x.label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[12.5px] text-ink-2">자간</span>
+              <span className="font-mono text-[11px] tabular-nums text-ink-3">{trackingPx.toFixed(1)}px</span>
+            </div>
+            <input type="range" min={-2} max={8} step={0.5} value={trackingPx}
+              onChange={(e) => onStyle('letterSpacing', `${e.target.value}px`)}
+              className="w-full accent-forest-green cursor-pointer" aria-label="자간" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[12.5px] text-ink-2">행간</span>
+              <span className="font-mono text-[11px] tabular-nums text-ink-3">{leadRatio.toFixed(1)}</span>
+            </div>
+            <input type="range" min={1} max={2.2} step={0.1} value={leadRatio}
+              onChange={(e) => onStyle('lineHeight', e.target.value)}
+              className="w-full accent-forest-green cursor-pointer" aria-label="행간" />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[12.5px] text-ink-2">그림자</span>
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-bg-subtle border border-deck-line">
+              {SHADOWS.map((s) => (
+                <button key={s.key} onClick={() => onStyle('textShadow', s.key)}
+                  className={`px-2.5 h-7 rounded-md text-[11.5px] transition-colors ${shadowKey === s.key ? 'bg-surface shadow-card text-forest-green-deep' : 'text-ink-3 hover:text-ink-2'}`}>{s.label}</button>
+              ))}
+            </div>
           </div>
           <ColorRow label="글자색" color={selected.styles.color} onChange={(hex) => onStyle('color', hex)} />
         </Section>

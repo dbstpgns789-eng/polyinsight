@@ -76,6 +76,8 @@ const AGENT_BODY = `
     return {
       color: cs.color, fontSize: cs.fontSize, textAlign: cs.textAlign,
       fontWeight: cs.fontWeight, background: el.style.background || el.style.backgroundColor || '',
+      letterSpacing: cs.letterSpacing, lineHeight: cs.lineHeight,  // 텍스트 세밀(자간·행간=computed)
+      textShadow: el.style.textShadow || '',  // 그림자=인라인(프리셋 정확매칭용, background와 동일 패턴)
       borderRadius: cs.borderTopLeftRadius, objectFit: cs.objectFit, opacity: cs.opacity  // 이미지 트리트먼트
     };
   }
