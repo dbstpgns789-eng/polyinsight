@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const mockGet = vi.fn()
-const mockPost = vi.fn()
+// ★vi.mock은 파일 최상단으로 호이스트됨 → mock 함수도 vi.hoisted로 먼저 초기화해야
+//   factory 안에서 접근 가능("Cannot access mockGet before initialization" 방지).
+const { mockGet, mockPost } = vi.hoisted(() => ({
+  mockGet: vi.fn(),
+  mockPost: vi.fn(),
+}))
 
 // axios.create()가 반환하는 인스턴스의 get/post를 목킹 (api.ts는 모듈 로드 시 interceptors 등록)
 vi.mock('axios', () => ({
