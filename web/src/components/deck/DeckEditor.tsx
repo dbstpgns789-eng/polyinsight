@@ -56,6 +56,7 @@ export interface DeckEditorHandle {
   setRect: (r: { left?: number; top?: number; width?: number; height?: number }) => void
   setPage: (index: number) => void
   selectEid: (eid: string) => void       // 레이어 패널 목록 클릭 → eid로 선택(클릭 가림 우회)
+  hoverEid: (eid: string) => void         // 레이어 행 hover → 캔버스 아웃라인(로케이트). ''=해제
   highlight: (value: string) => void
   clearHighlight: () => void
   zoomBy: (factor: number) => void       // 중앙 기준 확대/축소
@@ -146,6 +147,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
     setRect: (r) => send('SET_RECT', r),
     setPage: (index) => send('SET_PAGE', { index }),
     selectEid: (eid) => send('SELECT_EID', { eid }),
+    hoverEid: (eid) => send('HOVER_EID', { eid }),
     highlight: (value) => send('HIGHLIGHT', { value }),
     clearHighlight: () => send('CLEAR_HIGHLIGHT'),
     zoomBy: (factor) => zoomByCenter(factor),

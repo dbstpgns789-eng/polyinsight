@@ -876,6 +876,25 @@ const AGENT_BODY = `
     var cs = cardEls(), card = cs[activeCard];
     post('LAYERS', { items: card ? collectLayers(card) : [], cardIndex: activeCard });
   }
+  // 레이어 목록 행 hover → 캔버스에서 그 요소를 아웃라인(로케이트). 선택 오버레이보다 아래 z(가려짐 표시용
+  // 점선). data-pi-artifact라 serialize 제거. 선택과 별개 풀 — hover는 순간 표시, 클릭이 진짜 선택.
+  var hoverOv = null;
+  function hoverEid(eid) {
+    if (!hoverOv) {
+      hoverOv = document.createElement('div');
+      hoverOv.setAttribute('data-pi-artifact', '1');
+      hoverOv.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483643;border:2px dashed #2F6F4E;border-radius:4px;background:rgba(47,111,78,.06);display:none;';
+      document.body.appendChild(hoverOv);
+    }
+    if (!eid) { hoverOv.style.display = 'none'; return; }
+    var cs = cardEls(), card = cs[activeCard];
+    var el = card && card.querySelector('[data-eid="' + String(eid).replace(/"/g, '') + '"]');
+    if (!el) { hoverOv.style.display = 'none'; return; }
+    var bx = boxOf(el);
+    hoverOv.style.display = 'block';
+    hoverOv.style.left = (bx.x - 2) + 'px'; hoverOv.style.top = (bx.y - 2) + 'px';
+    hoverOv.style.width = bx.w + 'px'; hoverOv.style.height = bx.h + 'px';
+  }
 
   function ensurePageStyle() {
     if (pageStyle) return;
@@ -950,6 +969,7 @@ const AGENT_BODY = `
         if (t) select(t);
         break;
       }
+      case 'HOVER_EID': hoverEid(d.eid); break;
       case 'UNDO': undo(); break;
       case 'REDO': redo(); break;
       case 'REVERT_FLOW': revertFlow(); break;

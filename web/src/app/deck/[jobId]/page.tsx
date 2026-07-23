@@ -595,6 +595,7 @@ function DeckPageInner() {
                     items={layers}
                     selectedEid={selected?.count && selected.count > 1 ? undefined : selected?.eid}
                     onSelect={(eid) => editorRef.current?.selectEid(eid)}
+                    onHover={(eid) => editorRef.current?.hoverEid(eid ?? '')}
                   />
                   <div className="h-px bg-border" />
                   <DeckMediaPanel jobId={jobId} onInsert={(p) => { editorRef.current?.insertImage(p); handleDirty() }} />

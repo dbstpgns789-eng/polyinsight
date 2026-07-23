@@ -10,6 +10,7 @@ interface Props {
   items: LayerItem[]
   selectedEid?: string
   onSelect: (eid: string) => void
+  onHover?: (eid: string | null) => void   // 행 hover → 캔버스 로케이트(아웃라인)
 }
 
 const KIND: Record<LayerKind, { glyph: string; name: string }> = {
@@ -19,7 +20,7 @@ const KIND: Record<LayerKind, { glyph: string; name: string }> = {
   shape: { glyph: '▢', name: '도형' },
 }
 
-export default function DeckLayersPanel({ items, selectedEid, onSelect }: Props) {
+export default function DeckLayersPanel({ items, selectedEid, onSelect, onHover }: Props) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -37,6 +38,7 @@ export default function DeckLayersPanel({ items, selectedEid, onSelect }: Props)
             return (
               <li key={it.eid}>
                 <button onClick={() => onSelect(it.eid)} title={it.label || k.name}
+                  onMouseEnter={() => onHover?.(it.eid)} onMouseLeave={() => onHover?.(null)}
                   className={`w-full flex items-center gap-2.5 px-2 h-8 rounded-lg text-left transition-colors ${
                     on ? 'bg-forest-green-wash text-forest-green-deep' : 'text-ink-2 hover:bg-bg-subtle'}`}>
                   <span aria-hidden="true"
