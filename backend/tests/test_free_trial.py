@@ -684,6 +684,101 @@ async def test_me_paid_user_can_export(client):
     assert body["canExport"] is True
 
 
+# ── 크레딧 차감 라우터 (B1 Step 3) ─────────────────────────────────────────
+async def _mk_deck(uid: int, job_id: str = "d1") -> str:
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    await _db.save_authored_deck(job_id, "<div data-screen-label='1'>x</div>", "{}", 1, "paper")
+    return job_id
+
+
+@pytest.mark.asyncio
+async def test_pro_upload_consumes_deck_cost_and_stamps_job(client, monkeypatch):
+    uid = await _mk_user("proupload@test")
+    await _db.add_credits(uid, plans.DECK_COST)             # 유료 + 정확히 1덱분
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    captured: dict = {}
+    monkeypatch.setattr("backend.routers.deck.run_authoring_pipeline",
+                        lambda job_id, *a, **k: captured.update(job_id=job_id))
+    r = await client.post("/api/deck/upload", files={"file": _fake_pdf()})
+    assert r.status_code == 202
+    assert await _db.get_credits(uid) == 0                  # DECK_COST 차감
+    job = await _db.get_job(captured["job_id"])
+    assert job["charged_credits"] == plans.DECK_COST        # 각인(환불 근거)
+
+
+@pytest.mark.asyncio
+async def test_pro_upload_insufficient_credits_402_no_deduct(client, monkeypatch):
+    uid = await _mk_user("poorpro@test")
+    await _db.add_credits(uid, plans.DECK_COST - 1)         # 부족
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    monkeypatch.setattr("backend.routers.deck.run_authoring_pipeline", lambda *a, **k: None)
+    r = await client.post("/api/deck/upload", files={"file": _fake_pdf()})
+    assert r.status_code == 402
+    assert r.json()["detail"]["code"] == "ERR-CREDIT-LOW"
+    assert await _db.get_credits(uid) == plans.DECK_COST - 1  # 불변(선차감 롤백)
+
+
+@pytest.mark.asyncio
+async def test_pro_nlpatch_422_does_not_charge(client, monkeypatch):
+    """§13-② LLM 성공했지만 결과 구조 깨져 422 → 크레딧 불변(차감 전 거부)."""
+    uid = await _mk_user("edit422@test")
+    await _db.add_credits(uid, plans.AIEDIT_COST)
+    job_id = await _mk_deck(uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    async def _bad(*a, **k):
+        return "<div>구조 깨짐(라벨 없음)</div>"
+    monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _bad)
+    r = await client.post(f"/api/deck/{job_id}/nlpatch", json={"instruction": "x"})
+    assert r.status_code == 422
+    assert await _db.get_credits(uid) == plans.AIEDIT_COST   # no-op 과금 없음
+
+
+@pytest.mark.asyncio
+async def test_pro_nlpatch_success_charges_aiedit(client, monkeypatch):
+    uid = await _mk_user("editok@test")
+    await _db.add_credits(uid, plans.AIEDIT_COST)
+    job_id = await _mk_deck(uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    async def _good(*a, **k):
+        return "<div data-screen-label='1'>고침</div>"
+    async def _fake_persist(job_id, html):
+        return {"cardCount": 1, "pngVersion": 1}
+    monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _good)
+    monkeypatch.setattr("backend.routers.deck.persist_edited_deck", _fake_persist)
+    r = await client.post(f"/api/deck/{job_id}/nlpatch", json={"instruction": "x"})
+    assert r.status_code == 200
+    assert await _db.get_credits(uid) == 0                   # AIEDIT_COST 차감
+
+
+@pytest.mark.asyncio
+async def test_pro_propose_422_does_not_charge(client, monkeypatch):
+    """propose(라이브 경로)도 422 구조거부 시 무과금."""
+    uid = await _mk_user("prop422@test")
+    await _db.add_credits(uid, plans.AIEDIT_COST)
+    job_id = await _mk_deck(uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    async def _bad(*a, **k):
+        return "<div>깨짐</div>"
+    monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _bad)
+    r = await client.post(f"/api/deck/{job_id}/nlpatch/propose",
+                          json={"instruction": "x", "html": "<div data-screen-label='1'>y</div>"})
+    assert r.status_code == 422
+    assert await _db.get_credits(uid) == plans.AIEDIT_COST
+
+
+@pytest.mark.asyncio
+async def test_log_done_refunds_credits_on_error():
+    """§13-① 정상 실행 중 ERROR → _log_done이 각인 크레딧 환불(recover와 같은 멱등 훅)."""
+    uid = await _mk_user("logdone@test")
+    await _db.add_credits(uid, plans.DECK_COST)
+    job_id = "job-logdone"
+    await _db.create_job(job_id, "t", uid)
+    await _db.consume_credits_for_job(uid, job_id, plans.DECK_COST)
+    await _db.update_job(job_id, "ERROR")
+    await _pipeline._log_done(job_id, uid, 0.0, 1)
+    assert await _db.get_credits(uid) == plans.DECK_COST     # 복구
+
+
 @pytest.mark.asyncio
 async def test_post_onboarded_marks_and_is_idempotent(client):
     uid = await _mk_user("onb@test")

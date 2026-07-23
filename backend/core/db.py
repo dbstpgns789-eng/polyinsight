@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
@@ -7,6 +8,8 @@ import aiosqlite
 
 from .config import settings
 from .storage import get_storage
+
+logger = logging.getLogger(__name__)
 
 
 def _hash_token(token: str) -> str:
@@ -572,6 +575,19 @@ async def recover_stale_jobs() -> int:
     PENDING/RUNNING = 전부 이전 프로세스의 고아 — 시간 조건 불필요.
     (단일 프로세스 운영 전제 — 다중 프로세스면 살아있는 잡을 오판할 수 있음)"""
     warnings = json.dumps(["서버 재시작으로 작업이 중단되었습니다. 다시 업로드해 주세요."])
+    # §13-① 선차감 크레딧 환불 — 재시작으로 소실된 잡은 _log_done을 못 타므로 여기서 환불한다.
+    # ERROR 마킹 전에 각인(charged_credits>0)된 잡을 골라 멱등 환불(refund_job_credits가 각인 소거).
+    async with _connect() as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT job_id FROM jobs WHERE status IN ('PENDING', 'RUNNING') AND charged_credits > 0"
+        ) as cur:
+            stale_charged = [r["job_id"] for r in await cur.fetchall()]
+    for jid in stale_charged:
+        try:
+            await refund_job_credits(jid)
+        except Exception:
+            logger.exception("재시작 크레딧 환불 실패 (job=%s)", jid)
     async with _connect() as conn:
         cursor = await conn.execute(
             "UPDATE jobs SET status = 'ERROR', warnings = ?, updated_at = ? "

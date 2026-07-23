@@ -130,6 +130,33 @@ async def test_refund_job_with_no_charge_is_noop():
     assert await _db.get_credits(uid) == 10
 
 
+@pytest.mark.asyncio
+async def test_recover_stale_jobs_refunds_charged_credits():
+    """§13-① 재시작으로 소실된 잡을 recover가 ERROR로 돌릴 때 선차감 크레딧을 복구한다."""
+    uid = await _mk_user()
+    await _db.add_credits(uid, 10)
+    await _db.create_job("stale", "t", uid)
+    await _db.consume_credits_for_job(uid, "stale", 10)   # credits 0, 각인 10, status PENDING
+    assert await _db.get_credits(uid) == 0
+
+    n = await _db.recover_stale_jobs()
+    assert n >= 1
+    assert await _db.get_credits(uid) == 10               # 복구됨
+    job = await _db.get_job("stale")
+    assert job["status"] == "ERROR"
+    assert job["charged_credits"] == 0                    # 각인 소거(재-recover해도 이중환불 없음)
+
+
+@pytest.mark.asyncio
+async def test_recover_stale_jobs_leaves_free_jobs_alone():
+    """각인 0(무료/면제)인 stale 잡은 크레딧 건드리지 않는다."""
+    uid = await _mk_user()
+    await _db.add_credits(uid, 5)
+    await _db.create_job("stalefree", "t", uid)           # 각인 0
+    await _db.recover_stale_jobs()
+    assert await _db.get_credits(uid) == 5
+
+
 # ── add_credits (충전) ──────────────────────────────────────────────
 @pytest.mark.asyncio
 async def test_add_credits_adds_and_promotes_to_pro():

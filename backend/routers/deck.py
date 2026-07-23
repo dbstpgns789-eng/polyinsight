@@ -92,11 +92,21 @@ async def deck_upload(
 
     job_id = str(uuid.uuid4())
     await db.create_job(job_id, title=file.filename, user_id=user["id"])
-    await db.log_event("deck_upload", user_id=user["id"], job_id=job_id,
-                       payload={"filename": file.filename, "card_count": card_count})
-    background_tasks.add_task(
-        run_authoring_pipeline, job_id, pdf_bytes, card_count, persona, user["id"], style_direction
-    )
+    # 유료(pro): 차감 + jobs.charged_credits 각인을 원자로(재시작 환불 근거, §13-①·③).
+    # job 생성 뒤에 하는 이유 = 각인 대상(job 행)이 있어야 하기 때문. free는 위에서 job 생성 전 소비.
+    if plans.author_charges_credits(user):
+        if not await db.consume_credits_for_job(user["id"], job_id, plans.DECK_COST):
+            await db.delete_job(job_id)
+            raise plans.credit_low_error(user)    # 레이스 패자·잔액부족
+    try:
+        await db.log_event("deck_upload", user_id=user["id"], job_id=job_id,
+                           payload={"filename": file.filename, "card_count": card_count})
+        background_tasks.add_task(
+            run_authoring_pipeline, job_id, pdf_bytes, card_count, persona, user["id"], style_direction
+        )
+    except Exception:
+        await db.refund_job_credits(job_id)       # §13-③ 차감 후 스케줄 실패 창 봉합
+        raise
     return {"jobId": job_id, "status": "PENDING"}
 
 
@@ -168,6 +178,10 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
             detail={"code": "ERR-EDIT-001",
                     "message": "수정 결과가 덱 구조를 벗어나 적용하지 않았습니다. 원본은 그대로입니다."},
         )
+    # 검증(계약) 통과 후에만 차감 — 422/LLM예외면 차감 전이라 no-op 과금 없음(§13-②).
+    if plans.author_charges_credits(user):
+        if not await db.consume_credits(user["id"], plans.AIEDIT_COST):
+            raise plans.credit_low_error(user)
 
     result = await persist_edited_deck(job_id, new_html)
     result["html"] = new_html
@@ -208,6 +222,10 @@ async def nlpatch_propose(job_id: str, body: DeckNLPropose, user: dict = Depends
             detail={"code": "ERR-EDIT-001",
                     "message": "수정 결과가 덱 구조를 벗어나 제안하지 않았습니다. 원본은 그대로입니다."},
         )
+    # 제안(propose)도 실 LLM 호출 → 계약 통과 후 차감(§13-②, 422면 무과금).
+    if plans.author_charges_credits(user):
+        if not await db.consume_credits(user["id"], plans.AIEDIT_COST):
+            raise plans.credit_low_error(user)
 
     verify = compute_verify(new_html, deck.get("paper_text"))
     await db.log_event("deck_edit", user_id=user["id"], job_id=job_id, payload={"kind": "nl-propose"})
