@@ -50,6 +50,9 @@ const AGENT_BODY = `
     if (!el) return null;
     if (el.nodeType === 3) el = el.parentElement;
     if (!el || el === document.body || el === document.documentElement) return null;
+    // SVG 안쪽 도형(path/circle 등)은 x/y 속성이라 CSS left/top 무효 → 루트 <svg>로 승격(원자 선택).
+    // ownerSVGElement는 가장 가까운 조상 svg(루트면 null) → 최외곽 svg까지 오른다.
+    if (el.ownerSVGElement) { var s = el; while (s.ownerSVGElement) s = s.ownerSVGElement; el = s; }
     if (isPiArtifact(el)) return null;
     if (el.hasAttribute && el.hasAttribute('data-screen-label')) return null; // 카드 프레임 자체는 선택 안 함
     return el;
@@ -327,7 +330,7 @@ const AGENT_BODY = `
   var undoStack = [], redoStack = [];
   function emitHistory() { post('HISTORY_STATE', { canUndo: undoStack.length > 0, canRedo: redoStack.length > 0 }); }
   function pushCmd(cmd) { undoStack.push(cmd); redoStack = []; emitHistory(); }
-  function afterMutate() { positionOverlay(); post('DIRTY', {}); postHeight(); }
+  function afterMutate() { positionOverlay(); post('DIRTY', {}); postHeight(); emitLayers(); }
   function afterHistoryStep() {
     refreshEditable(); pruneSelection();
     if (selection.length) emitSelected(); else post('DESELECTED', {});
@@ -805,6 +808,8 @@ const AGENT_BODY = `
     for (var j = 0; j < ce.length; j++) { ce[j].removeAttribute('contenteditable'); ce[j].style.outline = ''; }
     var ph = clone.querySelectorAll('.pi-hidden');   // 페이징 숨김 흔적 제거 → 7장 온전
     for (var k = 0; k < ph.length; k++) ph[k].classList.remove('pi-hidden');
+    var eids = clone.querySelectorAll('[data-eid]');  // 레이어/선택 스탬프 제거 → 발행 HTML 오염 방지
+    for (var m = 0; m < eids.length; m++) eids[m].removeAttribute('data-eid');
     return '<!DOCTYPE html>\\n' + clone.outerHTML;
   }
 
@@ -816,6 +821,56 @@ const AGENT_BODY = `
     for (var i = 0; i < cs.length; i++) if (cs[i] === card) return i;
     return -1;
   }
+
+  // ── 레이어 패널: 카드의 '원자 요소'(텍스트리프·이미지·SVG루트·가시 도형) 수집 ──────────────
+  // freeze 승격 집합과 독립 — 가려진(배경 SVG·풀블리드 div)·inline 요소도 목록에 떠야 클릭 가림을
+  // 우회한다(가림이 "안 움직인다"의 정체였다). 컨테이너(자식 있는 래퍼)는 하강만, 목록엔 원자 요소만
+  // → 노이즈 없이(래퍼 div 미포함) 누락 없이(SVG·도형·이미지 포착). 실측 3덱 20카드 검증 규칙.
+  function paintsSomething(el) {
+    var cs = getComputedStyle(el);
+    if (parseFloat(cs.opacity) === 0 || cs.visibility === 'hidden') return false;
+    var col = cs.backgroundColor;
+    if (col && col !== 'rgba(0, 0, 0, 0)' && col !== 'transparent') return true;
+    if (cs.backgroundImage && cs.backgroundImage !== 'none') return true;
+    if (cs.borderTopWidth !== '0px' || cs.borderRightWidth !== '0px' || cs.borderBottomWidth !== '0px' || cs.borderLeftWidth !== '0px') return true;
+    if (cs.boxShadow && cs.boxShadow !== 'none') return true;
+    return false;
+  }
+  function layerLabel(el, kind) {
+    if (kind === 'text') return (el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40);
+    if (kind === 'image') return el.getAttribute('alt') || '이미지';
+    if (kind === 'graphic') return '그래픽';
+    var r = el.getBoundingClientRect();
+    return '도형 ' + Math.round(r.width) + '×' + Math.round(r.height);
+  }
+  function collectLayers(card) {
+    var items = [];
+    function visit(el) {
+      var kids = el.children;
+      for (var i = 0; i < kids.length; i++) {
+        var c = kids[i];
+        if (isPiArtifact(c) || c.tagName === 'BR') continue;
+        var tag = c.tagName.toLowerCase(), kind = null;
+        if (tag === 'svg') kind = 'graphic';                 // 루트 svg — 안 파고듦(도형은 원자 아님)
+        else if (tag === 'img') kind = 'image';
+        else if (isTextLeaf(c)) kind = 'text';               // 텍스트 덩어리 — 안 파고듦(inline span 병합)
+        else if (c.childElementCount === 0) {
+          var r = c.getBoundingClientRect();
+          if (r.width > 4 && r.height > 4 && paintsSomething(c)) kind = 'shape';
+          else continue;                                     // 안 보이는 빈 요소 스킵
+        } else { visit(c); continue; }                       // 컨테이너 → 하강만
+        items.push({ eid: ensureEid(c), kind: kind, label: layerLabel(c, kind) });
+      }
+    }
+    visit(card);
+    return items;
+  }
+  function emitLayers() {
+    if (!paged) return;
+    var cs = cardEls(), card = cs[activeCard];
+    post('LAYERS', { items: card ? collectLayers(card) : [], cardIndex: activeCard });
+  }
+
   function ensurePageStyle() {
     if (pageStyle) return;
     pageStyle = document.createElement('style');
@@ -839,9 +894,10 @@ const AGENT_BODY = `
     // 고정폭/높이를 박으면 진짜 폰트 로드 시 텍스트가 넓/커져 wrap·overflow(뷰어PNG는 폰트후 렌더라 정상).
     var card = cs[activeCard];
     if (card && document.fonts && document.fonts.status !== 'loaded') {
-      document.fonts.ready.then(function () { freezeCard(card); positionOverlay(); postHeight(); });
+      document.fonts.ready.then(function () { freezeCard(card); positionOverlay(); postHeight(); emitLayers(); });
     } else {
       freezeCard(card);
+      emitLayers();
     }
     positionOverlay(); postHeight();
   }
@@ -882,6 +938,12 @@ const AGENT_BODY = `
       case 'SET_MODE': setMode(d.mode); break;
       case 'GET_HTML': post('HTML', { html: serialize() }); break;
       case 'CLEAR_SELECTION': deselect(); break;
+      case 'SELECT_EID': {
+        var cs2 = cardEls(), card2 = cs2[activeCard];
+        var t = card2 && card2.querySelector('[data-eid="' + String(d.eid || '').replace(/"/g, '') + '"]');
+        if (t) select(t);
+        break;
+      }
       case 'UNDO': undo(); break;
       case 'REDO': redo(); break;
       case 'REVERT_FLOW': revertFlow(); break;
