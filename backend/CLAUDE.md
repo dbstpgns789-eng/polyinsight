@@ -111,6 +111,8 @@ pytest backend/tests/
 LLM 실 API 호출(S6 gate ab/full, 풀런 등)은 **실행 전 반드시 허락 받는다**.
 mock/단위 테스트는 예외.
 
+★로컬 개발 기본값 = `DEV_MOCK_LLM=True`(mock, 비용0). 실호출(`=False`)로 전환은 **사용자 허락 필수** — 편집·캡션·저작 로컬 테스트도 `=False`면 실제 과금된다. (2026-07-22: 로컬이 `=False`라 그냥 테스트가 조용히 Sonnet 과금된 구멍 → 환경 기본값으로 규칙 강제.)
+
 ---
 
 ## 7. NEVER (Backend 전용)
