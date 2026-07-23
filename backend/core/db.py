@@ -56,7 +56,8 @@ async def migrate() -> None:
                 title TEXT,
                 user_id INTEGER,
                 created_at TEXT,
-                updated_at TEXT
+                updated_at TEXT,
+                charged_credits INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS card_data (
@@ -105,7 +106,8 @@ async def migrate() -> None:
                 created_at TEXT NOT NULL,
                 plan TEXT NOT NULL DEFAULT 'free',
                 free_decks_used INTEGER NOT NULL DEFAULT 0,
-                onboarded_at TEXT
+                onboarded_at TEXT,
+                credits INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS auth_tokens (
@@ -240,6 +242,14 @@ async def migrate() -> None:
             await conn.execute("ALTER TABLE users ADD COLUMN onboarded_at TEXT")
             await conn.execute("UPDATE users SET onboarded_at = ?", (_utc_now_iso(),))
             await conn.commit()
+        # 크레딧제(B1, 2026-07-23) — users.credits 잔액 + jobs.charged_credits 환불근거 각인.
+        # DEFAULT 0이라 backfill UPDATE 불필요(면제 lab은 크레딧 무관). 단독 ALTER = 오토커밋 durable.
+        if "credits" not in ucols2:
+            await conn.execute("ALTER TABLE users ADD COLUMN credits INTEGER NOT NULL DEFAULT 0")
+        async with conn.execute("PRAGMA table_info(jobs)") as cur:
+            jcols = [row[1] for row in await cur.fetchall()]
+        if "charged_credits" not in jcols:
+            await conn.execute("ALTER TABLE jobs ADD COLUMN charged_credits INTEGER NOT NULL DEFAULT 0")
         # L1(2026-07-09): BLOB→파일시스템. 기존 DB에 storage_key 없으면 추가(멱등).
         for _tbl in ("card_images", "exports", "deck_assets"):
             async with conn.execute(f"PRAGMA table_info({_tbl})") as cur:
@@ -978,6 +988,86 @@ async def refund_free_deck(user_id: int) -> None:
 async def set_plan(user_id: int, plan: str) -> None:
     async with _connect() as conn:
         await conn.execute("UPDATE users SET plan = ? WHERE id = ?", (plan, user_id))
+        await conn.commit()
+
+
+# ── 크레딧(B1, 2026-07-23) — consume_free_deck 원자패턴 복제 ──────────────────
+async def get_credits(user_id: int) -> int:
+    """잔액. 행 없으면 0."""
+    async with _connect() as conn:
+        async with conn.execute("SELECT credits FROM users WHERE id = ?", (user_id,)) as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+
+async def consume_credits(user_id: int, cost: int) -> bool:
+    """원자적 차감(잡 없는 동기 작업 = AI 편집). 성공=True. 부족/cost≤0=False.
+    UPDATE 한 문장이 잔액 검사까지 하므로 check-then-act 레이스 없음."""
+    if cost <= 0:
+        return False
+    async with _connect() as conn:
+        cur = await conn.execute(
+            "UPDATE users SET credits = credits - ? WHERE id = ? AND credits >= ?",
+            (cost, user_id, cost),
+        )
+        await conn.commit()
+        return (cur.rowcount or 0) > 0
+
+
+async def consume_credits_for_job(user_id: int, job_id: str, cost: int) -> bool:
+    """덱 생성용 — 차감 + jobs.charged_credits 각인을 **한 트랜잭션**으로(§13-①·③).
+    차감만 되고 각인이 안 되는 창(재시작 시 환불 못함)을 원천 차단. 부족/cost≤0=False."""
+    if cost <= 0:
+        return False
+    async with _connect() as conn:
+        await conn.execute("BEGIN")
+        cur = await conn.execute(
+            "UPDATE users SET credits = credits - ? WHERE id = ? AND credits >= ?",
+            (cost, user_id, cost),
+        )
+        if (cur.rowcount or 0) == 0:
+            await conn.rollback()
+            return False
+        await conn.execute("UPDATE jobs SET charged_credits = ? WHERE job_id = ?", (cost, job_id))
+        await conn.commit()
+        return True
+
+
+async def refund_job_credits(job_id: str) -> None:
+    """잡의 선차감 크레딧을 **멱등** 환불. _log_done(ERROR)·recover_stale_jobs 둘 다 호출(§13-①).
+    각인(charged_credits)을 읽어 환불 후 0으로 소거 — 소거가 이중환불 방어."""
+    async with _connect() as conn:
+        conn.row_factory = aiosqlite.Row
+        await conn.execute("BEGIN")
+        async with conn.execute(
+            "SELECT user_id, charged_credits FROM jobs WHERE job_id = ?", (job_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        charged = int(row["charged_credits"]) if row and row["charged_credits"] else 0
+        if not row or charged <= 0 or row["user_id"] is None:
+            await conn.rollback()
+            return
+        await conn.execute(
+            "UPDATE users SET credits = credits + ? WHERE id = ?", (charged, row["user_id"])
+        )
+        await conn.execute(
+            "UPDATE jobs SET charged_credits = 0 WHERE job_id = ? AND charged_credits > 0", (job_id,)
+        )
+        await conn.commit()
+
+
+async def add_credits(user_id: int, amount: int) -> None:
+    """충전 — plan='pro' 승격 + 잔액 가산(한 트랜잭션). amount≤0이면 no-op(음수충전 방어).
+    plan='lab'(면제)은 pro로 강등하지 않는다."""
+    if amount <= 0:
+        return
+    async with _connect() as conn:
+        await conn.execute(
+            "UPDATE users SET credits = credits + ?, "
+            "plan = CASE WHEN plan = 'lab' THEN plan ELSE 'pro' END "
+            "WHERE id = ?",
+            (amount, user_id),
+        )
         await conn.commit()
 
 
