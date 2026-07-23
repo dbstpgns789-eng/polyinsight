@@ -187,6 +187,19 @@ async def migrate() -> None:
                 expires_at TEXT,
                 PRIMARY KEY (job_id, asset_id)
             );
+
+            -- 소셜 발행 연동(2026-07-23): 유저별 IG 계정 토큰(암호화 저장). 유저당 provider 1개.
+            CREATE TABLE IF NOT EXISTS social_accounts (
+                user_id INTEGER NOT NULL,
+                provider TEXT NOT NULL,
+                ig_user_id TEXT NOT NULL,
+                ig_username TEXT,
+                access_token TEXT NOT NULL,
+                token_expires_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, provider)
+            );
             """
         )
         # idempotent 마이그레이션 — 기존 DB의 authored_deck에 paper_text 없으면 추가.
@@ -897,6 +910,50 @@ async def link_oauth_account(provider: str, provider_user_id: str, user_id: int,
             "INSERT OR IGNORE INTO oauth_accounts (provider, provider_user_id, user_id, email, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
             (provider, provider_user_id, user_id, email, now),
+        )
+        await conn.commit()
+
+
+# ── 소셜 발행 연동: social_accounts (2026-07-23) ───────────────────────────
+
+async def upsert_social_account(user_id: int, provider: str, ig_user_id: str,
+                                ig_username: str | None, access_token: str,
+                                token_expires_at: str | None) -> None:
+    now = _utc_now_iso()
+    async with _connect() as conn:
+        await conn.execute(
+            """
+            INSERT INTO social_accounts
+                (user_id, provider, ig_user_id, ig_username, access_token, token_expires_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, provider) DO UPDATE SET
+                ig_user_id = excluded.ig_user_id,
+                ig_username = excluded.ig_username,
+                access_token = excluded.access_token,
+                token_expires_at = excluded.token_expires_at,
+                updated_at = excluded.updated_at
+            """,
+            (user_id, provider, ig_user_id, ig_username, access_token, token_expires_at, now, now),
+        )
+        await conn.commit()
+
+
+async def get_social_account(user_id: int, provider: str) -> dict | None:
+    async with _connect() as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT * FROM social_accounts WHERE user_id = ? AND provider = ?",
+            (user_id, provider),
+        ) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def delete_social_account(user_id: int, provider: str) -> None:
+    async with _connect() as conn:
+        await conn.execute(
+            "DELETE FROM social_accounts WHERE user_id = ? AND provider = ?",
+            (user_id, provider),
         )
         await conn.commit()
 
