@@ -163,3 +163,62 @@ async def test_add_credits_does_not_demote_lab():
 @pytest.mark.asyncio
 async def test_get_credits_zero_for_missing_user():
     assert await _db.get_credits(999999) == 0
+
+
+# ── plans.py 게이트 재배선 (순수 dict, DB 불필요) ──────────────────
+from fastapi import HTTPException  # noqa: E402
+
+from backend.core import plans  # noqa: E402
+
+FREE = {"id": 1, "plan": "free", "free_decks_used": 0}
+FREE_USED = {"id": 1, "plan": "free", "free_decks_used": 1}
+PRO_RICH = {"id": 2, "plan": "pro", "credits": 100}
+PRO_POOR = {"id": 2, "plan": "pro", "credits": 1}
+LAB = {"id": 3, "plan": "lab"}
+SERVICE = {"id": 0, "email": "svc", "role": "service"}   # X-Render-Token 3키
+
+
+def _gate_code(fn, user):
+    try:
+        fn(user)
+    except HTTPException as e:
+        return e.status_code, e.detail.get("code")
+    return None
+
+
+def test_author_charges_credits_only_pro_nonexempt():
+    assert plans.author_charges_credits(PRO_RICH) is True
+    assert plans.author_charges_credits(FREE) is False
+    assert plans.author_charges_credits(LAB) is False       # 면제
+    assert plans.author_charges_credits(SERVICE) is False    # 면제
+
+
+def test_require_can_author_regimes():
+    assert _gate_code(plans.require_can_author, FREE) is None          # 무료 잔여
+    assert _gate_code(plans.require_can_author, LAB) is None           # 면제
+    assert _gate_code(plans.require_can_author, SERVICE) is None       # 면제
+    assert _gate_code(plans.require_can_author, PRO_RICH) is None      # 잔액 충분
+    assert _gate_code(plans.require_can_author, FREE_USED) == (402, "ERR-PLAN-AUTHOR")   # 무료 소진
+    assert _gate_code(plans.require_can_author, PRO_POOR) == (402, "ERR-CREDIT-LOW")     # 잔액 부족
+
+
+def test_require_can_ai_designer_regimes():
+    assert _gate_code(plans.require_can_ai_designer, FREE) == (402, "ERR-PLAN-AI-DESIGNER")  # 무료 차단
+    assert _gate_code(plans.require_can_ai_designer, LAB) is None          # 면제
+    assert _gate_code(plans.require_can_ai_designer, PRO_RICH) is None     # 잔액 충분
+    assert _gate_code(plans.require_can_ai_designer, PRO_POOR) == (402, "ERR-CREDIT-LOW")    # 잔액 부족
+
+
+def test_export_gate_unchanged():
+    assert plans.can_export(FREE) is False
+    assert plans.can_export(PRO_POOR) is True    # 크레딧 0이어도 export는 plan 게이트만
+    assert plans.can_export(LAB) is True
+    assert plans.can_export(SERVICE) is True
+
+
+def test_credit_low_error_shape():
+    e = plans.credit_low_error(PRO_POOR)
+    assert e.status_code == 402
+    assert e.gate_kind == "credits"
+    assert e.detail["code"] == "ERR-CREDIT-LOW"
+    assert "크레딧" in e.detail["message"]

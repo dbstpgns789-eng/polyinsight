@@ -207,10 +207,17 @@ def test_free_user_who_used_their_deck_cannot_author():
 
 
 def test_paid_user_can_do_both():
-    for plan in ("pro", "lab"):
-        u = {"id": 1, "plan": plan, "free_decks_used": 99}
-        assert plans.can_author(u) is True
-        assert plans.can_export(u) is True
+    # lab(면제)은 크레딧 없이도 무제한
+    lab = {"id": 1, "plan": "lab", "free_decks_used": 99}
+    assert plans.can_author(lab) is True
+    assert plans.can_export(lab) is True
+    # pro는 크레딧이 있어야 생성(B1). export는 크레딧 무관(plan 게이트만).
+    pro_rich = {"id": 2, "plan": "pro", "credits": plans.DECK_COST}
+    assert plans.can_author(pro_rich) is True
+    assert plans.can_export(pro_rich) is True
+    pro_poor = {"id": 2, "plan": "pro", "credits": 0}
+    assert plans.can_author(pro_poor) is False   # 잔액 0 → 생성 불가
+    assert plans.can_export(pro_poor) is True     # export는 여전히 가능
 
 
 def test_render_service_user_is_exempt():
@@ -243,8 +250,8 @@ def test_require_can_author_raises_402_with_plan_code():
 
 
 def test_require_passes_silently_when_allowed():
-    u = {"id": 1, "plan": "pro", "free_decks_used": 0}
-    plans.require_can_author(u)   # 예외 없이 통과해야 함
+    u = {"id": 1, "plan": "pro", "free_decks_used": 0, "credits": plans.DECK_COST}
+    plans.require_can_author(u)   # 잔액 충분 → 예외 없이 통과
     plans.require_can_export(u)
 
 
@@ -338,7 +345,7 @@ async def test_free_user_second_upload_blocked_with_402(client):
 async def test_paid_user_upload_does_not_consume_free_counter(client, monkeypatch):
     """유료 유저는 무료 카운터를 건드리지 않는다(no-op 반환을 실패로 오해하면 안 됨)."""
     uid = await _mk_user("paidupload@test")
-    await _db.set_plan(uid, "pro")
+    await _db.add_credits(uid, plans.DECK_COST)   # 유료(pro)+크레딧 (B1: pro도 잔액 필요)
     _as_user(dict(await _db.get_user_by_id(uid)))
     monkeypatch.setattr(
         "backend.routers.deck.run_authoring_pipeline",
@@ -599,7 +606,7 @@ async def test_free_user_nlpatch_propose_blocked_with_402(client):
 async def test_paid_user_nlpatch_not_blocked_by_plan(client):
     """유료는 플랜 게이트를 통과한다(덱이 없어 뒤에서 404 나는 건 무방 — LLM은 안 탄다)."""
     uid = await _mk_user("paidai@test")
-    await _db.set_plan(uid, "pro")
+    await _db.add_credits(uid, plans.DECK_COST)   # 유료(pro)+크레딧 (B1: AI편집도 잔액 필요)
     job_id = "job-paidai"
     await _db.create_job(job_id, "p.pdf", user_id=uid)
     _as_user(dict(await _db.get_user_by_id(uid)))
@@ -668,7 +675,7 @@ async def test_me_reflects_exhausted_free_user(client):
 @pytest.mark.asyncio
 async def test_me_paid_user_can_export(client):
     uid = await _mk_user("mepaid@test")
-    await _db.set_plan(uid, "pro")
+    await _db.add_credits(uid, plans.DECK_COST)   # 유료(pro)+크레딧 (B1: canAuthor는 잔액 필요)
     _as_user(dict(await _db.get_user_by_id(uid)))
 
     body = (await client.get("/api/auth/me")).json()
