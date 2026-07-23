@@ -166,6 +166,7 @@ async def me(user: dict = Depends(auth_core.get_current_user)):
         "emailVerified": bool(user.get("email_verified")),
         # 플랜 상태 — 프론트가 미터·잠금·페이월·진입 라우팅을 그리는 데 쓴다.
         "plan": plans.plan_of(user),
+        "credits": plans.credits_of(user),   # 잔액(P1-2 위젯이 읽을 자리)
         "freeDecksUsed": plans.free_decks_used(user),
         "freeDeckLimit": plans.FREE_DECK_LIMIT,
         "canAuthor": plans.can_author(user),

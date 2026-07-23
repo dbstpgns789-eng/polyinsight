@@ -8,6 +8,7 @@ import uuid
 import zipfile
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Response, UploadFile
 
 from pydantic import BaseModel, Field
@@ -49,7 +50,9 @@ _MAX_PDF_BYTES = 50 * 1024 * 1024  # 50 MB
 _MAX_ASSET_BYTES = 8 * 1024 * 1024  # 8 MB — 덱 이미지 자산
 # SVG 제외(XSS/SSRF 축소, 스펙 §7). 저작 덱의 raster 삽입만 허용.
 _ASSET_MIME_WHITELIST = {"image/png", "image/jpeg", "image/webp", "image/gif"}
-_ASSET_SOURCE_TYPES = {"upload-owned", "upload-data", "paper-figure"}
+_ASSET_SOURCE_TYPES = {"upload-owned", "upload-data", "paper-figure", "stock-pexels", "stock-unsplash"}
+# 스톡 URL 임포트 SSRF 방어 — provider CDN 호스트만 허용(내부/사설 URL·리다이렉트 차단, 스펙 §7 SSRF 축소).
+_STOCK_IMPORT_HOSTS = {"images.pexels.com", "images.unsplash.com", "plus.unsplash.com"}
 
 
 @router.post("/deck/upload", status_code=202)
@@ -91,11 +94,21 @@ async def deck_upload(
 
     job_id = str(uuid.uuid4())
     await db.create_job(job_id, title=file.filename, user_id=user["id"])
-    await db.log_event("deck_upload", user_id=user["id"], job_id=job_id,
-                       payload={"filename": file.filename, "card_count": card_count})
-    background_tasks.add_task(
-        run_authoring_pipeline, job_id, pdf_bytes, card_count, persona, user["id"], style_direction
-    )
+    # 유료(pro): 차감 + jobs.charged_credits 각인을 원자로(재시작 환불 근거, §13-①·③).
+    # job 생성 뒤에 하는 이유 = 각인 대상(job 행)이 있어야 하기 때문. free는 위에서 job 생성 전 소비.
+    if plans.author_charges_credits(user):
+        if not await db.consume_credits_for_job(user["id"], job_id, plans.DECK_COST):
+            await db.delete_job(job_id)
+            raise plans.credit_low_error(user)    # 레이스 패자·잔액부족
+    try:
+        await db.log_event("deck_upload", user_id=user["id"], job_id=job_id,
+                           payload={"filename": file.filename, "card_count": card_count})
+        background_tasks.add_task(
+            run_authoring_pipeline, job_id, pdf_bytes, card_count, persona, user["id"], style_direction
+        )
+    except Exception:
+        await db.refund_job_credits(job_id)       # §13-③ 차감 후 스케줄 실패 창 봉합
+        raise
     return {"jobId": job_id, "status": "PENDING"}
 
 
@@ -167,6 +180,10 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
             detail={"code": "ERR-EDIT-001",
                     "message": "수정 결과가 덱 구조를 벗어나 적용하지 않았습니다. 원본은 그대로입니다."},
         )
+    # 검증(계약) 통과 후에만 차감 — 422/LLM예외면 차감 전이라 no-op 과금 없음(§13-②).
+    if plans.author_charges_credits(user):
+        if not await db.consume_credits(user["id"], plans.AIEDIT_COST):
+            raise plans.credit_low_error(user)
 
     result = await persist_edited_deck(job_id, new_html)
     result["html"] = new_html
@@ -207,6 +224,10 @@ async def nlpatch_propose(job_id: str, body: DeckNLPropose, user: dict = Depends
             detail={"code": "ERR-EDIT-001",
                     "message": "수정 결과가 덱 구조를 벗어나 제안하지 않았습니다. 원본은 그대로입니다."},
         )
+    # 제안(propose)도 실 LLM 호출 → 계약 통과 후 차감(§13-②, 422면 무과금).
+    if plans.author_charges_credits(user):
+        if not await db.consume_credits(user["id"], plans.AIEDIT_COST):
+            raise plans.credit_low_error(user)
 
     verify = compute_verify(new_html, deck.get("paper_text"))
     await db.log_event("deck_edit", user_id=user["id"], job_id=job_id, payload={"kind": "nl-propose"})
@@ -278,6 +299,55 @@ async def get_card_public(job_id: str, card_num: int, exp: int = 0, sig: str = "
         raise HTTPException(404, detail={"code": "ERR-IMG-004", "message": "not found"})
     jpeg = images_util.to_jpeg(png, max_width=1080)
     return Response(content=jpeg, media_type="image/jpeg")
+
+
+class AssetFromUrl(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+    source_type: str = "stock-pexels"
+
+
+@router.post("/deck/{job_id}/assets/from-url", status_code=201)
+async def import_deck_asset_from_url(
+    job_id: str, body: AssetFromUrl, user: dict = Depends(get_current_user),
+):
+    """스톡 검색 결과(외부 URL)를 서버가 받아 deck_asset으로 저장 → {assetId, url}.
+
+    덱 자립성: 저장 자산은 렌더 시 data URI로 인라인돼 외부 pexels/unsplash 의존이 사라진다
+    (직접 <img src=외부URL>은 export가 CDN 가용성에 묶임). ★SSRF 방어 = provider CDN 호스트
+    allowlist + 리다이렉트 미추적(내부/사설 URL 임포트 차단, 스펙 §7). 게이트는 소유권만
+    (이미지 삽입 = 편집, LLM 안 씀 → 무료. export 게이트 아님).
+    """
+    await require_owned_job(job_id, user)
+
+    from urllib.parse import urlparse
+    parsed = urlparse(body.url)
+    if parsed.scheme not in ("http", "https") or parsed.hostname not in _STOCK_IMPORT_HOSTS:
+        raise HTTPException(400, detail={"code": "ERR-IMG-005", "message": "허용되지 않은 이미지 소스입니다."})
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0), follow_redirects=False) as client:
+            resp = await client.get(body.url)
+            resp.raise_for_status()
+            data = resp.content
+            mime = (resp.headers.get("content-type") or "").split(";")[0].strip().lower()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(502, detail={"code": "ERR-IMG-006", "message": "이미지를 가져오지 못했습니다."})
+
+    if mime not in _ASSET_MIME_WHITELIST:
+        raise HTTPException(400, detail={"code": "ERR-IMG-001", "message": "지원하지 않는 이미지 형식입니다(PNG·JPEG·WebP·GIF)."})
+    if not data:
+        raise HTTPException(400, detail={"code": "ERR-IMG-003", "message": "빈 이미지입니다."})
+    if len(data) > _MAX_ASSET_BYTES:
+        raise HTTPException(400, detail={"code": "ERR-IMG-002", "message": "이미지 크기가 8MB를 초과합니다."})
+
+    st = body.source_type if body.source_type in _ASSET_SOURCE_TYPES else "stock-pexels"
+    asset_id = uuid.uuid4().hex[:16]
+    await db.save_deck_asset(job_id, asset_id, data, mime, source_type=st, source_url=body.url)
+    await db.log_event("deck_asset_import", user_id=user["id"], job_id=job_id,
+                       payload={"asset_id": asset_id, "mime": mime, "source_type": st})
+    return {"assetId": asset_id, "url": f"/api/deck/{job_id}/assets/{asset_id}"}
 
 
 @router.get("/deck/{job_id}/cards/{card_num}")
@@ -381,7 +451,7 @@ async def publish_instagram(job_id: str, user: dict = Depends(get_current_user))
             logging.getLogger(__name__).warning("instagram 발행 실패: %s", type(exc).__name__)
             raise HTTPException(502, detail={"code": "ERR-IG-004", "message": "인스타 발행에 실패했습니다. 잠시 후 다시 시도해 주세요."})
 
-        deducted = await db.deduct_credits(user["id"], settings.PUBLISH_CREDIT_COST)   # M4: 성공 시에만 + 반환 체크
+        deducted = await db.consume_credits(user["id"], settings.PUBLISH_CREDIT_COST)   # M4: 성공 시에만 + 반환 체크 (main 크레딧 백엔드 정본)
         if not deducted:
             logging.getLogger(__name__).warning("발행 후 크레딧 차감 실패(경합) job=%s user=%s", job_id, user["id"])
         await db.log_event("instagram_publish", user_id=user["id"], job_id=job_id)

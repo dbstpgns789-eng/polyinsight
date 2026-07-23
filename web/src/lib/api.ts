@@ -150,4 +150,8 @@ export const searchStockImages = async (q: string): Promise<StockImageResult[]> 
   return res.data.results as StockImageResult[]
 }
 
+// 스톡 결과(외부 URL)를 서버가 받아 deck_asset으로 임포트 → {assetId, url}(렌더 인라인용).
+export const importStockAsset = (jobId: string, url: string, sourceType: string) =>
+  api.post(`/deck/${jobId}/assets/from-url`, { url, source_type: sourceType }, { timeout: 30_000 })
+
 export default api

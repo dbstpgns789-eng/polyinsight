@@ -207,10 +207,17 @@ def test_free_user_who_used_their_deck_cannot_author():
 
 
 def test_paid_user_can_do_both():
-    for plan in ("pro", "lab"):
-        u = {"id": 1, "plan": plan, "free_decks_used": 99}
-        assert plans.can_author(u) is True
-        assert plans.can_export(u) is True
+    # lab(면제)은 크레딧 없이도 무제한
+    lab = {"id": 1, "plan": "lab", "free_decks_used": 99}
+    assert plans.can_author(lab) is True
+    assert plans.can_export(lab) is True
+    # pro는 크레딧이 있어야 생성(B1). export는 크레딧 무관(plan 게이트만).
+    pro_rich = {"id": 2, "plan": "pro", "credits": plans.DECK_COST}
+    assert plans.can_author(pro_rich) is True
+    assert plans.can_export(pro_rich) is True
+    pro_poor = {"id": 2, "plan": "pro", "credits": 0}
+    assert plans.can_author(pro_poor) is False   # 잔액 0 → 생성 불가
+    assert plans.can_export(pro_poor) is True     # export는 여전히 가능
 
 
 def test_render_service_user_is_exempt():
@@ -243,8 +250,8 @@ def test_require_can_author_raises_402_with_plan_code():
 
 
 def test_require_passes_silently_when_allowed():
-    u = {"id": 1, "plan": "pro", "free_decks_used": 0}
-    plans.require_can_author(u)   # 예외 없이 통과해야 함
+    u = {"id": 1, "plan": "pro", "free_decks_used": 0, "credits": plans.DECK_COST}
+    plans.require_can_author(u)   # 잔액 충분 → 예외 없이 통과
     plans.require_can_export(u)
 
 
@@ -338,7 +345,7 @@ async def test_free_user_second_upload_blocked_with_402(client):
 async def test_paid_user_upload_does_not_consume_free_counter(client, monkeypatch):
     """유료 유저는 무료 카운터를 건드리지 않는다(no-op 반환을 실패로 오해하면 안 됨)."""
     uid = await _mk_user("paidupload@test")
-    await _db.set_plan(uid, "pro")
+    await _db.add_credits(uid, plans.DECK_COST)   # 유료(pro)+크레딧 (B1: pro도 잔액 필요)
     _as_user(dict(await _db.get_user_by_id(uid)))
     monkeypatch.setattr(
         "backend.routers.deck.run_authoring_pipeline",
@@ -599,7 +606,7 @@ async def test_free_user_nlpatch_propose_blocked_with_402(client):
 async def test_paid_user_nlpatch_not_blocked_by_plan(client):
     """유료는 플랜 게이트를 통과한다(덱이 없어 뒤에서 404 나는 건 무방 — LLM은 안 탄다)."""
     uid = await _mk_user("paidai@test")
-    await _db.set_plan(uid, "pro")
+    await _db.add_credits(uid, plans.DECK_COST)   # 유료(pro)+크레딧 (B1: AI편집도 잔액 필요)
     job_id = "job-paidai"
     await _db.create_job(job_id, "p.pdf", user_id=uid)
     _as_user(dict(await _db.get_user_by_id(uid)))
@@ -639,6 +646,18 @@ async def test_me_exposes_plan_state(client):
     assert body["canAuthor"] is True
     assert body["canExport"] is False
     assert body["onboarded"] is False
+    assert body["credits"] == 0
+
+
+@pytest.mark.asyncio
+async def test_me_exposes_credit_balance(client):
+    """충전 후 /me가 잔액을 노출한다(P1-2 위젯이 읽을 자리)."""
+    uid = await _mk_user("mecred@test")
+    await _db.add_credits(uid, 30)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    body = (await client.get("/api/auth/me")).json()
+    assert body["credits"] == 30
+    assert body["plan"] == "pro"
 
 
 @pytest.mark.asyncio
@@ -668,13 +687,108 @@ async def test_me_reflects_exhausted_free_user(client):
 @pytest.mark.asyncio
 async def test_me_paid_user_can_export(client):
     uid = await _mk_user("mepaid@test")
-    await _db.set_plan(uid, "pro")
+    await _db.add_credits(uid, plans.DECK_COST)   # 유료(pro)+크레딧 (B1: canAuthor는 잔액 필요)
     _as_user(dict(await _db.get_user_by_id(uid)))
 
     body = (await client.get("/api/auth/me")).json()
     assert body["plan"] == "pro"
     assert body["canAuthor"] is True
     assert body["canExport"] is True
+
+
+# ── 크레딧 차감 라우터 (B1 Step 3) ─────────────────────────────────────────
+async def _mk_deck(uid: int, job_id: str = "d1") -> str:
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    await _db.save_authored_deck(job_id, "<div data-screen-label='1'>x</div>", "{}", 1, "paper")
+    return job_id
+
+
+@pytest.mark.asyncio
+async def test_pro_upload_consumes_deck_cost_and_stamps_job(client, monkeypatch):
+    uid = await _mk_user("proupload@test")
+    await _db.add_credits(uid, plans.DECK_COST)             # 유료 + 정확히 1덱분
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    captured: dict = {}
+    monkeypatch.setattr("backend.routers.deck.run_authoring_pipeline",
+                        lambda job_id, *a, **k: captured.update(job_id=job_id))
+    r = await client.post("/api/deck/upload", files={"file": _fake_pdf()})
+    assert r.status_code == 202
+    assert await _db.get_credits(uid) == 0                  # DECK_COST 차감
+    job = await _db.get_job(captured["job_id"])
+    assert job["charged_credits"] == plans.DECK_COST        # 각인(환불 근거)
+
+
+@pytest.mark.asyncio
+async def test_pro_upload_insufficient_credits_402_no_deduct(client, monkeypatch):
+    uid = await _mk_user("poorpro@test")
+    await _db.add_credits(uid, plans.DECK_COST - 1)         # 부족
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    monkeypatch.setattr("backend.routers.deck.run_authoring_pipeline", lambda *a, **k: None)
+    r = await client.post("/api/deck/upload", files={"file": _fake_pdf()})
+    assert r.status_code == 402
+    assert r.json()["detail"]["code"] == "ERR-CREDIT-LOW"
+    assert await _db.get_credits(uid) == plans.DECK_COST - 1  # 불변(선차감 롤백)
+
+
+@pytest.mark.asyncio
+async def test_pro_nlpatch_422_does_not_charge(client, monkeypatch):
+    """§13-② LLM 성공했지만 결과 구조 깨져 422 → 크레딧 불변(차감 전 거부)."""
+    uid = await _mk_user("edit422@test")
+    await _db.add_credits(uid, plans.AIEDIT_COST)
+    job_id = await _mk_deck(uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    async def _bad(*a, **k):
+        return "<div>구조 깨짐(라벨 없음)</div>"
+    monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _bad)
+    r = await client.post(f"/api/deck/{job_id}/nlpatch", json={"instruction": "x"})
+    assert r.status_code == 422
+    assert await _db.get_credits(uid) == plans.AIEDIT_COST   # no-op 과금 없음
+
+
+@pytest.mark.asyncio
+async def test_pro_nlpatch_success_charges_aiedit(client, monkeypatch):
+    uid = await _mk_user("editok@test")
+    await _db.add_credits(uid, plans.AIEDIT_COST)
+    job_id = await _mk_deck(uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    async def _good(*a, **k):
+        return "<div data-screen-label='1'>고침</div>"
+    async def _fake_persist(job_id, html):
+        return {"cardCount": 1, "pngVersion": 1}
+    monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _good)
+    monkeypatch.setattr("backend.routers.deck.persist_edited_deck", _fake_persist)
+    r = await client.post(f"/api/deck/{job_id}/nlpatch", json={"instruction": "x"})
+    assert r.status_code == 200
+    assert await _db.get_credits(uid) == 0                   # AIEDIT_COST 차감
+
+
+@pytest.mark.asyncio
+async def test_pro_propose_422_does_not_charge(client, monkeypatch):
+    """propose(라이브 경로)도 422 구조거부 시 무과금."""
+    uid = await _mk_user("prop422@test")
+    await _db.add_credits(uid, plans.AIEDIT_COST)
+    job_id = await _mk_deck(uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    async def _bad(*a, **k):
+        return "<div>깨짐</div>"
+    monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _bad)
+    r = await client.post(f"/api/deck/{job_id}/nlpatch/propose",
+                          json={"instruction": "x", "html": "<div data-screen-label='1'>y</div>"})
+    assert r.status_code == 422
+    assert await _db.get_credits(uid) == plans.AIEDIT_COST
+
+
+@pytest.mark.asyncio
+async def test_log_done_refunds_credits_on_error():
+    """§13-① 정상 실행 중 ERROR → _log_done이 각인 크레딧 환불(recover와 같은 멱등 훅)."""
+    uid = await _mk_user("logdone@test")
+    await _db.add_credits(uid, plans.DECK_COST)
+    job_id = "job-logdone"
+    await _db.create_job(job_id, "t", uid)
+    await _db.consume_credits_for_job(uid, job_id, plans.DECK_COST)
+    await _db.update_job(job_id, "ERROR")
+    await _pipeline._log_done(job_id, uid, 0.0, 1)
+    assert await _db.get_credits(uid) == plans.DECK_COST     # 복구
 
 
 @pytest.mark.asyncio
@@ -838,3 +952,87 @@ async def test_plain_http_errors_are_not_logged_as_gate_hits(client):
 
     evts = [e for e in await _db.list_events(limit=50) if e["event_type"] == "plan_gate_hit"]
     assert len(evts) == 0
+
+
+# ── 스톡 자산 URL 임포트 (P0-4) ────────────────────────────────────────────
+import httpx as _httpx
+
+
+def _tiny_png() -> bytes:
+    b = io.BytesIO()
+    Image.new("RGB", (4, 4), (10, 120, 90)).save(b, format="PNG")
+    return b.getvalue()
+
+
+class _FakeResp:
+    def __init__(self, content: bytes, ctype: str):
+        self.content = content
+        self.headers = {"content-type": ctype}
+
+    def raise_for_status(self):
+        pass
+
+
+def _fake_httpx(content: bytes, ctype: str):
+    class _FakeClient:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, **k): return _FakeResp(content, ctype)
+    return _FakeClient
+
+
+@pytest.mark.asyncio
+async def test_import_stock_asset_saves_deck_asset(client, monkeypatch):
+    """스톡 URL을 서버가 받아 deck_asset으로 저장 → {assetId, url}. 렌더 인라인용 소유 자산."""
+    uid = await _mk_user("stock@test")
+    job_id = "job-stock"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    monkeypatch.setattr(_httpx, "AsyncClient", _fake_httpx(_tiny_png(), "image/png"))
+
+    r = await client.post(f"/api/deck/{job_id}/assets/from-url",
+                          json={"url": "https://images.pexels.com/photos/1/x.jpg", "source_type": "stock-pexels"})
+    assert r.status_code == 201
+    asset_id = r.json()["assetId"]
+    asset = await _db.get_deck_asset(job_id, asset_id)
+    assert asset is not None and asset["bytes"] == _tiny_png()
+
+
+@pytest.mark.asyncio
+async def test_import_stock_rejects_ssrf_host(client, monkeypatch):
+    """★SSRF — allowlist 밖 호스트(내부/사설)는 fetch 전에 400. 서버가 내부로 요청 못 감."""
+    uid = await _mk_user("ssrf@test")
+    job_id = "job-ssrf"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    called = []
+
+    class _Boom:
+        def __init__(self, *a, **k): called.append("init")
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, *a, **k): called.append("get"); return _FakeResp(b"x", "image/png")
+
+    monkeypatch.setattr(_httpx, "AsyncClient", _Boom)
+
+    r = await client.post(f"/api/deck/{job_id}/assets/from-url",
+                          json={"url": "http://localhost:8000/api/auth/me"})
+    assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "ERR-IMG-005"
+    assert called == []   # fetch 자체를 안 함
+
+
+@pytest.mark.asyncio
+async def test_import_stock_rejects_non_image(client, monkeypatch):
+    """이미지 아닌 응답(text/html)은 거부 — 임의 파일 임포트 차단."""
+    uid = await _mk_user("badmime@test")
+    job_id = "job-bm"
+    await _db.create_job(job_id, "p.pdf", user_id=uid)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    monkeypatch.setattr(_httpx, "AsyncClient", _fake_httpx(b"<html>", "text/html"))
+
+    r = await client.post(f"/api/deck/{job_id}/assets/from-url",
+                          json={"url": "https://images.unsplash.com/photo-1/x"})
+    assert r.status_code == 400
+    assert r.json()["detail"]["code"] == "ERR-IMG-001"
