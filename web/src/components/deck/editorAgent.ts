@@ -88,6 +88,11 @@ const AGENT_BODY = `
     return el.getAttribute('data-eid');
   }
   function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+  // ★ SVG 루트는 offsetWidth/Height가 undefined(HTML 레이아웃 박스가 아님) → getBoundingClientRect 폴백.
+  // 없으면 CARD_W - offsetWidth = NaN → clamp NaN → style.left='NaNpx'(무효) → SVG 이동·드래그·수치이동 불가
+  // (레이어 패널이 SVG를 선택 가능하게 만들며 드러난 이동 블로커). HTML은 offsetWidth 그대로(무회귀).
+  function offW(el) { var v = el.offsetWidth; return (v == null) ? Math.round(el.getBoundingClientRect().width) : v; }
+  function offH(el) { var v = el.offsetHeight; return (v == null) ? Math.round(el.getBoundingClientRect().height) : v; }
 
   function primary() { return selection.length ? selection[selection.length - 1] : null; }
   function inSelection(el) { return selection.indexOf(el) >= 0; }
@@ -606,7 +611,7 @@ const AGENT_BODY = `
         befores = promoteAll(group, card);
         // 요소별 offsetParent 오프셋(카드좌표) 캡처 — 중첩 요소의 클램프를 카드공간에서 하기 위함
         for (var i = 0; i < group.length; i++) {
-          var op0 = group[i].offsetParent || card, opr0 = op0.getBoundingClientRect();
+          var op0 = posAncestor(group[i], card), opr0 = op0.getBoundingClientRect();  // SVG offsetParent=null → posAncestor
           bases.push({ l: parseFloat(group[i].style.left) || 0, t: parseFloat(group[i].style.top) || 0, offX: opr0.left - cr.left, offY: opr0.top - cr.top });
         }
         gx0 = minx; gy0 = miny; gw = maxx - minx; gh = maxy - miny;
@@ -617,7 +622,7 @@ const AGENT_BODY = `
       var sn = snapMove(card, group, nbx, nby, gw, gh);
       var ddx = sn.left - gx0, ddy = sn.top - gy0;
       for (var i = 0; i < group.length; i++) {
-        var w = group[i].offsetWidth, h = group[i].offsetHeight;
+        var w = offW(group[i]), h = offH(group[i]);
         // 카드공간에서 클램프 후 offsetParent 좌표로 환원 — 중첩 요소가 컨테이너 top에 걸려 카드끝까지 못 올라가던 버그 수정(direct child는 off=0 → 무변화)
         var cardL = clamp(bases[i].l + bases[i].offX + ddx, 0, CARD_W - w);
         var cardT = clamp(bases[i].t + bases[i].offY + ddy, 0, CARD_H - h);
@@ -649,7 +654,7 @@ const AGENT_BODY = `
     promoteAll([el], card);
     var sx = e.clientX, sy = e.clientY;
     var baseL = parseFloat(el.style.left) || 0, baseT = parseFloat(el.style.top) || 0;
-    var baseW = el.offsetWidth, baseH = el.offsetHeight;
+    var baseW = offW(el), baseH = offH(el);   // SVG offsetWidth=undefined 대비(핸들 리사이즈)
     function move(ev) {
       var dx = ev.clientX - sx, dy = ev.clientY - sy;
       var l = baseL, t = baseT, w = baseW, h = baseH;
@@ -748,9 +753,10 @@ const AGENT_BODY = `
       if (d.width != null) after.width = Math.max(12, parseFloat(d.width) || 0) + 'px';
       if (d.height != null) after.height = Math.max(12, parseFloat(d.height) || 0) + 'px';
       applyInline(el, after);
-      var w = el.offsetWidth, h = el.offsetHeight;
-      // ★ 입력값은 카드 좌표 → offsetParent 좌표로 변환(중첩 요소 반전/어긋남 수정). 클램프는 카드 공간에서.
-      var op = el.offsetParent || card, opr = op.getBoundingClientRect(), cardr = card.getBoundingClientRect();
+      var w = offW(el), h = offH(el);
+      // ★ 입력값은 카드 좌표 → 실제 containing block 좌표로 변환(중첩·SVG 어긋남 수정). 클램프는 카드 공간에서.
+      // posAncestor 사용 — SVG는 offsetParent=null이라 card로 폴백되며 래퍼 오프셋만큼 어긋난다(promoteAll과 동일 규칙).
+      var op = posAncestor(el, card), opr = op.getBoundingClientRect(), cardr = card.getBoundingClientRect();
       var offX = opr.left - cardr.left, offY = opr.top - cardr.top;
       if (d.left != null) after.left = (clamp(parseFloat(d.left) || 0, 0, CARD_W - w) - offX) + 'px';
       if (d.top != null) after.top = (clamp(parseFloat(d.top) || 0, 0, CARD_H - h) - offY) + 'px';
@@ -765,8 +771,8 @@ const AGENT_BODY = `
       var befores = promoteAll(els, card), cmds = [];
       for (var i = 0; i < els.length; i++) {
         var el = els[i], after = snapInline(el);
-        after.left = clamp((parseFloat(el.style.left) || 0) + dx, 0, CARD_W - el.offsetWidth) + 'px';
-        after.top = clamp((parseFloat(el.style.top) || 0) + dy, 0, CARD_H - el.offsetHeight) + 'px';
+        after.left = clamp((parseFloat(el.style.left) || 0) + dx, 0, CARD_W - offW(el)) + 'px';
+        after.top = clamp((parseFloat(el.style.top) || 0) + dy, 0, CARD_H - offH(el)) + 'px';
         cmds.push(layoutCmd(el, befores[i], after)); applyInline(el, after);
       }
       pushCmd(compositeCmd(cmds)); emitSelected(); afterMutate();
