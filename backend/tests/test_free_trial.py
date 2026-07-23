@@ -646,6 +646,18 @@ async def test_me_exposes_plan_state(client):
     assert body["canAuthor"] is True
     assert body["canExport"] is False
     assert body["onboarded"] is False
+    assert body["credits"] == 0
+
+
+@pytest.mark.asyncio
+async def test_me_exposes_credit_balance(client):
+    """충전 후 /me가 잔액을 노출한다(P1-2 위젯이 읽을 자리)."""
+    uid = await _mk_user("mecred@test")
+    await _db.add_credits(uid, 30)
+    _as_user(dict(await _db.get_user_by_id(uid)))
+    body = (await client.get("/api/auth/me")).json()
+    assert body["credits"] == 30
+    assert body["plan"] == "pro"
 
 
 @pytest.mark.asyncio

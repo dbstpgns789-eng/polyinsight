@@ -173,10 +173,10 @@ if author_charges_credits(user):                # 유료(pro)
 
 ## 8. API 표면
 
+잔액은 **기존 `GET /api/auth/me` 응답에 `credits` 필드로** 노출한다(프론트가 이미 유저 상태를 여기서 읽음 — DRY). 전용 `/me/credits` 폴링 엔드포인트는 만들지 않는다(YAGNI — 소비자=P1-2 위젯이 생기고 갱신 패턴이 확정될 때 추가).
 ```
-GET /api/me/credits → {credits: int, plan: str}
+GET /api/auth/me → { ..., "plan": str, "credits": int, "canAuthor": bool, "canExport": bool, ... }
 ```
-- 프론트 잔액 위젯(P1-2) 준비. 게이트 아님(읽기).
 - **충전 엔드포인트는 이 스펙 밖**(Creem 웹훅 붙일 때). 지금은 `add_credits` 함수 + 관리자/테스트 수동 충전으로 충분.
 
 ## 9. 에러 처리
