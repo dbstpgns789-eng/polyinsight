@@ -20,6 +20,48 @@
 
 ---
 
+## 🔴 적대 검증 반영 (2026-07-23) — 착수 전 필수
+
+적대 검증 2대(코드-맞춤 + 정합성/보안, Meta 공식문서 대조)가 잡은 결함. **아래를 각 Task에 반영해 구현한다.**
+
+**✅ API 경로 확정:** Instagram Login은 **FB 페이지 없이 캐러셀 발행 가능**(Meta overview·content-publishing 문서 확인). 경로 결정 옳음. 단 아래 형식·보안 픽스 필수.
+
+**코드-맞춤 (없는 걸 "재사용"이라 가정한 것들):**
+- **R1** `login_cookie` 헬퍼 **없음** → `backend/tests/conftest.py`에 신규 작성:
+  ```python
+  import secrets
+  from backend.core import db
+  async def login_cookie(uid: int) -> dict:
+      tok = secrets.token_urlsafe(16)
+      await db.create_session(tok, uid, ttl_hours=72)   # get_current_user가 세션쿠키로 인증
+      return {"session": tok}
+  ```
+- **R2** `set_job_owner` **없음** → 발행 테스트는 `save_authored_deck` **전에** `await db.create_job(jid, "p.pdf", user_id=uid)`로 jobs 행 생성(안 하면 `require_owned_job`→404). `set_job_owner(...)` 호출 전부 이걸로 교체.
+- **R3** `config.py` = **pydantic BaseSettings** → Task 1 Step 2를 **os.getenv 아니라 타입 어노테이션 필드**로:
+  ```python
+  INSTAGRAM_CLIENT_ID: str = ""
+  INSTAGRAM_CLIENT_SECRET: str = ""
+  SOCIAL_TOKEN_KEY: str = ""
+  PUBLIC_CARD_URL_SECRET: str = ""
+  PUBLISH_CREDIT_COST: int = 5
+  ```
+  (`GOOGLE_CLIENT_ID: str = ""` 바로 옆. 미어노테이션 = 필드 아님 → `.env` 오버라이드 죽음.)
+- **R4** `respx` **의존성 아님** → `backend/requirements-dev.txt`에 `respx>=0.21.1`(httpx<0.29 호환) 추가 + `pip install`. (Task 4·8 mock.)
+- **R5** Task 9 `deck.py` 상단에 **`import logging` 하드 추가**(없으면 NameError).
+
+**정합성/보안:**
+- **🔴 B1 (블로커) 이미지 형식/크기** — Meta 발행은 **JPEG only · 폭 ≤1440px · ≤8MB**. 카드 원본은 2160×2700 PNG(deck_renderer scale=2). → **Task 7 공개 라우트가 JPEG 변환 + 1080폭 다운스케일해 서빙.** `backend/core/images.py`(PIL·`downscale_png` 존재)에 `to_jpeg(png_bytes, max_width=1080) -> bytes`(불투명 배경 위 flatten, 카드=solid bg라 안전) 추가, 라우트는 `media_type="image/jpeg"`. **안 하면 라이브 첫 POST 실패 = 슬라이스 무산.** 라이브검증(Task 11)에 "서빙 바이트=JPEG·폭≤1440" 어서션 추가.
+- **M1 토큰 로그 유출** — `graph.instagram.com` **GET**이 `access_token`을 params로 → `raise_for_status()` 예외 메시지에 URL+토큰 → `logging.exception`이 기록(설계 §4 자기위반). → **GET은 `headers={"Authorization": f"Bearer {token}"}`로**(params에서 토큰 제거), OR 로그는 `exc.response.status_code`+`exc.response.text`만(URL 금지). Task 4·8·9 전부.
+- **M2 발행성공→실패보고→중복게시** — `media_publish` 성공(=이미 게시됨) 후 permalink GET이 순간 400/rate-limit이면 예외→502→유저 재클릭→**중복 캐러셀**. → Task 8 `publish_carousel`: **성공 경계를 media_publish로**, permalink GET은 `try/except`로 best-effort(실패 시 permalink=None). Task 9는 media_publish 성공 즉시 크레딧 차감.
+- **M3 서명URL 미설정 시 위조(IDOR)** — `PUBLIC_CARD_URL_SECRET` 기본 `""` → `hmac.new(b"", ...)` = 공개 빈키 → 아무나 임의 `job_id`/`card_num` 서명 위조 → **남의 비공개 초안 덱 카드 무인증 열람**. → Task 7 `signing.py`에 `enabled()`(secret 비고 충분길이) 추가, `verify_card`는 secret 비면 **무조건 False**, 발행 엔드포인트도 secret 없으면 dormant(400). `job_id` 형식 검증 추가.
+- **M4 멱등성 없음 + deduct 반환 무시 → 중복게시+과소청구** — 프리체크와 차감 사이 ~10-30s 네트워크왕복, 락 없음 → 동시/재시도 2발행 둘 다 게시, 둘째 `deduct_credits`는 no-op(False)인데 **반환 무시** → 2게시 1청구. → Task 9: **job별 발행 `asyncio.Lock`**(`_publish_locks`) + `deduct_credits` **반환값 체크**(False면 로깅). 프론트 `disabled`만으론 네트워크 재시도 못 막음.
+- **m1** 단일카드 덱 → 캐러셀은 2~10 children 필수. `card_count==1`이면 **단일 이미지 발행 분기**(`ig_publish.publish_single`). (현 해피패스 테스트가 card_count=1 → mock라서만 통과. 테스트도 2장으로 조정 or 분기 커버.)
+- **m2** 캡션 **2200자/30태그 클램프**(`_deck_caption_text`에서).
+- **m3** 60일 토큰만료 → 일반 502 아니라 **auth 에러(OAuthException) 감지해 "인스타 재연동 필요"** 안내(Task 9).
+- **m4** OAuth authorize 호스트 `https://www.instagram.com/oauth/authorize` **라이브 검증**(Task 4 유닛은 host 안 봄 → 어서션 추가: `assert url.startswith(_IG_AUTH)`).
+
+---
+
 ### Task 1: Config 추가 + 토큰 암호화 헬퍼
 
 **Files:**
