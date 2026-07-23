@@ -15,6 +15,7 @@
 - 테스트는 **항상 `pytest backend/tests/`** (bare pytest = 죽은 스위트). Windows는 `PYTHONUTF8=1`.
 - 커밋 포맷: 백엔드 `[BE]`, 프론트 `[WEB]`.
 - **실 LLM/실 Graph API 호출은 실행 전 허락** (Task 8·9의 mock 테스트는 예외). Task 11(라이브 발행)만 실호출.
+- **★유닛 테스트는 절대 실 LLM 호출 금지** — 캡션 경로 테스트는 `db.set_deck_caption`으로 캐시를 **미리 시드**하거나 `generate_caption`을 monkeypatch. 로컬 `.env` `DEV_MOCK_LLM=True`(mock 기본) 유지. 실호출 검증은 유저 허락 후 명시 전환.
 - **Graph API 스코프·엔드포인트는 Task 4 착수 시 Meta 최신문서로 재확인** (자주 바뀜). 아래는 설계 시점 기준.
 
 ---
@@ -963,6 +964,8 @@ async def test_publish_happy_path(_ctx, monkeypatch):
     from backend.tests.conftest import login_cookie
     # 덱 + 연동 + 크레딧
     await db.save_authored_deck("jP", '<div data-screen-label="01" style="width:1080px"></div>', "[]", 1, "paper")
+    # ★캡션 캐시 시드 필수 — 없으면 _deck_caption_text가 generate_caption(실 Sonnet) 호출 → 실 과금(유저 비용규칙 위반)
+    await db.set_deck_caption("jP", json.dumps({"caption": "테스트 캡션", "hashtags": ["#논문"]}))
     await db.upsert_social_account(uid, "instagram", "ig9", "shop", crypto.encrypt("TOK"), None)
     await db.add_credits(uid, 10)
     # 잡 소유권 (기존 헬퍼로 uid 소유 잡 등록 — test_api.py 관례)
