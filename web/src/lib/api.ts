@@ -39,6 +39,20 @@ export const uploadDeck = (file: File, cardCount: number, persona?: string, styl
 
 export const getDeck = (jobId: string) => api.get(`/deck/${jobId}`)
 
+// ── 인스타 자동 발행 (2026-07-23) ──────────────────────────────────────────
+export const getInstagramStatus = () =>
+  api.get<{ connected: boolean; username: string | null }>('/social/instagram/status')
+    .then((r) => r.data)
+    .catch(() => ({ connected: false, username: null }))
+
+export const publishInstagram = (jobId: string) =>
+  api.post<{ permalink?: string }>(`/deck/${jobId}/publish/instagram`)
+    .then((r) => ({ ok: true as const, permalink: r.data.permalink }))
+    .catch((e: Error) => ({ ok: false as const, error: e.message || '발행에 실패했어요.' }))
+
+// OAuth 리다이렉트 — 전체 페이지 네비게이션(<a href>)이라 /api 풀 경로.
+export const instagramConnectUrl = () => '/api/auth/oauth/instagram/start'
+
 // 덱 이미지 자산 업로드(멀티파트) → {assetId, url}. 렌더시 data URI 인라인 전제(저장 HTML엔 url만).
 export const uploadDeckAsset = (jobId: string, file: File, sourceType = 'upload-owned') => {
   const form = new FormData()
