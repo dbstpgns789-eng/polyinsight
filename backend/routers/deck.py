@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import logging
 import uuid
 import zipfile
 from typing import Annotated
@@ -15,7 +16,8 @@ from ..agents.deck.caption import generate_caption
 from ..agents.deck.deck_renderer import render_deck
 from ..agents.deck.nl_patch import apply_nl_patch
 from ..agents.deck.pipeline import compute_verify, persist_edited_deck, run_authoring_pipeline
-from ..core import db, plans, ratelimit, signing
+from ..agents.deck import ig_publish
+from ..core import crypto, db, plans, ratelimit, signing
 from ..core import images as images_util
 from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
@@ -317,6 +319,73 @@ async def get_deck_caption(job_id: str, user: dict = Depends(get_current_user)):
     result = await generate_caption(deck["html"] or "", deck.get("paper_text") or "")
     await db.set_deck_caption(job_id, json.dumps(result, ensure_ascii=False))
     return result
+
+
+# ── 인스타 자동 발행 (2026-07-23) ──────────────────────────────────────────
+_publish_locks: dict[str, asyncio.Lock] = {}   # M4: job별 발행 락(중복게시·과소청구 방지)
+
+
+async def _deck_caption_text(job_id: str, deck: dict) -> str:
+    """발행용 캡션(캡션+해시태그, m2: 2200자·30태그 클램프). 캐시 있으면 사용, 없으면 생성.
+    검증 통과 수치만(해자) — generate_caption이 미확인 수치 0을 보장."""
+    cached = deck.get("caption_json")
+    if cached:
+        data = json.loads(cached)
+    else:
+        data = await generate_caption(deck["html"] or "", deck.get("paper_text") or "")
+        await db.set_deck_caption(job_id, json.dumps(data, ensure_ascii=False))
+    tags = " ".join((data.get("hashtags") or [])[:30])   # m2
+    text = data.get("caption", "")
+    if tags:
+        text = f"{text}\n\n{tags}"
+    return text[:2200].strip()   # m2
+
+
+@router.post("/deck/{job_id}/publish/instagram")
+async def publish_instagram(job_id: str, user: dict = Depends(get_current_user)):
+    """덱을 유저 IG에 캐러셀 발행. 연동·크레딧 확인 → 서명 공개URL → Graph 발행 → 성공 시 차감.
+    ★M4: job별 락 + deduct 반환 체크(동시/재시도 중복게시·과소청구 방지)."""
+    await require_owned_job(job_id, user)
+    if not signing.enabled():   # M3: 공개URL 서명키 없으면 발행 dormant(위조 방지)
+        raise HTTPException(503, detail={"code": "ERR-IG-005", "message": "발행 기능이 아직 설정되지 않았습니다."})
+    acct = await db.get_social_account(user["id"], "instagram")
+    if not acct:
+        raise HTTPException(400, detail={"code": "ERR-IG-001", "message": "인스타 계정을 먼저 연동해 주세요."})
+
+    lock = _publish_locks.setdefault(job_id, asyncio.Lock())
+    async with lock:   # M4: 동시/재시도 발행 직렬화
+        if await db.get_credits(user["id"]) < settings.PUBLISH_CREDIT_COST:
+            raise HTTPException(402, detail={"code": "ERR-IG-002", "message": "크레딧이 부족합니다."})
+        deck = await db.get_authored_deck(job_id)
+        if not deck:
+            raise HTTPException(404, detail={"code": "ERR-IG-003", "message": "덱을 찾을 수 없습니다."})
+
+        base = (settings.PUBLIC_BASE_URL or settings.WEB_BASE_URL).rstrip("/")
+        urls: list[str] = []
+        for n in range(1, int(deck["card_count"]) + 1):
+            exp, sig = signing.sign_card(job_id, n)
+            urls.append(f"{base}/api/deck/{job_id}/cards/{n}/public?exp={exp}&sig={sig}")
+
+        caption = await _deck_caption_text(job_id, deck)
+        token = crypto.decrypt(acct["access_token"])
+        try:
+            permalink = await ig_publish.publish_carousel(acct["ig_user_id"], token, urls, caption)
+        except httpx.HTTPStatusError as exc:
+            code = exc.response.status_code if exc.response is not None else 0
+            if code in (400, 401):   # m3: 토큰 만료 등 auth 실패 → 재연동 안내
+                logging.getLogger(__name__).warning("instagram 발행 auth 실패: %s", code)
+                raise HTTPException(401, detail={"code": "ERR-IG-006", "message": "인스타 연동이 만료됐어요. 다시 연동해 주세요."})
+            logging.getLogger(__name__).warning("instagram 발행 실패: %s", code)
+            raise HTTPException(502, detail={"code": "ERR-IG-004", "message": "인스타 발행에 실패했습니다. 잠시 후 다시 시도해 주세요."})
+        except Exception as exc:
+            logging.getLogger(__name__).warning("instagram 발행 실패: %s", type(exc).__name__)
+            raise HTTPException(502, detail={"code": "ERR-IG-004", "message": "인스타 발행에 실패했습니다. 잠시 후 다시 시도해 주세요."})
+
+        deducted = await db.deduct_credits(user["id"], settings.PUBLISH_CREDIT_COST)   # M4: 성공 시에만 + 반환 체크
+        if not deducted:
+            logging.getLogger(__name__).warning("발행 후 크레딧 차감 실패(경합) job=%s user=%s", job_id, user["id"])
+        await db.log_event("instagram_publish", user_id=user["id"], job_id=job_id)
+    return {"permalink": permalink}
 
 
 @router.post("/deck/{job_id}/export")
