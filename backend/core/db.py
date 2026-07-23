@@ -448,7 +448,16 @@ async def save_authored_deck(
     card_count: int,
     paper_text: str | None = None,
 ) -> None:
-    """덱 저장. paper_text=None(편집 저장)이면 기존 원문을 보존(덮어쓰지 않음)."""
+    """덱 저장. paper_text=None(편집 저장)이면 기존 원문을 보존(덮어쓰지 않음).
+
+    ★경계 위생(2026-07-23): 저작 모델은 [검사 산문 → ```html → 문서]를 뱉는다. 산문·펜스가
+      덱 HTML 앞에 남으면 편집기가 그 수다를 카드 위에 렌더한다(2026-07-14 버그 재발 — 셀룰로오스
+      덱에서 실제 확인). strip은 최초 저작(authoring.py:128) 한 곳뿐이라 편집·vision-fix POLISH
+      재저장이 우회했다(3세션 코드감사로 확정). **모든 호출자가 지나는 이 문에서 걷어낸다** —
+      어느 경로도 못 새게. clean 문서·카드 조각엔 무해(멱등, 4종 실측 검증).
+    """
+    from ..agents.deck.authoring import _strip_code_fence  # 지연 임포트(core→agents 순환 방지)
+    html = _strip_code_fence(html)
     now = _utc_now_iso()
     async with _connect() as conn:
         await conn.execute(
