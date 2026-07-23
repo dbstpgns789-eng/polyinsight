@@ -15,7 +15,7 @@ from ..agents.deck.caption import generate_caption
 from ..agents.deck.deck_renderer import render_deck
 from ..agents.deck.nl_patch import apply_nl_patch
 from ..agents.deck.pipeline import compute_verify, persist_edited_deck, run_authoring_pipeline
-from ..core import db, plans, ratelimit
+from ..core import db, plans, ratelimit, signing
 from ..core import images as images_util
 from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
@@ -262,6 +262,20 @@ async def get_deck_asset(job_id: str, asset_id: str):
                     "message": "이미지를 찾을 수 없습니다(만료되었을 수 있습니다)."},
         )
     return Response(content=asset["bytes"], media_type=asset["mime"] or "image/png")
+
+
+@router.get("/deck/{job_id}/cards/{card_num}/public")
+async def get_card_public(job_id: str, card_num: int, exp: int = 0, sig: str = ""):
+    """서명·만료 검증된 무인증 카드 이미지 (Meta Graph API image_url용, 스펙 §5).
+    ★B1: Meta는 JPEG·폭≤1440만 허용 → 저장 PNG(2160)를 1080폭 JPEG로 변환해 서빙.
+    ★M3: signing.verify_card가 시크릿 없으면 무조건 False(빈키 위조 차단). self-heal 재사용."""
+    if not signing.verify_card(job_id, card_num, exp, sig):
+        raise HTTPException(404, detail={"code": "ERR-IMG-004", "message": "not found"})
+    png = await _heal_card_images(job_id, card_num)
+    if png is None:
+        raise HTTPException(404, detail={"code": "ERR-IMG-004", "message": "not found"})
+    jpeg = images_util.to_jpeg(png, max_width=1080)
+    return Response(content=jpeg, media_type="image/jpeg")
 
 
 @router.get("/deck/{job_id}/cards/{card_num}")
