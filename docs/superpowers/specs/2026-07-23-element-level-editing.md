@@ -87,3 +87,30 @@
 카드 내 '의미 요소'(텍스트리프·img·svg루트·배경div)를 별도 수집. 그래야 가려진/inline 요소도 목록에 뜬다.
 **eid 결정:** 패널용 전수 스탬프 필요 → serialize에서 `data-eid` **제거하도록** L802 아티팩트 목록 확장
 (검증기 이슈#4 — 발행 HTML 오염 방지).
+
+## 8. ★ 빌드 완료 (2026-07-23 · 실측 검증)
+
+구현 커밋(feat/element-level-edit): 스펙 → editorAgent 프로토콜 → React 패널 → SVG 이동 픽스 → hover.
+
+**빌드된 것 (P0 전부 + 폴리시):**
+- **레이어 패널** — `DeckLayersPanel`(우측 '직접 편집' 탭 최상단). 카드의 원자 요소(텍스트·이미지·
+  그래픽·도형) 목록, 클릭=`SELECT_EID`(가림 우회), 선택 요소 하이라이트(양방향 동기), 26요소 카드
+  대비 max-h 스크롤.
+- **수집 규칙**(`collectLayers`) — freeze 승격집합과 독립. 텍스트리프·img·svg루트·가시 도형(childless
+  paints) 수집, 컨테이너는 하강만. **실측 3덱 20카드로 노이즈0·누락0 검증**(스펙 리스크#2 해소).
+- **원자 선택** — pick이 SVG 안쪽 도형 클릭 시 `ownerSVGElement` 체인으로 루트 `<svg>` 승격.
+- **hover 로케이트** — 행 hover→`HOVER_EID`→캔버스 점선 아웃라인(가려진 요소 위치 표시).
+- **serialize 위생** — `data-eid` 제거(발행 HTML 오염 방지).
+
+**★ 발견·수정한 버그 (레이어 패널이 노출):** SVG 루트는 `offsetWidth/Height`가 **undefined** →
+`setRect`·드래그·핸들 리사이즈의 clamp에서 `CARD_W - undefined = NaN` → `style.left='NaNpx'`(무효)
+→ **SVG가 선택돼도 이동·드래그 불가**(리사이즈만 우연히 됨, left/top 분기 안 타서). `offW/offH` 헬퍼로
+getBoundingClientRect 폴백(HTML 무회귀) + 좌표 오프셋을 `offsetParent`(SVG=null)→`posAncestor` 일관화.
+→ 이제 구슬 SVG가 SET_RECT로 정확 착지·실드래그 정확 델타·리사이즈 OK.
+
+**검증(브라우저 하네스 + 독립 Next 라우트 E2E):** LAYERS 방출·SELECT_EID로 구슬 SVG 선택·svg루트
+승격·serialize eid제거·실덱 9요소 렌더·행 클릭 선택·하이라이트·오버레이·SVG 이동/드래그/리사이즈·텍스트
+무회귀·hover 표시/해제 — 전항 통과. tsc·vitest(107) 그린.
+
+**미착수(P1, 별개 슬라이스):** 패널 per-row 삭제/표시토글(삭제는 선택 후 요소 인스펙터로 가능),
+alt+클릭 캔버스 관통, inline sub-word 개별 이동(out). GAP-1(inline/mixed)은 리스트 선택으로 우회됨.
