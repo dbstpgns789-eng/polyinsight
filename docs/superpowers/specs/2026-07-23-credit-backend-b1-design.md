@@ -22,21 +22,22 @@ B1 = 기능 차등 폐기. 모든 유저에게 기능은 다 열리고, **작업
 - 무료 1덱은 크레딧을 쓰지 않는다 — 기존 `free_decks_used` 경로 그대로.
 - 충전팩 구매 → `plan='pro'` + `credits += 양`. 이 순간부터 크레딧 세계.
 - 퍼널: 무료 1덱 체험 → 막힘 → 충전 → 유료(생성·편집=크레딧, export 열림).
-- **면제**: `role='service'`(X-Render-Token)·`plan='lab'`(박사님·내부)은 게이트/차감 전부 면제(기존 `_is_exempt` 재사용).
+- **면제**: `role='service'`(X-Render-Token)은 `_is_exempt`로, `plan='lab'`(박사님·내부)은 **PAID_PLANS 멤버십**(`plan_of in ("pro","lab")`)으로 면제된다 — 차감 판정 술어가 `plan_of=="pro"` 양성 매칭이라 lab은 자동 배제(차감·게이트 전부 통과). ⚠둘의 출처가 달라 "그냥 _is_exempt 재사용"이 아님(적대검증 지적).
 - 크레딧 0인 유료 유저: 생성/편집은 막히지만(402) **export는 됨**(plan 게이트). 재충전하면 다시 생성.
 
 ## 3. 스키마
 
-`users`에 컬럼 하나 멱등 추가(기존 plan/free_decks_used 마이그레이션 패턴 복제):
+두 컬럼 멱등 추가(기존 plan/free_decks_used 마이그레이션 패턴 복제):
 
 ```sql
 ALTER TABLE users ADD COLUMN credits INTEGER NOT NULL DEFAULT 0
+ALTER TABLE jobs  ADD COLUMN charged_credits INTEGER NOT NULL DEFAULT 0
 ```
 
-- **잔액만(balance-only).** 거래내역(ledger) 테이블은 만들지 않는다 — 사용내역 UI(P1-2) 착수 시 추가.
-  근거: 기존 `free_decks_used`도 잔액만이라 일관. YAGNI.
-- 기존 유저 백필: `credits=0`. (면제 lab 유저는 크레딧과 무관하므로 백필 불필요, DEFAULT 0으로 족함.)
-- `CREATE TABLE users`(신규 DB)에도 `credits INTEGER NOT NULL DEFAULT 0` 추가.
+- `users.credits` = 잔액. **잔액만(balance-only)**, 거래내역(ledger) 테이블 없음 — 사용내역 UI(P1-2) 착수 시 추가. 기존 `free_decks_used`도 잔액만이라 일관. YAGNI.
+- `jobs.charged_credits` = **이 잡 생성에 선차감된 크레딧(환불 근거)**. 적대검증 blocker(§13-①) 대응 — 환불을 휘발성 인자가 아니라 **DB 행**에 남겨야 재시작 후에도 복구 가능. 무료 소비/면제 잡은 0.
+- 기존 유저 백필: `credits=0`(면제 lab은 크레딧 무관, DEFAULT 0으로 족함). 기존 잡 백필: `charged_credits=0`.
+- `CREATE TABLE users`·`CREATE TABLE jobs`(신규 DB)에도 각 컬럼 추가(환경별 스키마 표류 방지).
 
 ## 4. 차감 단가 (상수)
 
@@ -54,26 +55,46 @@ AIEDIT_COST = 2      # 자연어 편집 1회(nlpatch·propose)
 
 ```python
 async def consume_credits(user_id: int, cost: int) -> bool:
-    """원자적 차감. 성공=True. 잔액 부족/음수 cost면 아무 것도 안 바꾸고 False.
+    """원자적 차감(잡 없는 동기 작업용 = AI 편집). 성공=True. 부족/cost≤0=False.
     UPDATE 한 문장이 잔액 검사까지 하므로 check-then-act 레이스 없음."""
-    UPDATE users SET credits = credits - :cost
-    WHERE id = :id AND credits >= :cost
+    if cost <= 0: return False
+    UPDATE users SET credits = credits - :cost WHERE id = :id AND credits >= :cost
     # return rowcount > 0
 
-async def refund_credits(user_id: int, cost: int) -> None:
-    """파이프라인 실패 시 선차감 환불(가산). free_deck 환불과 같은 훅."""
-    UPDATE users SET credits = credits + :cost WHERE id = :id
+async def consume_credits_for_job(user_id: int, job_id: str, cost: int) -> bool:
+    """덱 생성용 — 차감 + 잡에 환불근거 각인을 **한 트랜잭션**으로. §13-①·③ 대응.
+    차감만 되고 각인이 안 되는 창(재시작 시 환불 못함)을 원천 차단."""
+    if cost <= 0: return False
+    BEGIN
+    UPDATE users SET credits = credits - :cost WHERE id = :id AND credits >= :cost
+    if rowcount == 0: ROLLBACK; return False
+    UPDATE jobs SET charged_credits = :cost WHERE id = :job_id
+    COMMIT; return True
+
+async def refund_job_credits(job_id: str) -> None:
+    """잡의 선차감 크레딧을 **멱등** 환불. _log_done(ERROR)·recover_stale_jobs 둘 다 호출.
+    각인을 0으로 지우는 게 이중환불 방어(WHERE charged_credits>0)."""
+    BEGIN
+    # 잡 소유자 잔액에 환불 + 각인 소거를 원자로. charged_credits>0일 때만(멱등).
+    UPDATE users SET credits = credits +
+        (SELECT charged_credits FROM jobs WHERE id = :job_id AND charged_credits > 0)
+        WHERE id = (SELECT user_id FROM jobs WHERE id = :job_id AND charged_credits > 0)
+    UPDATE jobs SET charged_credits = 0 WHERE id = :job_id
+    COMMIT
+    # 구현 시 정확한 SQL은 TDD로. 불변식: charged_credits>0인 잡만 1회 환불, 이후 0.
 
 async def add_credits(user_id: int, amount: int) -> None:
-    """충전. plan='pro'로 승격 + 잔액 가산(한 트랜잭션)."""
+    """충전. plan='pro' 승격 + 잔액 가산(한 트랜잭션). amount<=0이면 무효(no-op)."""
+    if amount <= 0: return
     UPDATE users SET credits = credits + :amount, plan = 'pro'
     WHERE id = :id AND plan NOT IN ('lab')   # lab(면제) 강등 금지
 
-async def get_credits(user_id: int) -> int
+async def get_credits(user_id: int) -> int   # 행 없으면 0
 ```
 
-- `consume_credits`: `cost <= 0` 방어(음수 차감=크레딧 증가 악용 차단) → False.
-- `add_credits`: `plan='lab'`은 승격 대상 아님(면제 유지). free/pro만 pro로.
+- 덱 생성 = `consume_credits_for_job`(차감+각인 원자). AI 편집 = `consume_credits`(잡 없음, 성공 후 차감이라 환불 불필요 — §7).
+- 환불은 오직 `refund_job_credits`(멱등). 별도 `refund_credits`는 두지 않는다 — AI 편집은 성공에만 과금해 환불 경로 자체가 없다.
+- `add_credits`: `amount<=0` no-op(음수 충전 방어). `plan='lab'`은 승격 안 함(면제 유지).
 
 ## 6. 게이트 재배선 (`plans.py`)
 
@@ -105,38 +126,50 @@ def can_export(user) -> bool:        # 변화 없음 (plan in PAID_PLANS)
 
 ## 7. 라우터 훅 재배선
 
-### `POST /deck/upload` (deck.py:69-91)
+### `POST /deck/upload` (deck.py:69-100)
+잡을 **먼저 만들고**(각인 대상 필요), 그 다음 차감+각인을 원자로. free는 기존 순서 유지.
 ```
-require_can_author(user)                        # 무료 소진 or 유료 잔액부족 → 402(조기)
+require_can_author(user)                        # 무료 소진 or 유료 잔액부족 → 402(조기, 읽기 전)
 ...
-charged_credits = 0
-if should_consume_free_deck(user):              # free 플랜 (기존)
-    if not consume_free_deck(...): raise author_gate_error
-elif author_charges_credits(user):              # 유료(pro)
-    if not consume_credits(user_id, DECK_COST): raise credit_low_error
-    charged_credits = DECK_COST
-# charged_credits를 run_authoring_pipeline 인자로 전달 (환불 추적)
+if should_consume_free_deck(user):              # free 플랜 (기존, 변화 없음)
+    if not consume_free_deck(...): raise author_gate_error   # job 생성 전
+job_id = uuid; create_job(...)
+if author_charges_credits(user):                # 유료(pro)
+    if not consume_credits_for_job(user_id, job_id, DECK_COST):
+        delete_job(job_id); raise credit_low_error          # 레이스 패자·잔액부족
+try:
+    background_tasks.add_task(run_authoring_pipeline, job_id, ...)
+except Exception:
+    refund_job_credits(job_id)                  # §13-③ 스케줄 실패 창 봉합
+    raise
 ```
-- 선차감(job 생성 전, 레이스 방어) 유지. 파이프라인 ERROR → 환불.
+- 무료: job 생성 전 선차감(기존 레이스 방어). 유료: job 생성 후 **차감+각인 원자**(각인이 재시작 환불의 근거). 둘 **상호배타**.
+- `run_authoring_pipeline`에 **크레딧 인자를 넘기지 않는다** — 환불 근거는 `jobs.charged_credits`(DB)다.
 
-### 파이프라인 실패 환불 (`pipeline._log_done`, 기존 `refund_free_deck` 옆)
-- **환불 추적 = 명시 인자.** 소비 시점의 plan을 나중에 재판정하면 그 사이 충전/강등으로 틀어질 수 있다.
-  업로드 핸들러가 실제 차감한 것을 `run_authoring_pipeline(..., charged_credits: int)`로 넘긴다.
-  - `charged_credits == 0` → (무료 카운터 소비 또는 면제) 기존 `refund_free_deck` 경로 판정 그대로.
-  - `charged_credits > 0` → ERROR 시 `refund_credits(user_id, charged_credits)`.
-- 무료 카운터 환불(`refund_free_deck`)과 크레딧 환불은 **상호배타**(한 업로드는 둘 중 하나만 선차감).
+### 실패 환불 — **두 진입점 모두** `refund_job_credits(job_id)` (멱등)
+1. `pipeline._log_done(status==ERROR)` — 정상 실행 중 실패(기존 `refund_free_deck` 옆에 추가).
+2. `db.recover_stale_jobs` — **재시작으로 소실된 잡을 ERROR로 뒤집을 때 반드시 환불**(§13-① blocker). 각 stale 잡에 `refund_job_credits` 호출.
+- 멱등(`WHERE charged_credits>0` + 각인 소거)이라 두 경로가 겹쳐도 **1회만** 환불. 이게 blocker의 핵심 봉합.
+- 무료 카운터 환불(`refund_free_deck`)은 기존 그대로($0, 재시작 바이패스 방치 유지 — 실화폐 아님).
 
-### `POST /deck/{id}/nlpatch`·`/nlpatch/propose` (deck.py:159, 196)
+### `POST /deck/{id}/nlpatch`·`/nlpatch/propose` (deck.py:159, 196) — **검증 통과 후 차감**
 ```
-require_can_ai_designer(user)                   # free→402(게이트), pro→잔액검사
-if plan=='pro' and not _is_exempt:
+require_can_ai_designer(user)                   # free→402(게이트), pro→잔액 조기검사
+new_html = await apply_nl_patch(...)            # LLM 호출
+if "data-screen-label" not in new_html: raise 422   # ★차감 전 — no-op이면 과금 0
+if author_charges_credits(user):                # 유료(pro)
     if not consume_credits(user_id, AIEDIT_COST): raise credit_low_error
-# LLM 호출 실패 시 환불(호출 전 차감이면 try/except로 refund)
+# 저장/렌더 → 응답
 ```
-- AI 편집은 **호출당 차감**. LLM 실패(에러)면 환불.
+- **성공(계약 통과)에만 차감** — §13-② 대응(422 구조거부·LLM 예외 모두 차감 전이라 no-op 과금 없음, 환불 경로 불필요).
+- 조기 잔액검사(require_can_ai_designer)로 못 낼 유저는 LLM 호출조차 안 함(원가 방어). 검사~차감 사이 레이스로 잔액이 빠지면 원자 소비가 402(드묾, LLM 원가만 흡수).
+- propose(미저장 프리뷰)도 동일 — LLM 실호출이라 성공 시 과금이 옳음(charge-per-LLM-call). PATCH 직접편집·reverify·caption은 **무 LLM = 무과금**(각각 기존 무게이트 유지, plans.py 도킹스트링에 명문).
 
 ### export (변화 없음)
-`require_can_export`만. 크레딧 미차감.
+`require_can_export`만(deck.py:363, export.py:28/64, jobs.py:115). 크레딧 미차감.
+
+### 부분 렌더 과금 정책 (§13-④)
+`pipeline.py`는 `status = DONE if images else ERROR` — 1장이라도 렌더되면 DONE. **정책: 1장 이상 = 전달된 산출물 = 전액 과금(환불 없음)**, 0장 = ERROR = 전액 환불(위 두 훅). 부분 덱도 유저가 편집·재생성 가능한 자산이라 전액 과금이 기본. (비례 환불은 ledger 필요 → P1-2 이후 재검토.)
 
 ## 8. API 표면
 
@@ -157,9 +190,13 @@ GET /api/me/credits → {credits: int, plan: str}
 
 신규 `test_credits.py`:
 - `consume_credits`: 잔액충분→차감·True / 부족→불변·False / cost≤0→False / **동시 2건**(원자성, 하나만 성공).
-- `refund_credits`: 가산. `add_credits`: 가산+plan승격, lab은 승격 안 됨.
-- 게이트: 무료 1덱 후 생성 차단(ERR-PLAN-AUTHOR) / 유료 생성 시 DECK_COST 차감 / 잔액부족 402(ERR-CREDIT-LOW) / AI편집 AIEDIT_COST 차감 / **export 무과금**(크레딧 불변) / lab·service 면제(차감 0).
-- 실패 환불: 파이프라인 ERROR → 선차감 크레딧 복구.
+- `consume_credits_for_job`: 성공 시 차감+`jobs.charged_credits` 각인 **동시** / 부족 시 **둘 다 불변**(롤백, 각인 0).
+- `refund_job_credits`: 환불+각인 소거 / **2회 호출해도 1회만 환불**(멱등, §13-①·③ 핵심).
+- `add_credits`: 가산+plan승격 / `amount<=0` no-op / lab은 승격 안 됨.
+- 게이트: 무료 1덱 후 생성 차단(ERR-PLAN-AUTHOR) / 유료 생성 시 DECK_COST 차감 / 잔액부족 402(ERR-CREDIT-LOW) / **export 무과금**(크레딧 불변) / lab·service 면제(차감 0).
+- **§13-② AI편집 422**: 구조 깨진 결과로 422 거부 시 크레딧 **불변**(차감 전 거부).
+- **§13-① 재시작 환불**: `charged_credits>0`인 stale 잡을 `recover_stale_jobs`가 ERROR로 돌릴 때 크레딧 복구.
+- **§13-④ 부분 렌더**: images≥1 → DONE → 전액 과금(환불 0) / images=0 → ERROR → 전액 환불.
 
 기존 `test_free_trial.py` 회귀: 무료 경로 불변 확인.
 
@@ -174,3 +211,16 @@ GET /api/me/credits → {credits: int, plan: str}
 ## 12. docs/ 반영 (구현 시)
 
 헌법 "docs 먼저": 구현 착수 시 `docs/contracts/07_api_data_model.md`에 크레딧 스키마·차감 규칙·`GET /me/credits`·`ERR-CREDIT-LOW` 반영(v2.9). 이 브레인스토밍 스펙과 계약 문서는 별개 — 계약 문서가 정본.
+
+## 13. 적대검증 로그 (2026-07-23)
+
+5개 렌즈 25 에이전트 병렬 공격 → 코드 대조 검증. **6 confirmed / 14 rejected**. 구별되는 결함 4개, 위 §3·§5·§7·§10에 반영:
+
+| # | 심각도 | 결함 | 봉합 |
+|---|---|---|---|
+| ① | **blocker** | 재시작/재배포로 소실된 잡을 `recover_stale_jobs`가 ERROR 마킹만 하고 환불 안 함 → 선차감 크레딧 영구 증발(휘발성 인자로는 복구 불가, ledger 없어 추적도 불가). 매일 18:00 재배포가 진행 잡 몰살하는 운영 상수라 실발생. | 환불근거를 `jobs.charged_credits`(DB)에 각인. `_log_done`·`recover_stale_jobs` 두 진입점 모두 `refund_job_credits`(멱등) 호출. |
+| ② | major | AI편집(nlpatch/propose): LLM 성공 후 결과 구조가 깨져 422 거부되는데 차감은 이미 됨 → 변화 0에 과금(모델 드리프트로 상습). 3개 렌즈 독립 발견. | **검증(data-screen-label) 통과 후 차감.** 422·LLM예외 모두 차감 전이라 no-op 과금 원천 차단. |
+| ③ | minor | `consume` 성공 후 `create_job`/`add_task` 실패 창 → 환불 훅 안 돎. | ①의 DB 각인이 커버(recover 스윕) + `add_task` 실패 시 즉시 `refund_job_credits`. |
+| ④ | minor | 부분 렌더(7장 중 3장) → `status=DONE` → 전액 과금·환불 미정의. | **정책 명문화**: 1장 이상=전달 산출물=전액 과금 / 0장=ERROR=전액 환불. (비례 환불은 ledger 필요→P1-2.) |
+
+기각된 14건 요지: 대부분 "아직 미구현 코드에 대한 가정", "범위 밖 Creem 웹훅 멱등성", "lab 면제가 실제 슈도코드(`plan=='pro'` 양성판정)에선 안전"으로 반박됨. 단 §2 "면제=_is_exempt 재사용" 문구가 부정확(lab 면제 실체는 PAID_PLANS 멤버십)하다는 지적은 타당 — 표현만 흠, 동작은 안전.
