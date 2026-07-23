@@ -253,6 +253,9 @@ async def migrate() -> None:
             await conn.execute("ALTER TABLE users ADD COLUMN onboarded_at TEXT")
             await conn.execute("UPDATE users SET onboarded_at = ?", (_utc_now_iso(),))
             await conn.commit()
+        # 발행 크레딧(2026-07-23) — 충전형 크레딧 잔액. 기존행=0(충전 전).
+        if "credits" not in ucols2:
+            await conn.execute("ALTER TABLE users ADD COLUMN credits INTEGER NOT NULL DEFAULT 0")
         # L1(2026-07-09): BLOB→파일시스템. 기존 DB에 storage_key 없으면 추가(멱등).
         for _tbl in ("card_images", "exports", "deck_assets"):
             async with conn.execute(f"PRAGMA table_info({_tbl})") as cur:
@@ -956,6 +959,32 @@ async def delete_social_account(user_id: int, provider: str) -> None:
             (user_id, provider),
         )
         await conn.commit()
+
+
+# ── 발행 크레딧: users.credits (2026-07-23) ────────────────────────────────
+
+async def get_credits(user_id: int) -> int:
+    async with _connect() as conn:
+        async with conn.execute("SELECT credits FROM users WHERE id = ?", (user_id,)) as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+
+async def add_credits(user_id: int, amount: int) -> None:
+    async with _connect() as conn:
+        await conn.execute("UPDATE users SET credits = credits + ? WHERE id = ?", (amount, user_id))
+        await conn.commit()
+
+
+async def deduct_credits(user_id: int, amount: int) -> bool:
+    """잔액 >= amount일 때만 차감하고 True. 부족하면 미차감 False (원자적 WHERE 가드)."""
+    async with _connect() as conn:
+        cur = await conn.execute(
+            "UPDATE users SET credits = credits - ? WHERE id = ? AND credits >= ?",
+            (amount, user_id, amount),
+        )
+        await conn.commit()
+        return (cur.rowcount or 0) > 0
 
 
 # ── 이메일 인증: auth_tokens (2026-07-02) ──────────────────────────────────
