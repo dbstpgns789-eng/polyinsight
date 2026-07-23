@@ -5,7 +5,7 @@
 // 무료체험 export-gate(402 ERR-PLAN-EXPORT) → 순수잠금 페이월. 워터마크·타이머·닫기숨김 없음.
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { exportDeck, getDeckCaption, getExportDownloadUrl } from '@/lib/api'
+import { exportDeck, getDeckCaption, getExportDownloadUrl, getInstagramStatus, publishInstagram, instagramConnectUrl } from '@/lib/api'
 import { buildInstagramCaption } from '@/lib/instagramCaption'
 import { planGateKind } from '@/lib/plan'
 
@@ -31,6 +31,11 @@ export default function DeckExportModal({ jobId, filename, cardCount, unverified
   const [capErr, setCapErr] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  // 인스타 연동/자동발행 (Phase B)
+  const [ig, setIg] = useState<{ connected: boolean; username: string | null } | null>(null)
+  const [publishing, setPublishing] = useState(false)
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -55,6 +60,7 @@ export default function DeckExportModal({ jobId, filename, cardCount, unverified
 
   const enterInstagram = async () => {
     setMode('instagram'); setCapErr(null); setCopied(false)
+    getInstagramStatus().then(setIg)    // 연동 상태 로드(자동발행 가능 여부)
     if (caption) return                 // 이미 받아둠(재진입 시 재요청 안 함)
     setCapLoading(true)
     try {
@@ -124,7 +130,38 @@ export default function DeckExportModal({ jobId, filename, cardCount, unverified
                 className="w-7 h-7 -ml-1 grid place-items-center rounded-lg text-ink-3 hover:bg-bg-subtle text-[16px]">←</button>
               <h2 className="text-[16px] font-bold text-ink">인스타에 올리기</h2>
             </div>
-            <p className="text-[12px] text-ink-3 mt-1">① 캡션 복사 → ② 이미지 다운로드 → ③ 인스타에서 붙여넣고 게시</p>
+
+            {/* 연동 시 앱에서 바로 자동 발행 / 미연동 시 연동 유도. 아래 수동 3단계는 폴백으로 유지 */}
+            {ig?.connected ? (
+              <div className="mt-3 rounded-xl border border-forest-green/40 bg-forest-green/5 p-3">
+                <p className="text-[12px] text-ink-2 mb-2">@{ig.username} 연동됨 · 앱에서 바로 발행</p>
+                {publishedUrl ? (
+                  <a href={publishedUrl} target="_blank" rel="noopener"
+                    className="h-10 grid place-items-center rounded-lg bg-forest-green text-canvas text-[13px] font-semibold">
+                    게시됐어요 — 인스타에서 보기 ↗
+                  </a>
+                ) : (
+                  <button disabled={publishing}
+                    onClick={async () => {
+                      setPublishing(true); setCapErr(null)
+                      const res = await publishInstagram(jobId)
+                      setPublishing(false)
+                      if (res.ok && res.permalink) setPublishedUrl(res.permalink)
+                      else setCapErr(res.ok ? '게시됐어요(링크는 잠시 후 확인).' : res.error)
+                    }}
+                    className="w-full h-10 rounded-lg bg-forest-green text-canvas text-[13px] font-bold disabled:opacity-50">
+                    {publishing ? '발행 중…' : '📸 인스타에 자동 발행'}
+                  </button>
+                )}
+              </div>
+            ) : ig ? (
+              <a href={instagramConnectUrl()}
+                className="mt-3 h-10 grid place-items-center rounded-lg border border-forest-green text-forest-green text-[13px] font-semibold">
+                인스타 계정 연동하고 바로 발행
+              </a>
+            ) : null}
+
+            <p className="text-[12px] text-ink-3 mt-3">또는 수동으로: ① 캡션 복사 → ② 이미지 다운로드 → ③ 인스타에서 붙여넣고 게시</p>
 
             {capLoading ? (
               <div className="mt-4 h-28 rounded-xl border border-border grid place-items-center text-[12.5px] text-ink-3">

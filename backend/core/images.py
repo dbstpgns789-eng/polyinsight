@@ -30,3 +30,22 @@ def downscale_png(raw: bytes, max_width: int = PREVIEW_MAX_WIDTH) -> bytes:
         return out.getvalue()
     except Exception:
         return raw
+
+
+def to_jpeg(raw: bytes, max_width: int = 1080, quality: int = 90) -> bytes:
+    """PNG(레티나 2160폭) → JPEG(폭≤max_width). Meta 발행 요건(JPEG·폭≤1440·≤8MB) 충족(B1).
+    JPEG는 알파 없음 → 불투명 배경 위 flatten(카드=solid bg라 안전)."""
+    img = Image.open(io.BytesIO(raw))
+    w, h = img.size
+    if w > max_width:
+        img = img.resize((max_width, max(1, round(h * max_width / w))), Image.LANCZOS)
+    if img.mode in ("RGBA", "LA", "P"):
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        rgba = img.convert("RGBA")
+        bg.paste(rgba, mask=rgba.split()[-1])
+        img = bg
+    else:
+        img = img.convert("RGB")
+    out = io.BytesIO()
+    img.save(out, format="JPEG", quality=quality, optimize=True)
+    return out.getvalue()

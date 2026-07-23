@@ -17,7 +17,7 @@ from backend.core.auth import get_current_user
 from backend.core.config import settings
 from backend.core.db import cleanup_expired_blobs, migrate, recover_stale_jobs
 from backend.core.plans import PlanGateError
-from backend.routers import auth, deck, export, images, jobs, projects
+from backend.routers import auth, deck, export, images, jobs, projects, social
 
 
 def _setup_file_logging() -> None:
@@ -116,3 +116,4 @@ app.include_router(projects.router, dependencies=[Depends(get_current_user)])
 app.include_router(export.router, dependencies=[Depends(get_current_user)])
 app.include_router(images.router, dependencies=[Depends(get_current_user)])
 app.include_router(deck.router)  # 단일 저작 경로 (헌법 v3.0) — 자체 get_current_user 의존
+app.include_router(social.router)  # 소셜 연동 상태/해제 — 자체 get_current_user 의존

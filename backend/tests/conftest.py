@@ -7,6 +7,18 @@ from dotenv import load_dotenv
 
 load_dotenv(pathlib.Path(__file__).parents[2] / ".env")
 
+
+async def login_cookie(uid: int) -> dict:
+    """테스트용 세션 쿠키 — get_current_user가 인증하도록 db.create_session으로 발급(R1).
+    create_session은 원문을 sha256 해시로 저장, 쿠키엔 원문 → get_valid_session이 매칭."""
+    import secrets
+
+    from backend.core import db
+    tok = secrets.token_urlsafe(16)
+    await db.create_session(tok, uid, ttl_hours=72)
+    return {"session": tok}
+
+
 PAPER_MD = pathlib.Path(
     r"C:\Users\User\OneDrive\Desktop\한국생산기술연구원_근로장학"
     r"\poly_claude_code\논문"

@@ -9,6 +9,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..core import auth as auth_core
+from ..core import crypto
 from ..core import db
 from ..core import email as email_mod
 from ..core import oauth as oauth_core
@@ -321,6 +322,51 @@ async def oauth_google_callback(request: Request, code: str = "", state: str = "
     await _start_session(resp, user_id)
     resp.delete_cookie(OAUTH_STATE_COOKIE, path="/")
     await db.log_event("oauth_login", user_id=user_id, payload={"provider": "google"})
+    return resp
+
+
+# ── 인스타 발행 연동 (2026-07-23) — 로그인 세션 아님, 이미 로그인한 유저에 IG 계정 붙임 ──
+@router.get("/oauth/instagram/start")
+async def oauth_instagram_start(user: dict = Depends(auth_core.get_current_user)):
+    """IG 연동 시작 — 로그인 유저만. 발행권한 연동(세션 안 만듦)."""
+    if not oauth_core.instagram_enabled() or not crypto.enabled():
+        return RedirectResponse(url=f"{_web_base()}/dashboard?error=ig_disabled", status_code=302)
+    state = secrets.token_urlsafe(24)
+    resp = RedirectResponse(url=oauth_core.instagram_authorize_url(state), status_code=302)
+    resp.set_cookie(OAUTH_STATE_COOKIE, state, max_age=600, httponly=True,
+                    samesite="lax", secure=settings.COOKIE_SECURE, path="/")
+    return resp
+
+
+@router.get("/oauth/instagram/callback")
+async def oauth_instagram_callback(
+    request: Request,
+    user: dict = Depends(auth_core.get_current_user),
+    code: str = "",
+    state: str = "",
+):
+    """IG 콜백 → 토큰 교환 → 암호화 저장(로그인 유저에 연동). 세션 안 만듦.
+    ★M1: 교환 실패 로그는 예외 타입만(httpx 예외의 URL·토큰 유출 방지)."""
+    web = _web_base()
+    cookie_state = request.cookies.get(OAUTH_STATE_COOKIE)
+    if not code or not state or not cookie_state or state != cookie_state:
+        return RedirectResponse(url=f"{web}/dashboard?error=ig_state", status_code=302)
+    try:
+        acct = await oauth_core.instagram_exchange(code)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("instagram oauth 교환 실패: %s", type(exc).__name__)
+        return RedirectResponse(url=f"{web}/dashboard?error=ig_failed", status_code=302)
+    exp = None
+    if acct.get("expires_in"):
+        from datetime import datetime, timedelta
+        exp = (datetime.utcnow() + timedelta(seconds=int(acct["expires_in"]))).isoformat()
+    await db.upsert_social_account(
+        user["id"], "instagram", acct["ig_user_id"], acct.get("ig_username"),
+        crypto.encrypt(acct["access_token"]), exp,
+    )
+    resp = RedirectResponse(url=f"{web}/dashboard?ig=connected", status_code=302)
+    resp.delete_cookie(OAUTH_STATE_COOKIE, path="/")
+    await db.log_event("instagram_connected", user_id=user["id"])
     return resp
 
 
