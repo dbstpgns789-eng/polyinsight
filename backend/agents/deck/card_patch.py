@@ -87,7 +87,7 @@ def apply_card_patch(html: str, patch: str) -> tuple[str, int, list[str]]:
     if not p or NO_CHANGES in p[:40].upper():
         return html, 0, []
     if "data-screen-label" not in p:
-        return html, 0, ["비전 수정 출력에 카드가 없어 무시했습니다 — 원본을 유지합니다."]
+        return html, 0, ["비전 수정 출력에 카드가 없어 무시했습니다. 원본을 유지합니다."]
 
     _, new_cards, _ = split_cards(p)
     if not new_cards:

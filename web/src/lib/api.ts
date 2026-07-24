@@ -19,6 +19,20 @@ api.interceptors.response.use(
   }
 )
 
+// axios 래퍼 에러 → 사용자 문구. 백엔드가 준 친절 메시지(detail.message)면 그대로 쓰고,
+// raw "Request failed with status code N"·"Network Error"면 상태코드별 일반 문구로 매핑한다.
+// (개발자 언어를 사용자에게 그대로 노출하던 문제 방지 — 특히 402·413·5xx.)
+export function friendlyError(e: unknown, fallback: string): string {
+  const err = e as { status?: number; message?: string }
+  const msg = err?.message ?? ''
+  if (msg && !/^Request failed with status code/i.test(msg) && !/^Network Error/i.test(msg)) return msg
+  const s = err?.status
+  if (s === 402) return '크레딧이 부족해요. 충전 후 다시 시도해 주세요.'
+  if (s === 413 || s === 400) return '파일이 너무 크거나 형식이 올바르지 않아요.'
+  if (s && s >= 500) return '서버에 일시적인 문제가 있어요. 잠시 후 다시 시도해 주세요.'
+  return fallback
+}
+
 // uploadPdf(구 POST /api/upload → run_pipeline)는 L0(2026-07-09)에서 삭제.
 // 저작 진입은 uploadDeck(/api/deck/upload) 하나뿐.
 

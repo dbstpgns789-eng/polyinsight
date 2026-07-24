@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
-import { getStatus, getDeck, patchDeck, nlProposeDeck } from '@/lib/api'
+import { getStatus, getDeck, patchDeck, nlProposeDeck, friendlyError } from '@/lib/api'
 import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState, type PageState, type LayerItem } from '@/components/deck/DeckEditor'
 import DeckElementPanel from '@/components/deck/DeckElementPanel'
 import DeckLayersPanel from '@/components/deck/DeckLayersPanel'
@@ -269,8 +269,8 @@ function DeckPageInner() {
       const r = await nlProposeDeck(jobId, instruction, html, target)
       const afterText = target?.eid ? extractEidText(r.data.html, target.eid) : null
       setPending({ html: r.data.html, verify: r.data.verify, afterText, target, beforeText })
-    } catch {
-      setEditWarnings(['AI가 응답하지 않았어요. 다시 시도해 주세요.'])
+    } catch (e) {
+      setEditWarnings([friendlyError(e, 'AI가 응답하지 않았어요. 다시 시도해 주세요.')])
     } finally { setProposing(false) }
   }, [jobId, selected, pending])
 

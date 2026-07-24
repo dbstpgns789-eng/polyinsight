@@ -8,7 +8,7 @@ import { useCallback, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
-import { uploadDeck } from '@/lib/api'
+import { uploadDeck, friendlyError } from '@/lib/api'
 import { planGateKind } from '@/lib/plan'
 
 // 칩 = 영감 팔레트(선택 강제 아님). 이름은 한국어 감각어만 — 비전공자가 읽고 느낌이 와야 함.
@@ -87,7 +87,7 @@ function DeckNewInner() {
         router.push('/upgrade?from=author')
         return
       }
-      setError(e instanceof Error ? e.message : '업로드 실패')
+      setError(friendlyError(e, '업로드에 실패했어요. 파일을 확인하고 다시 시도해 주세요.'))
       setSubmitting(false)
     }
   }, [file, cardCount, style, router])
@@ -123,7 +123,7 @@ function DeckNewInner() {
               <p className="text-[13px] text-ink-3 mt-0.5">PDF · {formatSize(file.size)}</p>
               <p className="inline-flex items-center gap-1.5 mt-2 text-forest-green-deep text-[12.5px] font-bold">
                 <CheckIcon size={13} stroke={2.8} />
-                논문 인수 완료
+                논문 업로드 완료
               </p>
             </div>
             <button type="button" onClick={() => inputRef.current?.click()}
@@ -156,8 +156,8 @@ function DeckNewInner() {
         {/* 미발표 원고를 올릴지 망설이는 순간이 여기다 — 처리방침을 읽지 않는 사람에게도 보여야 한다 */}
         <p className="text-[12.5px] text-ink-3 mt-2 text-center leading-relaxed">
           올린 논문은 카드뉴스를 만드는 데만 쓰이고 <strong className="font-semibold text-ink-2">AI 학습에는 사용되지 않습니다.</strong>{' '}
-          언제든 직접 삭제할 수 있습니다.{' '}
-          <a href="/privacy" className="underline underline-offset-2 hover:text-ink-2">처리방침</a>
+          언제든 직접 삭제할 수 있으며, 자세한 내용은{' '}
+          <a href="/privacy" className="underline underline-offset-2 hover:text-ink-2">개인정보 처리방침</a>에서 확인할 수 있습니다.
         </p>
 
         {/* 아트디렉터에게 한마디 */}
@@ -166,7 +166,7 @@ function DeckNewInner() {
             <h2 className="text-[18px] font-extrabold text-ink tracking-[-0.01em]">아트디렉터에게 한마디</h2>
             <span className="text-[13px] text-ink-3 font-semibold">선택</span>
           </div>
-          <p className="text-[13.5px] leading-relaxed text-ink-3 mb-5">비우면 AI가 논문에 맞게 정합니다 · 내용은 논문이 정합니다 — 수치는 검증돼요</p>
+          <p className="text-[13.5px] leading-relaxed text-ink-3 mb-5">비워도 괜찮아요. AI가 논문에 맞춰 알아서 정합니다.</p>
 
           <p className="text-[13px] font-bold text-ink-2 mb-2.5">💡 이렇게 말해보세요</p>
           <div className="flex flex-col gap-2 mb-5">
