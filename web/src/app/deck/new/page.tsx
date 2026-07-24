@@ -14,11 +14,11 @@ import { planGateKind } from '@/lib/plan'
 // 칩 = 영감 팔레트(선택 강제 아님). 이름은 한국어 감각어만 — 비전공자가 읽고 느낌이 와야 함.
 // 클릭 시 풀 서술이 입력창에 들어가 "말로 지시" 문법을 가르친다.
 const STYLE_CHIPS = [
-  '미드나잇 네온 — 어두운 배경 + 형광 강조선',
-  '따뜻한 종이 잡지 — 종이빛 바탕 + 형광펜 강조',
-  '학교 칠판 — 분필 손글씨 느낌',
-  '지브리풍 — 부드러운 수채 파스텔',
-  '깔끔한 공공기관 — 절제된 네이비·그레이',
+  '미드나잇 네온: 어두운 배경 + 형광 강조선',
+  '따뜻한 종이 잡지: 종이빛 바탕 + 형광펜 강조',
+  '학교 칠판: 분필 손글씨 느낌',
+  '지브리풍: 부드러운 수채 파스텔',
+  '깔끔한 공공기관: 절제된 네이비·그레이',
 ]
 
 // 예시 발화 = 소프트 스키마: 축(색감/독자/강조점)을 하나씩 가르친다. 코드 파싱 없음(헌법 §1).
@@ -183,14 +183,14 @@ function DeckNewInner() {
             {STYLE_CHIPS.map((c) => (
               <button key={c} type="button" onClick={() => setStyle(c)}
                 className={`text-[13.5px] px-4 py-2 rounded-full border whitespace-nowrap transition-colors ${style === c ? 'bg-forest-green text-canvas border-forest-green font-bold' : 'bg-canvas border-border text-ink-2 font-semibold hover:border-forest-green/50'}`}>
-                {c.split(' — ')[0]}
+                {c.split(':')[0]}
               </button>
             ))}
           </div>
 
           <textarea
             value={style} onChange={(e) => setStyle(e.target.value)}
-            placeholder="색감, 난이도, 강조점 — 뭐든 말로 지시하세요… (비워도 됩니다)"
+            placeholder="색감·난이도·강조점, 뭐든 말로 지시하세요… (비워도 됩니다)"
             rows={2}
             className="block w-full min-h-[72px] text-[14.5px] leading-relaxed rounded-[14px] border border-border p-4 resize-y text-ink outline-none transition-shadow focus:border-forest-green focus:ring-4 focus:ring-forest-green-wash"
             style={{ background: 'var(--surface)' }}
@@ -235,7 +235,7 @@ function DeckNewInner() {
         {/* 신뢰 문구의 제자리 = 결심하는 순간 옆 */}
         <p className="text-center text-[12.5px] text-ink-3 mt-3 inline-flex items-center gap-1.5 w-full justify-center">
           <span className="text-forest-green-deep inline-flex"><CheckIcon size={12} stroke={3} /></span>
-          모든 수치는 원문과 자동 대조됩니다 · 보통 2~3분
+          모든 수치는 원문과 자동 대조됩니다 · 논문에 따라 2~5분
         </p>
 
       </div>

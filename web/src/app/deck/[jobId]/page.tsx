@@ -39,7 +39,7 @@ interface DeckPayload {
 // ── 생성 진행 화면 — 진짜 공정 공개 (Mirra식 극장이되 문구=실제 파이프라인 단계) ──
 // 가짜 남은시간·가짜 취소버튼 금지. progress(10→40→70→85)는 실측, 사이는 완만히 creep.
 const PIPELINE_STEPS = [
-  { key: 'S1', emoji: '📖', label: '논문 읽기', msg: '논문을 읽고 있어요 — 텍스트와 그림, 수치를 꺼냅니다' },
+  { key: 'S1', emoji: '📖', label: '논문 읽기', msg: '논문을 읽고 있어요. 텍스트와 그림, 수치를 꺼냅니다' },
   { key: 'AUTHOR', emoji: '✍️', label: 'AI 저작', msg: 'AI가 논문의 그림을 보며 스토리와 디자인을 저작하고 있어요' },
   // Best-of-N(AUTHOR_CANDIDATES>1)일 때만 등장 — 여러 시안을 만들어 심사해 최고를 고른다
   { key: 'SELECT', emoji: '⚖️', label: '시안 비교', msg: '여러 시안을 만들어 나란히 놓고 가장 좋은 것을 고르고 있어요' },
@@ -99,7 +99,7 @@ function GenerationTheater({ stage, progress }: { stage: string; progress: numbe
         </div>
         <div className="flex justify-between text-[12.5px] text-ink-3 mb-8">
           <span>{mm}:{ss}</span>
-          <span>보통 2~3분</span>
+          <span>논문에 따라 2~5분</span>
         </div>
 
         <div className="inline-flex flex-col items-start gap-2 mb-8" aria-label="생성 단계">
@@ -517,7 +517,7 @@ function DeckPageInner() {
               />
               {(proposing || !!pending) && (
                 <div className="absolute inset-0 z-10 cursor-not-allowed" aria-hidden="true"
-                  title={proposing ? 'AI가 고치는 중…' : 'AI 제안 확인 중 — 적용/취소 후 편집하세요'} />
+                  title={proposing ? 'AI가 고치는 중…' : 'AI 제안 확인 중. 적용·취소 후 편집하세요'} />
               )}
               {jump && (
                 <DeckFactJumpBar
