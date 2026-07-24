@@ -5,6 +5,12 @@ const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // 업로드 프록시 본문 한도. 기본 10MB가 backend 허용(50MB)보다 작아, 10MB 넘는 논문이
+  // /api/deck/upload 프록시(rewrites)에서 잘려 backend 도달 전 ECONNRESET→500이 났다.
+  // backend 50MB + 멀티파트 오버헤드 여유로 60MB. 실제 상한은 backend가 친절 메시지로 강제.
+  experimental: {
+    proxyClientMaxBodySize: '60mb',        // rewrites 프록시(우리 /api/* → backend) 본문 한도(기본 10MB)
+  },
   async rewrites() {
     return [
       {
