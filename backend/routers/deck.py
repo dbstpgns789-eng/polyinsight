@@ -22,6 +22,7 @@ from ..core import crypto, db, plans, ratelimit, signing
 from ..core import images as images_util
 from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
+from ..core.llm_client import get_usage, start_usage_capture
 
 router = APIRouter(prefix="/api", tags=["deck"])
 
@@ -173,7 +174,9 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
     if deck is None or not deck.get("html"):
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
 
+    start_usage_capture()   # AI 편집 실 토큰 포착(gap B 픽스 — 편집 원가 추적)
     new_html = await apply_nl_patch(deck["html"], body.instruction, deck.get("paper_text"))
+    _usage = get_usage() or {}
     if "data-screen-label" not in new_html:
         raise HTTPException(
             422,
@@ -188,7 +191,10 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
     result = await persist_edited_deck(job_id, new_html)
     result["html"] = new_html
     await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
-                       payload={"kind": "nl", "card_count": result["cardCount"]})
+                       payload={"kind": "nl", "card_count": result["cardCount"],
+                                "input_tokens": _usage.get("input_tokens", 0),
+                                "output_tokens": _usage.get("output_tokens", 0),
+                                "llm_calls": _usage.get("calls", 0)})
     return result
 
 
@@ -214,10 +220,12 @@ async def nlpatch_propose(job_id: str, body: DeckNLPropose, user: dict = Depends
     if deck is None or not deck.get("html"):
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
 
+    start_usage_capture()   # AI 편집 실 토큰 포착(gap B 픽스 — 편집 원가 추적)
     new_html = await apply_nl_patch(
         body.html, body.instruction, deck.get("paper_text"),
         target=body.target.model_dump() if body.target else None,
     )
+    _usage = get_usage() or {}
     if "data-screen-label" not in new_html:
         raise HTTPException(
             422,
