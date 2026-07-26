@@ -39,8 +39,12 @@ const AGENT_BODY = `
   function postHeight() { post('HEIGHT', { height: document.documentElement.scrollHeight }); }
 
   // ── selection helpers ────────────────────────────────────────────────────
+  // svg 내부 도형(circle/rect/text/path…)인가. ownerSVGElement는 조상 svg(루트는 자신엔 null).
+  // 루트 <svg>는 CSS 박스라 false → 통짜 그래픽 이동은 기존 경로, 내부 도형만 svg 좌표계 경로로 분기.
+  function isSvgInner(el) { return !!(el && el.ownerSVGElement); }
   function isTextLeaf(el) {
     if (!el) return false;
+    if (el.ownerSVGElement) return false;   // svg <text>는 contentEditable 부적합 → 도형처럼 이동/삭제만(인라인 편집 제외)
     if (el.querySelector('div,section,svg,img,ul,ol,table,figure,canvas,header,footer,article')) return false;
     return (el.textContent || '').trim().length > 0;
   }
@@ -52,9 +56,13 @@ const AGENT_BODY = `
     if (!el) return null;
     if (el.nodeType === 3) el = el.parentElement;
     if (!el || el === document.body || el === document.documentElement) return null;
-    // SVG 안쪽 도형(path/circle 등)은 x/y 속성이라 CSS left/top 무효 → 루트 <svg>로 승격(원자 선택).
-    // ownerSVGElement는 가장 가까운 조상 svg(루트면 null) → 최외곽 svg까지 오른다.
-    if (el.ownerSVGElement) { var s = el; while (s.ownerSVGElement) s = s.ownerSVGElement; el = s; }
+    // svg 안쪽 도형(circle/rect/text/path)을 개별 선택한다(루트 승격 폐기). 좌표가 CSS left/top이 아니라
+    // svg 좌표계라, 이동은 getScreenCTM 역행렬로 화면델타→user변환 후 transform으로 처리한다(아래 moveSvg).
+    // tspan/textPath만 부모 <text>로 올려 텍스트 도형 단위로 잡는다. 빈 영역 클릭=루트 svg(통짜 그래픽).
+    if (el.ownerSVGElement) {
+      var tn = (el.tagName || '').toLowerCase();
+      if (tn === 'tspan' || tn === 'textpath') el = el.parentNode;
+    }
     if (isPiArtifact(el)) return null;
     if (el.hasAttribute && el.hasAttribute('data-screen-label')) return null; // 카드 프레임 자체는 선택 안 함
     return el;
@@ -268,8 +276,8 @@ const AGENT_BODY = `
       if (!groupBox) groupBox = makeOverlayEl(true);
       placeBox(groupBox, unionBox(selection));
     }
-    // 8방향 리사이즈 핸들은 정확히 1개 선택 + 편집모드일 때만(다중 스케일은 범위 밖)
-    if (mode === 'edit' && selection.length === 1) {
+    // 8방향 리사이즈 핸들은 정확히 1개 선택 + 편집모드일 때만(다중 스케일은 범위 밖). svg 내부 도형은 v1 리사이즈 미지원.
+    if (mode === 'edit' && selection.length === 1 && !isSvgInner(selection[0])) {
       ensureHandles(); showHandles(true);
       var b = boxOf(selection[0]); var x = b.x, y = b.y, w = b.w, h = b.h;
       var pos = { nw: [x, y], n: [x + w / 2, y], ne: [x + w, y], e: [x + w, y + h / 2], se: [x + w, y + h], s: [x + w / 2, y + h], sw: [x, y + h], w: [x, y + h / 2] };
@@ -580,6 +588,7 @@ const AGENT_BODY = `
     for (var i = 0; i < nodes.length; i++) {
       var el = nodes[i];
       if (isPiArtifact(el) || el.tagName === 'BR') continue;
+      if (el.ownerSVGElement) continue;   // svg 내부 도형은 CSS 박스로 승격 금지(좌표계 다름) — 루트 svg만 승격됨
       var cs = getComputedStyle(el);
       if (cs.position === 'absolute' || cs.position === 'fixed') continue;
       if (cs.display === 'inline') continue;
@@ -667,8 +676,30 @@ const AGENT_BODY = `
     if (!isTextLeaf(primary())) e.preventDefault(); // 텍스트는 캐럿 위해 기본동작 허용
     var downX = e.clientX, downY = e.clientY, dragging = false;
     var befores = null, bases = [], gx0 = 0, gy0 = 0, gw = 0, gh = 0;
+    // svg 내부 도형 단독 이동 — CSS 박스 승격 대신 svg 좌표계 transform. (다중·혼합 이동은 v1 제외)
+    var svgSolo = group.length === 1 && isSvgInner(group[0]);
+    var svgBase = '', svgInv = null, svgPt = null, svgBefore = null;
 
+    // svg 내부: 화면 델타 → 부모 getScreenCTM 역행렬로 user 델타(viewBox 스케일·중첩 g 흡수) → transform translate 누적.
+    function moveSvg(ev) {
+      if (!dragging) {
+        if (Math.abs(ev.clientX - downX) < DRAG_THRESHOLD && Math.abs(ev.clientY - downY) < DRAG_THRESHOLD) return;
+        dragging = true; clearEditable();
+        var t = group[0];
+        svgBefore = snapInline(t);              // undo용(LAYOUT_PROPS에 transform 포함 → layoutCmd 재사용)
+        svgBase = t.style.transform || '';
+        var host = t.parentNode;
+        var ctm = (host && host.getScreenCTM) ? host.getScreenCTM() : t.getScreenCTM();
+        svgInv = ctm.inverse(); svgPt = t.ownerSVGElement;
+      }
+      var a = svgPt.createSVGPoint(); a.x = 0; a.y = 0;
+      var c = svgPt.createSVGPoint(); c.x = ev.clientX - downX; c.y = ev.clientY - downY;
+      var ua = a.matrixTransform(svgInv), uc = c.matrixTransform(svgInv);
+      group[0].style.transform = (svgBase ? svgBase + ' ' : '') + 'translate(' + (uc.x - ua.x) + 'px,' + (uc.y - ua.y) + 'px)';
+      positionOverlay();
+    }
     function move(ev) {
+      if (svgSolo) { moveSvg(ev); return; }
       if (!dragging) {
         if (Math.abs(ev.clientX - downX) < DRAG_THRESHOLD && Math.abs(ev.clientY - downY) < DRAG_THRESHOLD) return;
         dragging = true;
@@ -707,9 +738,13 @@ const AGENT_BODY = `
       document.removeEventListener('mouseup', up, true);
       clearGuides();
       if (dragging) {
-        var cmds = [];
-        for (var i = 0; i < group.length; i++) cmds.push(layoutCmd(group[i], befores[i], snapInline(group[i])));
-        pushCmd(cmds.length === 1 ? cmds[0] : compositeCmd(cmds));
+        if (svgSolo) {
+          pushCmd(layoutCmd(group[0], svgBefore, snapInline(group[0])));   // svg는 transform 하나만 변함
+        } else {
+          var cmds = [];
+          for (var i = 0; i < group.length; i++) cmds.push(layoutCmd(group[i], befores[i], snapInline(group[i])));
+          pushCmd(cmds.length === 1 ? cmds[0] : compositeCmd(cmds));
+        }
         emitSelected(); afterMutate();
       } else if (collapse) { select(el); } // 다중 중 하나 plain클릭 → 단일 축소
     }
