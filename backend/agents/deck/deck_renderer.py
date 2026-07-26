@@ -56,6 +56,16 @@ async def _inline_deck_assets(html: str, job_id: str | None) -> str:
     return _ASSET_URL_RE.sub(_repl, html)
 
 
+# 한글 카드뉴스 조판 위생: 어절 단위 줄바꿈(keep-all)이 기본, 넘치는 긴 토큰만 분해(overflow-wrap).
+# 제목류는 균형 줄바꿈(text-wrap:pretty). 저작 모델이 <style>에서 word-break를 빠뜨려도(현 덱 0건)
+# 렌더가 강제 → 한글이 어절 중간에서 안 끊긴다. 편집 iframe(web DeckEditor.buildSrcDoc)도 동일 규칙 주입.
+_TYPO_HYGIENE_CSS = (
+    "h1,h2,h3,h4,h5,h6,p,li,span,div,dt,dd,figcaption,blockquote,td,th,a,strong,em"
+    "{word-break:keep-all;overflow-wrap:break-word;}"
+    "h1,h2,h3,h4{text-wrap:pretty;}"
+)
+
+
 async def _render_async(
     html: str, scale: int, timeout_s: float, job_id: str | None = None
 ) -> tuple[list[bytes], list[str]]:
@@ -75,6 +85,11 @@ async def _render_async(
             # 웹폰트 race 방지 — 폰트 로딩 완료 대기
             try:
                 await page.evaluate("document.fonts && document.fonts.ready")
+            except Exception:
+                pass
+            # 조판 위생을 fit-scale 측정 전에 주입 — keep-all이 줄바꿈을 바꾸므로 높이 측정에 반영돼야 한다.
+            try:
+                await page.add_style_tag(content=_TYPO_HYGIENE_CSS)
             except Exception:
                 pass
             # 안전망: 이미지 decode 완료 대기(networkidle이 디코드를 보장 안 함 → 부분 캡처 방지)

@@ -85,8 +85,13 @@ interface Props {
 
 const CARD_W = 1080
 
+// 조판 위생 — 백엔드 렌더(deck_renderer._TYPO_HYGIENE_CSS)와 동일 규칙으로 편집뷰=PNG 일치.
+// 한글이 어절 중간에서 안 끊기게(keep-all) + 긴 토큰만 분해. data-pi-agent라 serialize에서 제거(영구저장 X).
+const TYPO_HYGIENE =
+  '<style data-pi-agent="1">h1,h2,h3,h4,h5,h6,p,li,span,div,dt,dd,figcaption,blockquote,td,th,a,strong,em{word-break:keep-all;overflow-wrap:break-word;}h1,h2,h3,h4{text-wrap:pretty;}</style>'
+
 function buildSrcDoc(html: string): string {
-  const tag = `<script data-pi-agent="1">${AGENT_BODY}</script>`
+  const tag = TYPO_HYGIENE + `<script data-pi-agent="1">${AGENT_BODY}</script>`
   return html.includes('</body>') ? html.replace('</body>', tag + '</body>') : html + tag
 }
 
