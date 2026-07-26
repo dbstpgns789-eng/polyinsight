@@ -285,14 +285,15 @@ function DeckPageInner() {
       } : prev)
       if (snapshot) setSnapshots((s) => [...s, snapshot])   // commit 직전 html 스냅샷
       setEditWarnings(r.data.warnings ?? [])
-      setVer((x) => x + 1)
+      setVer((x) => x + 1)                 // key=ver → DeckEditor 재마운트(AI 적용 결과를 iframe에 반영)
+      setViewIdx(page.index)               // 재마운트가 진입 카드(viewIdx)로 페이징 → 현재 카드로 못박음
       setPending(null)
       setPngStale(false)
       autosaveRef.current?.markClean()   // 제안 수락이 이미 저장했다 — 같은 html 재저장 방지
       stampSaved()
       setSelected(null)
     } finally { setCommitting(false) }
-  }, [jobId, pending, deck, stampSaved])
+  }, [jobId, pending, deck, stampSaved, page.index])
 
   const handleDiscard = useCallback(() => setPending(null), [])
 
@@ -307,11 +308,12 @@ function DeckPageInner() {
       } : prev)
       setSnapshots((s) => s.slice(0, -1))
       setEditWarnings(r.data.warnings ?? [])
-      setVer((x) => x + 1)
+      setVer((x) => x + 1)                 // key=ver → 되돌린 html로 재마운트
+      setViewIdx(page.index)               // 현재 카드 유지(진입 카드로 튕기지 않게)
       setPending(null)
       setSelected(null)
     } finally { setReverting(false) }
-  }, [jobId, snapshots])
+  }, [jobId, snapshots, page.index])
 
   const toggleMode = useCallback(async () => {
     // 편집 → 뷰: 마지막 편집을 저장하고, 그때 **한 번만** PNG를 새로 받는다.
@@ -501,6 +503,7 @@ function DeckPageInner() {
           {editing ? (
             <div className="relative h-full">
               <DeckEditor
+                key={ver}
                 ref={editorRef}
                 className="absolute inset-0"
                 html={deck.html as string}
