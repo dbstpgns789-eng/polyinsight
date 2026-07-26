@@ -23,6 +23,8 @@ const AGENT_BODY = `
   var groupBox = null;     // 2개+ 선택 시 집합 바운딩박스(점선)
   var handles = [];        // 8방향 리사이즈 핸들(단일 선택 시만)
   var guides = [];         // 스냅 정렬 가이드선
+  var spacingEls = [];     // 드래그 중 이웃 간격 측정(선+숫자 배지) — 가이드와 함께 정리
+  var dimBadge = null;     // 선택 요소 치수(W×H) 배지
   var paged = false;       // 편집 모드 한 장씩 페이징(3f)
   var activeCard = 0;      // 현재 페이지(0-based)
   var pageStyle = null;    // .pi-hidden 숨김 스타일시트(아티팩트)
@@ -134,6 +136,25 @@ const AGENT_BODY = `
   }
   function placeBox(ov, b) { ov.style.display = 'block'; ov.style.left = (b.x - 2) + 'px'; ov.style.top = (b.y - 2) + 'px'; ov.style.width = b.w + 'px'; ov.style.height = b.h + 'px'; }
 
+  // ── 치수 배지(선택/드래그/리사이즈 중 W×H 표시, Figma식) ─────────────────────────
+  // body 좌표(오버레이와 동일계). 카드 자연px = 표시 수치(1080폭 캔버스 기준). data-pi-artifact → serialize 제거.
+  function showDimBadge(b) {
+    if (!dimBadge) {
+      dimBadge = document.createElement('div');
+      dimBadge.setAttribute('data-pi-artifact', '1');
+      dimBadge.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483646;'
+        + 'background:#2F6F4E;color:#fff;font:600 12px/1.35 ui-sans-serif,system-ui,-apple-system,sans-serif;'
+        + 'padding:2px 7px;border-radius:5px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.28);'
+        + 'transform:translateX(-50%);display:none;';
+      document.body.appendChild(dimBadge);
+    }
+    dimBadge.textContent = Math.round(b.w) + ' × ' + Math.round(b.h);
+    dimBadge.style.display = 'block';
+    dimBadge.style.left = (b.x + b.w / 2) + 'px';
+    dimBadge.style.top = (b.y + b.h + 7) + 'px';
+  }
+  function hideDimBadge() { if (dimBadge) dimBadge.style.display = 'none'; }
+
   // ── 팩트 점프 하이라이트 ────────────────────────────────────────────────────
   // DOM에 <mark>를 넣지 않는다 — 삽입하면 문서가 dirty가 되어 자동저장이 원본을 오염시킨다.
   // Range 좌표만 읽어 오버레이 박스를 띄운다(data-pi-artifact → serialize에서 제거됨).
@@ -240,7 +261,7 @@ const AGENT_BODY = `
   function positionOverlay() {
     for (var i = 0; i < overlayPool.length; i++) overlayPool[i].style.display = 'none';
     if (groupBox) groupBox.style.display = 'none';
-    if (!selection.length) { showHandles(false); return; }
+    if (!selection.length) { showHandles(false); hideDimBadge(); return; }
     ensureOverlays(selection.length);
     for (var i = 0; i < selection.length; i++) placeBox(overlayPool[i], boxOf(selection[i]));
     if (selection.length > 1) {
@@ -257,6 +278,8 @@ const AGENT_BODY = `
         handles[i].style.left = pos[d][0] + 'px'; handles[i].style.top = pos[d][1] + 'px';
       }
     } else { showHandles(false); }
+    // 치수 배지: 단일=요소 박스, 다중=집합 박스. 드래그·리사이즈 중 positionOverlay가 매 프레임 갱신 → 라이브.
+    showDimBadge(selection.length > 1 ? unionBox(selection) : boxOf(selection[0]));
     positionMarks();   // 마커도 스크롤·리사이즈·줌에 맞춰 재추적
   }
 
@@ -374,13 +397,58 @@ const AGENT_BODY = `
   }
 
   // ── snap (정렬 가이드) ───────────────────────────────────────────────────────
-  function clearGuides() { for (var i = 0; i < guides.length; i++) { if (guides[i].parentNode) guides[i].parentNode.removeChild(guides[i]); } guides = []; }
+  function clearSpacing() { for (var i = 0; i < spacingEls.length; i++) { if (spacingEls[i].parentNode) spacingEls[i].parentNode.removeChild(spacingEls[i]); } spacingEls = []; }
+  // 가이드·간격 측정은 둘 다 드래그 순간 힌트 → 함께 정리(매 mousemove·drag end).
+  function clearGuides() { clearSpacing(); for (var i = 0; i < guides.length; i++) { if (guides[i].parentNode) guides[i].parentNode.removeChild(guides[i]); } guides = []; }
   function addGuide(card, vertical, pos) {
     var g = document.createElement('div'); g.setAttribute('data-pi-guide', '1'); g.setAttribute('data-pi-artifact', '1');
     g.style.cssText = vertical
-      ? 'position:absolute;top:0;bottom:0;left:' + pos + 'px;width:1.5px;background:#ff3d8b;z-index:2147483646;pointer-events:none;'
-      : 'position:absolute;left:0;right:0;top:' + pos + 'px;height:1.5px;background:#ff3d8b;z-index:2147483646;pointer-events:none;';
+      ? 'position:absolute;top:0;bottom:0;left:' + pos + 'px;width:2px;background:#ff3d8b;z-index:2147483646;pointer-events:none;'
+      : 'position:absolute;left:0;right:0;top:' + pos + 'px;height:2px;background:#ff3d8b;z-index:2147483646;pointer-events:none;';
     card.appendChild(g); guides.push(g);
+  }
+
+  // ── 간격 측정(드래그 중 이웃까지의 픽셀 간격, Figma식 주황 치수선) ───────────────────
+  // 카드 상대좌표로 card 자식에 그린다(가이드와 동일계). 선(점선) + 숫자 배지 쌍.
+  var SPACE_MAX = 320;  // 이보다 먼 이웃은 그리지 않는다(측정이 의미 있으려면 근접).
+  function spacingSeg(card, horizontal, a, b, cross, gap) {
+    var col = '#ff3d8b';
+    var ln = document.createElement('div'); ln.setAttribute('data-pi-artifact', '1');
+    ln.style.cssText = horizontal
+      ? 'position:absolute;height:0;left:' + Math.min(a, b) + 'px;top:' + cross + 'px;width:' + Math.abs(b - a) + 'px;border-top:1.5px dashed ' + col + ';z-index:2147483645;pointer-events:none;'
+      : 'position:absolute;width:0;top:' + Math.min(a, b) + 'px;left:' + cross + 'px;height:' + Math.abs(b - a) + 'px;border-left:1.5px dashed ' + col + ';z-index:2147483645;pointer-events:none;';
+    card.appendChild(ln); spacingEls.push(ln);
+    var bd = document.createElement('div'); bd.setAttribute('data-pi-artifact', '1');
+    bd.textContent = String(Math.round(gap));
+    bd.style.cssText = 'position:absolute;left:' + (horizontal ? (a + b) / 2 : cross) + 'px;top:' + (horizontal ? cross : (a + b) / 2) + 'px;'
+      + 'transform:translate(-50%,-50%);background:' + col + ';color:#fff;font:600 11px/1.3 ui-sans-serif,system-ui,-apple-system,sans-serif;'
+      + 'padding:1px 5px;border-radius:4px;white-space:nowrap;z-index:2147483646;pointer-events:none;';
+    card.appendChild(bd); spacingEls.push(bd);
+  }
+  // box = 이동 후 카드 상대 박스{x,y,w,h}. 4방향 각각 가장 가까운(겹치는) 이웃까지의 간격을 그린다.
+  function showSpacing(card, box, group) {
+    var cr = card.getBoundingClientRect();
+    var sibs = siblingsOf(card, group);
+    var mL = box.x, mR = box.x + box.w, mT = box.y, mB = box.y + box.h;
+    var L = null, R = null, T = null, B = null;
+    for (var i = 0; i < sibs.length; i++) {
+      var r = sibs[i].getBoundingClientRect();
+      var sl = r.left - cr.left, st = r.top - cr.top, sR = sl + r.width, sB = st + r.height;
+      if (st < mB && sB > mT) {   // 세로 겹침 → 좌/우 이웃
+        var cy = Math.max(mT, st) + (Math.min(mB, sB) - Math.max(mT, st)) / 2;
+        if (sR <= mL) { var gl = mL - sR; if (gl <= SPACE_MAX && (!L || gl < L.gap)) L = { edge: sR, near: mL, cross: cy, gap: gl }; }
+        else if (sl >= mR) { var gr = sl - mR; if (gr <= SPACE_MAX && (!R || gr < R.gap)) R = { edge: sl, near: mR, cross: cy, gap: gr }; }
+      }
+      if (sl < mR && sR > mL) {   // 가로 겹침 → 상/하 이웃
+        var cx = Math.max(mL, sl) + (Math.min(mR, sR) - Math.max(mL, sl)) / 2;
+        if (sB <= mT) { var gt = mT - sB; if (gt <= SPACE_MAX && (!T || gt < T.gap)) T = { edge: sB, near: mT, cross: cx, gap: gt }; }
+        else if (st >= mB) { var gb = st - mB; if (gb <= SPACE_MAX && (!B || gb < B.gap)) B = { edge: st, near: mB, cross: cx, gap: gb }; }
+      }
+    }
+    if (L) spacingSeg(card, true, L.edge, L.near, L.cross, L.gap);
+    if (R) spacingSeg(card, true, R.near, R.edge, R.cross, R.gap);
+    if (T) spacingSeg(card, false, T.edge, T.near, T.cross, T.gap);
+    if (B) spacingSeg(card, false, B.near, B.edge, B.cross, B.gap);
   }
   function siblingsOf(card, els) {
     var out = [], ch = card.children;
@@ -622,6 +690,7 @@ const AGENT_BODY = `
       // 집합 좌상단을 경계 클램프 후 스냅 → 전 요소에 동일 델타
       var nbx = clamp(gx0 + dx, 0, CARD_W - gw), nby = clamp(gy0 + dy, 0, CARD_H - gh);
       var sn = snapMove(card, group, nbx, nby, gw, gh);
+      showSpacing(card, { x: sn.left, y: sn.top, w: gw, h: gh }, group);   // 이웃 간격 치수(스냅 가이드와 별개)
       var ddx = sn.left - gx0, ddy = sn.top - gy0;
       for (var i = 0; i < group.length; i++) {
         var w = offW(group[i]), h = offH(group[i]);
