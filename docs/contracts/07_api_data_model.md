@@ -408,7 +408,31 @@ source_type: string  (선택, 기본 upload-owned) — upload-owned | upload-dat
 
 #### `PATCH /api/deck/:jobId` (commit — 기재 보강)
 
-직접조작 저장과 **AI 제안 적용(commit)** 공용. 요청 `{ "html": "…" }` 저장 → 재검증 + PNG 재렌더. AI 되돌리기는 클라이언트가 commit 직전 html을 스냅샷해 두었다가 이 엔드포인트로 재저장한다(서버는 무상태).
+직접조작 저장과 **AI 제안 적용(commit)** 공용. 요청 `{ "html": "…", "auto": false }` 저장 → 재검증 + PNG 재렌더.
+
+- `auto` (bool, 기본 `false`) — **자동저장 여부**. `true`면 덱만 갱신하고 **판(revision)을 남기지 않는다**.
+  자동저장은 편집 후 3초 유휴마다 돌기 때문에 판을 쌓으면 목록이 수백 개가 되어 사람이 고를 수 없다.
+  자동저장 중의 사고는 iframe undo 스택이 받고, 세션을 벗어난 사고는 판이 받는다(역할 분리).
+- `auto: false`(수동 저장·AI 제안 커밋)면 저장된 판을 `deck_revision`에 적재한다.
+
+#### `GET /api/deck/:jobId/revisions` (2026-07-26)
+
+되돌아갈 판 목록을 최신순으로 반환한다. **HTML 전문은 싣지 않는다**(덱당 수십 KB — 목록 응답이 메가로 큰다).
+
+**Response** `200 OK`
+```json
+{ "revisions": [ { "id": 12, "source": "ai_edit", "cardCount": 7, "createdAt": "2026-07-26T10:22:01Z" } ] }
+```
+`source`: `author`(모델이 처음 뱉은 판, 영구 보존) · `manual`(수동 저장) · `ai_edit`(자연어 편집 커밋) · `restore`(복원 그 자체도 판을 남긴다 — 되돌리기를 되돌릴 수 있어야 한다).
+
+**에러**: 잡/덱 없음 404(ERR-JOB-001).
+
+#### `POST /api/deck/:jobId/revisions/:revId/restore` (2026-07-26)
+
+그 판의 HTML을 현재 덱으로 되돌린다. 복원은 삭제가 아니라 **또 한 번의 저장**이라, 복원 직전 상태도
+`source: "restore"` 판으로 남는다. 응답은 `PATCH`와 같은 형태에 `html`을 동봉한다(에디터 재마운트용).
+
+**에러**: 잡/덱 없음 404(ERR-JOB-001) · 그 잡의 판이 아님 404(ERR-JOB-001, `job_id`를 함께 걸어 IDOR 차단).
 
 #### `<element data-eid>` — 편집 앵커 규약
 
@@ -501,6 +525,30 @@ iframe editorAgent가 요소 선택 시 부여하는 **불투명 난수 id**(예
 | `source_url` | TEXT? | (스톡) 원본 CDN URL |
 | `provider`/`credit`/`credit_url` | TEXT? | (스톡) 저자 표시 |
 | `created_at`/`expires_at` | TEXT | ISO 8601. TTL=덱 수명 정합(기본 720h) |
+
+---
+
+### 2-1c. DeckRevision (SQLite: `deck_revision`) — 판 보관 (2026-07-26)
+
+`authored_deck`는 `job_id` PK UPSERT라 저장할 때마다 이전 판이 소실된다. 되돌리기는 iframe undo 스택과
+프론트 `useState` 배열뿐이었고 **둘 다 브라우저 메모리라 새로고침하면 동시에 0이 된다** — 서버 복구 경로가 없었다.
+
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `id` | INTEGER PK AUTOINCREMENT | 판 id. 최신순 정렬 키 |
+| `job_id` | TEXT | jobs FK. 조회 시 항상 함께 걸어 IDOR 차단 |
+| `html` | TEXT | 덱 전문. `save_authored_deck`과 **같은 위생**(`_strip_code_fence`)을 지난다 |
+| `verify_json` | TEXT | 그 판의 충실성 검증 결과 |
+| `card_count` | INT | 그 판의 카드 수 |
+| `source` | TEXT | author \| manual \| ai_edit \| vision_fix \| restore |
+| `created_at` | TEXT | ISO 8601 |
+
+**적재 정책 — 자동저장은 판을 만들지 않는다.** 의미 있는 경계에서만 남긴다:
+저작 완료(`author`, 원본) · 수동 저장 · AI 편집 커밋 · 복원. 3초 유휴마다 쌓으면 덱 하나에
+판이 수백 개가 되어 목록이 사람이 읽을 수 없는 것이 된다.
+
+> ★위생을 공유해야 하는 이유: revision이 `_strip_code_fence`를 안 지나면 오염된 판(산문·코드펜스)이
+> 보관되고, 복원하는 순간 그 오염이 되살아난다. 2026-07-23 덱 HTML 산문 위생 버그와 같은 계열이다.
 
 ---
 
@@ -806,6 +854,7 @@ type DegradeCode =
 
 | 날짜 | 버전 | 변경 내용 |
 |---|---|---|
+| 2026-07-26 | v3.0 | **덱 판 보관(revision).** `deck_revision` 테이블 신설(§2-1c) — `authored_deck` UPSERT 덮어쓰기로 이전 판이 소실되고, 되돌리기가 iframe undo·프론트 `useState`뿐이라 새로고침하면 복구 경로가 0이던 문제. `GET /api/deck/:jobId/revisions`·`POST /api/deck/:jobId/revisions/:revId/restore` 추가, `PATCH /api/deck/:jobId`에 `auto` 플래그(§1-7). **자동저장(3초 유휴)은 판을 만들지 않는다** — 판이 수백 개면 목록이 못 읽는 것이 된다. 판은 `save_authored_deck`과 같은 위생(`_strip_code_fence`)을 지난다. 배경 결정: `docs/decisions/2026-07-26-json-scenegraph-vs-html.md`. |
 | 2026-07-23 | v2.9 | **크레딧 백엔드(B1).** `users.credits`·`jobs.charged_credits` 컬럼 추가(§2-8·2-9 신설). 유료(pro) 게이트를 binary→**크레딧 차감**으로 재배선(덱 10·AI편집 2, export 무과금). `ERR-CREDIT-LOW`(402) 추가. `GET /api/auth/me`에 `credits` 필드. **적대검증 5렌즈**로 봉합: 재시작 소실 잡 멱등 환불(`jobs.charged_credits` 각인·`recover_stale_jobs`+`_log_done`), AI편집 422 무과금(검증 후 차감), 부분렌더 전액과금 명문화. 설계: `docs/superpowers/specs/2026-07-23-credit-backend-b1-design.md`. Creem 결제·거래내역·프론트 위젯은 P1-2+. |
 | 2026-07-22 | v2.8 | **AI 디자이너 유료 게이트.** 무료체험 정책 전환: "편집 전부 열림"(v2.7) → 직접 편집(`PATCH`)은 무료 유지, **자연어 편집(`nlpatch`·`propose`, LLM 원가)만 유료(pro/lab)**. 무료 유저의 무제한 AI 편집 = 지출 구멍 봉합(export 벽과 동일 원리). 에러 코드 `ERR-PLAN-AI-DESIGNER`(402) 추가. BM 확정=충전형 크레딧제, `/upgrade` 4티어 화면은 [WEB] 커밋. |
 | 2026-07-19 | v2.7 | 무료체험 export-gate 게이트 계약. `users` 테이블에 `plan`/`free_decks_used`/`onboarded_at` 3컬럼 추가(§2-8 신설). 인증 API 섹션(§1-8) 신설 — `GET /api/auth/me` 응답 확장, `POST /api/auth/onboarded` 신규. 에러 코드에 `ERR-PLAN-AUTHOR`/`ERR-PLAN-EXPORT`(402) 2건 추가. |

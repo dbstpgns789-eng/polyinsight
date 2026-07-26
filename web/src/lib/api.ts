@@ -68,8 +68,22 @@ export const getDeckAssetUrl = (jobId: string, assetId: string) =>
   `/api/deck/${jobId}/assets/${assetId}`
 
 // 편집(직접조작) 저장 → 재검증 + PNG 재렌더. Playwright 대기 위해 타임아웃 확대.
-export const patchDeck = (jobId: string, html: string) =>
-  api.patch(`/deck/${jobId}`, { html }, { timeout: 120_000 })
+// auto=true(자동저장)면 서버가 판(revision)을 남기지 않는다 — 3초 유휴마다 쌓으면 목록이 못 읽는 것이 된다.
+export const patchDeck = (jobId: string, html: string, auto = false) =>
+  api.patch(`/deck/${jobId}`, { html, auto }, { timeout: 120_000 })
+
+export interface DeckRevision {
+  id: number
+  source: 'author' | 'manual' | 'ai_edit' | 'restore'
+  cardCount: number
+  createdAt: string
+}
+
+export const listDeckRevisions = (jobId: string) =>
+  api.get<{ revisions: DeckRevision[] }>(`/deck/${jobId}/revisions`)
+
+export const restoreDeckRevision = (jobId: string, revId: number) =>
+  api.post(`/deck/${jobId}/revisions/${revId}/restore`, {}, { timeout: 120_000 })
 
 // 자연어 편집 (유료 LLM). 응답에 새 html·verify 포함.
 export const nlPatchDeck = (jobId: string, instruction: string) =>

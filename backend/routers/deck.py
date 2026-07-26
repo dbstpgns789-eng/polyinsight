@@ -137,6 +137,7 @@ async def get_deck(job_id: str, user: dict = Depends(get_current_user)):
 
 class DeckPatch(BaseModel):
     html: str = Field(min_length=1, max_length=2_000_000)
+    auto: bool = False   # 자동저장(3초 유휴)이면 True — 판을 남기지 않는다
 
 
 @router.patch("/deck/{job_id}")
@@ -150,9 +151,40 @@ async def patch_deck(job_id: str, body: DeckPatch, user: dict = Depends(get_curr
         raise HTTPException(
             400, detail={"code": "ERR-INP-003", "message": "유효한 덱 HTML이 아닙니다(카드 라벨 없음)."}
         )
-    result = await persist_edited_deck(job_id, body.html)
+    result = await persist_edited_deck(
+        job_id, body.html, revision_source=None if body.auto else "manual"
+    )
     await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
                        payload={"kind": "direct", "card_count": result["cardCount"]})
+    return result
+
+
+@router.get("/deck/{job_id}/revisions")
+async def list_revisions(job_id: str, user: dict = Depends(get_current_user)):
+    """되돌아갈 판 목록(최신순). HTML 전문은 싣지 않는다 — 덱당 수십 KB."""
+    await require_owned_job(job_id, user)
+    rows = await db.list_deck_revisions(job_id)
+    return {
+        "revisions": [
+            {"id": r["id"], "source": r["source"],
+             "cardCount": r["card_count"], "createdAt": r["created_at"]}
+            for r in rows
+        ]
+    }
+
+
+@router.post("/deck/{job_id}/revisions/{rev_id}/restore")
+async def restore_revision(job_id: str, rev_id: int, user: dict = Depends(get_current_user)):
+    """그 판으로 덱을 되돌린다. 복원도 저장이라 복원 자체가 판으로 남는다(되돌리기의 되돌리기)."""
+    await require_owned_job(job_id, user)
+    rev = await db.get_deck_revision(job_id, rev_id)   # job_id 동반 조회 = IDOR 차단
+    if rev is None:
+        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "그 판을 찾을 수 없습니다."})
+
+    result = await persist_edited_deck(job_id, rev["html"], revision_source="restore")
+    result["html"] = rev["html"]
+    await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
+                       payload={"kind": "restore", "rev_id": rev_id})
     return result
 
 
@@ -185,7 +217,7 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
         if not await db.consume_credits(user["id"], plans.AIEDIT_COST):
             raise plans.credit_low_error(user)
 
-    result = await persist_edited_deck(job_id, new_html)
+    result = await persist_edited_deck(job_id, new_html, revision_source="ai_edit")
     result["html"] = new_html
     await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
                        payload={"kind": "nl", "card_count": result["cardCount"]})

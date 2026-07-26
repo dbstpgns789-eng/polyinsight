@@ -10,10 +10,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
-import { getStatus, getDeck, patchDeck, nlProposeDeck } from '@/lib/api'
+import { getStatus, getDeck, patchDeck, nlProposeDeck, listDeckRevisions, restoreDeckRevision, type DeckRevision } from '@/lib/api'
 import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState, type PageState, type LayerItem } from '@/components/deck/DeckEditor'
 import DeckElementPanel from '@/components/deck/DeckElementPanel'
 import DeckLayersPanel from '@/components/deck/DeckLayersPanel'
+import DeckRevisionsPanel from '@/components/deck/DeckRevisionsPanel'
 import DeckMediaPanel from '@/components/deck/DeckMediaPanel'
 import DeckAIAssistant from '@/components/deck/DeckAIAssistant'
 import { extractEidText } from '@/lib/deckDiff'
@@ -139,7 +140,9 @@ function DeckPageInner() {
   const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [saving, setSaving] = useState(false)
   const [selected, setSelected] = useState<SelectedInfo | null>(null)
-  const [layers, setLayers] = useState<LayerItem[]>([])   // 현재 카드 원자 요소 목록(레이어 패널)
+  const [layers, setLayers] = useState<LayerItem[]>([])
+  const [revisions, setRevisions] = useState<DeckRevision[]>([])
+  const [restoringId, setRestoringId] = useState<number | null>(null)   // 현재 카드 원자 요소 목록(레이어 패널)
   const [ver, setVer] = useState(0)            // PNG 캐시 무력화 버전
   const [pngStale, setPngStale] = useState(false)   // 자동저장으로 html은 바뀌었는데 PNG는 아직 안 받은 상태
   const [editWarnings, setEditWarnings] = useState<string[]>([])
@@ -225,7 +228,7 @@ function DeckPageInner() {
     setSaving(true)
     try {
       const html = await editorRef.current.getHtml()
-      const r = await patchDeck(jobId, html)
+      const r = await patchDeck(jobId, html, silent)   // silent = 자동저장 → 서버가 판을 안 남긴다
       setDeck((prev) => prev ? {
         ...prev, html, verify: r.data.verify, cardCount: r.data.cardCount,
       } : prev)
@@ -312,6 +315,34 @@ function DeckPageInner() {
       setSelected(null)
     } finally { setReverting(false) }
   }, [jobId, snapshots])
+
+  // 판 목록 — 서버 보관이라 새로고침해도 남는다(위 snapshots·iframe undo는 브라우저 메모리).
+  const refreshRevisions = useCallback(async () => {
+    try {
+      setRevisions((await listDeckRevisions(jobId)).data.revisions)
+    } catch {
+      // 목록은 보조 기능 — 실패해도 편집을 막지 않는다.
+    }
+  }, [jobId])
+
+  const handleRestore = useCallback(async (revId: number) => {
+    setRestoringId(revId)
+    try {
+      const r = await restoreDeckRevision(jobId, revId)
+      setDeck((prev) => prev ? {
+        ...prev, html: r.data.html, verify: r.data.verify, cardCount: r.data.cardCount,
+      } : prev)
+      setEditWarnings(r.data.warnings ?? [])
+      setVer((x) => x + 1)      // 의도적 재로드 — 에디터를 복원본으로 재마운트(목록도 아래 effect가 갱신)
+      setPending(null)
+      setSelected(null)
+    } finally { setRestoringId(null) }
+  }, [jobId])
+
+  // ver는 의도적 재로드(수동 저장·AI 커밋·복원)마다 오른다 = 판이 생긴 시점. 자동저장은 안 올린다.
+  useEffect(() => {
+    if (mode === 'edit') void refreshRevisions()
+  }, [mode, ver, refreshRevisions])
 
   const toggleMode = useCallback(async () => {
     // 편집 → 뷰: 마지막 편집을 저장하고, 그때 **한 번만** PNG를 새로 받는다.
@@ -597,6 +628,8 @@ function DeckPageInner() {
                     onSelect={(eid) => editorRef.current?.selectEid(eid)}
                     onHover={(eid) => editorRef.current?.hoverEid(eid ?? '')}
                   />
+                  <div className="h-px bg-border" />
+                  <DeckRevisionsPanel items={revisions} busyId={restoringId} onRestore={handleRestore} />
                   <div className="h-px bg-border" />
                   <DeckMediaPanel jobId={jobId} onInsert={(p) => { editorRef.current?.insertImage(p); handleDirty() }} />
                   <div className="h-px bg-border" />
