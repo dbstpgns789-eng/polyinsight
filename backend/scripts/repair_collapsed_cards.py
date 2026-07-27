@@ -60,8 +60,23 @@ REPAIR_JS = """() => {
 }"""
 
 
+OUTSIDE = re.compile(r"(?:top|left):\s*-\d", re.I)
+
+
 def damaged_cards(html: str) -> int:
     return sum(1 for c in CARD_SPLIT.split(html) if "data-screen-label" in c and ZERO_W.search(c))
+
+
+def outside_card(html: str) -> int:
+    """카드 밖으로 튄 절대좌표(음수 top/left) 개수.
+
+    ★이 규칙이 없어서 한 번 당했다(2026-07-26). 편집 이력이 있는 덱은 손상이 섞인다.
+    사용자가 드래그해 좌표가 박힌 뒤 hidden freeze가 덮치면 부모는 제자리인데 자식만 0으로
+    측정돼 top이 -900px 같은 값이 된다. 이런 카드는 인라인 마커가 흐름에서 빠지며 위치
+    정보가 소실돼 자동 복구로 원상 복구가 안 된다(제목 글자가 통째로 빠진다).
+    복구 후에도 이게 남으면 저장하지 말고 사람에게 넘긴다 — 재생성이 더 깨끗하다.
+    """
+    return len(OUTSIDE.findall(html))
 
 
 async def main() -> int:
@@ -89,10 +104,15 @@ async def main() -> int:
             await page.set_content(html, wait_until="domcontentloaded")
             r = await page.evaluate(REPAIR_JS)
             after = damaged_cards(r["html"])
+            stray = outside_card(r["html"])
             print(f"  {jid}: 손상카드 {before}장 → {after}장 "
                   f"(흐름복귀 {r['promoted']} · 박스만해제 {r['pinned']})")
             if after:
                 print("    ⚠ 남은 손상이 있어 저장하지 않는다 — 수동 확인 필요")
+                continue
+            if stray:
+                print(f"    ⚠ 카드 밖 좌표 {stray}건 잔존 — 편집 이력이 섞인 덱이라 자동 복구로")
+                print("      원상 복구되지 않는다(인라인 마커 위치 소실). 저장하지 않는다. 재생성 권장.")
                 continue
             if args.apply:
                 deck = await db.get_authored_deck(jid)
