@@ -98,6 +98,12 @@ const AGENT_BODY = `
 
   function primary() { return selection.length ? selection[selection.length - 1] : null; }
   function inSelection(el) { return selection.indexOf(el) >= 0; }
+  // 이 지점이 편집 중인 텍스트 안인가 — 텍스트 긁기와 요소 드래그를 가르는 판정.
+  function editableHostOf(t) {
+    if (t && t.nodeType === 3) t = t.parentElement;
+    if (!t || !t.closest) return null;
+    return t.closest('[contenteditable="true"]');
+  }
   function clearEditable() {
     var es = document.querySelectorAll('[contenteditable]');
     for (var i = 0; i < es.length; i++) { es[i].removeAttribute('contenteditable'); es[i].style.outline = ''; }
@@ -585,6 +591,13 @@ const AGENT_BODY = `
     if (mode !== 'edit') return;
     if (spaceHeld) { e.preventDefault(); startPan(e); return; }   // 스페이스+드래그 = 팬(편집 대신)
     if (e.target && e.target.hasAttribute && e.target.hasAttribute('data-pi-handle')) return; // 핸들은 자체 처리
+    // ★ 이미 편집 중인(포커스된) 텍스트를 다시 끌면 = 범위 선택(긁기). 요소를 옮기지 않는다.
+    // 텍스트를 긁으려면 이동 임계(3px)를 넘겨야 하는데 그 순간 드래그로 전환하며 clearEditable()과
+    // removeAllRanges()가 선택을 지워, 텍스트 범위 선택이 구조적으로 불가능했다(2026-07-26 제보).
+    // 여기서 빠지면 브라우저 기본 동작이 캐럿·범위 선택을 처리한다. 옮기려면 편집을 벗어난 뒤 끈다
+    // (딴 곳을 클릭하면 포커스가 옮겨가 이 조건이 풀린다) — Figma·Canva와 같은 관례.
+    var ceHost = editableHostOf(e.target);
+    if (ceHost && document.activeElement === ceHost) return;
     commitTextEdit();  // 선택/드래그 전환 전에 진행 중 텍스트 편집 확정
     var picked = pick(e.target);
     if (!picked) {                              // 빈영역 → 마퀴 시작(additive면 선택 유지)
