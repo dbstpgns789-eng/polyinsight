@@ -185,7 +185,7 @@ export default function Home() {
             <div className="showcase__grid">
               <figure className="showcase-item reveal reveal-delay-1">
                 <div className="showcase-item__frame">
-                  <img src="/cards/showcase_attention.png" alt="Attention Is All You Need 논문을 요약한 카드뉴스 표지 — 미니멀 다크 에메랄드" loading="lazy" />
+                  <img src="/cards/showcase_attention.png" alt="Attention Is All You Need 논문을 요약한 카드뉴스 표지,미니멀 다크 에메랄드" loading="lazy" />
                 </div>
                 <figcaption className="showcase-item__cap">
                   <b>Attention Is All You Need</b>
@@ -195,7 +195,7 @@ export default function Home() {
               </figure>
               <figure className="showcase-item reveal reveal-delay-2">
                 <div className="showcase-item__frame">
-                  <img src="/cards/showcase_bert.png" alt="BERT 논문을 요약한 카드뉴스 표지 — 빈칸 채우기 체험형" loading="lazy" />
+                  <img src="/cards/showcase_bert.png" alt="BERT 논문을 요약한 카드뉴스 표지,빈칸 채우기 체험형" loading="lazy" />
                 </div>
                 <figcaption className="showcase-item__cap">
                   <b>BERT</b>
@@ -205,7 +205,7 @@ export default function Home() {
               </figure>
               <figure className="showcase-item reveal reveal-delay-3">
                 <div className="showcase-item__frame">
-                  <img src="/cards/showcase_resnet.png" alt="ResNet 논문을 요약한 카드뉴스 표지 — 수식 칠판형" loading="lazy" />
+                  <img src="/cards/showcase_resnet.png" alt="ResNet 논문을 요약한 카드뉴스 표지,수식 칠판형" loading="lazy" />
                 </div>
                 <figcaption className="showcase-item__cap">
                   <b>ResNet</b>
@@ -342,7 +342,7 @@ export default function Home() {
               </details>
               <details className="faq__item">
                 <summary className="faq__q">얼마나 걸리나요?</summary>
-                <p className="faq__a">보통 2~3분입니다. 논문을 분석하고, 카드뉴스를 저작하고, 모든 수치를 원문과 대조한 뒤 이미지로 만드는 과정이 포함됩니다.</p>
+                <p className="faq__a">논문에 따라 보통 2~5분입니다. 논문을 분석하고, 카드뉴스를 저작하고, 모든 수치를 원문과 대조한 뒤 이미지로 만드는 과정이 포함됩니다.</p>
               </details>
               <details className="faq__item">
                 <summary className="faq__q">올린 논문은 안전한가요?</summary>

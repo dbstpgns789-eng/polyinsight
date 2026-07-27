@@ -1,69 +1,92 @@
 # -*- coding: utf-8 -*-
-"""자연어 편집(3c) 전용 프롬프트 — 저작이 아니라 '최소 변경 수정'.
+"""AI 디자이너 편집 프롬프트 — 전체 HTML 재출력이 아니라 '최소 편집 스펙(ops)' JSON을 요구한다.
 
-저작(authoring_prompts)과 분리한다: 저작은 백지에서 창작, 편집은 *기존 덱 보존* + 국소 수정.
-출력 계약(data-screen-label·1080×1350·인라인 스타일·코드펜스 금지)과 충실성 규칙은 그대로 승계.
+정본 정의 docs/contracts/25 + 스펙 2026-07-24-ai-designer-edit-spec.md.
+LLM 입력=요소 인벤토리(작음), 출력=ops(작음). 덱 전체를 다시 뽑던 구조(느림·비쌈·타임아웃) 폐기.
 """
 from __future__ import annotations
 
-EDIT_SYSTEM = """당신은 이미 완성된 인스타그램 카드뉴스 '덱'(standalone HTML)을 사용자의 지시대로
-**최소 변경**으로 수정하는 편집자입니다. 새로 저작하지 않습니다 — 주어진 HTML을 보존하고
-지시가 가리키는 부분만 고칩니다.
+import json
 
-[편집 원칙 — 엄수]
-1. 지시에 직접 관련된 요소만 바꾼다. 지시 밖의 카드·텍스트·레이아웃·색은 **그대로 보존**한다.
-2. 카드 장수를 임의로 바꾸지 않는다(지시가 명시적으로 추가/삭제를 요구할 때만).
-3. 전체를 재작성하지 말 것. diff를 머릿속에 그리고 그 부분만 손댄다.
+EDIT_SYSTEM = """당신은 완성된 인스타그램 카드뉴스 '덱'을 사용자의 자연어 지시대로 다듬는 **디자이너**입니다.
+사용자는 디자인(CSS·색·간격)을 직접 다룰 줄 모릅니다. "고급스럽게", "따뜻하게", "제목 강조" 같은
+느낌·의도를 받아, 그걸 **실제 편집 스펙(ops)**으로 번역하는 것이 당신의 일입니다.
 
-[출력 계약 — 엄수 (원본과 동일하게 유지)]
-- 카드 각각 <div data-screen-label="01"> … </div> (2자리 라벨, 01부터) 구조를 유지한다. 여는 태그의 `data-role` 역할 태그도 원본 그대로 유지한다.
-- 각 카드 최상위 div의 width:1080px; height:1350px; overflow:hidden 을 유지한다.
-- 모든 스타일은 인라인 또는 <head><style>. 외부 JS·애니메이션 의존 금지.
-- 코드펜스(```), 설명문 없이 <!DOCTYPE html> … </html> **전문만** 출력한다(부분 출력 금지).
-- **data-eid 보존**: `data-eid` 속성이 붙은 요소는 그 속성을 **원형 그대로 유지**한다(편집 후에도 동일한 data-eid). 제거·변경·재부여 금지.
+★덱을 다시 쓰지 않습니다. 전체 HTML을 출력하지 않습니다. 아래 JSON만 출력합니다.
 
-[충실성 — 헌법 §2 (해자)]
-- 원문에 없는 수치를 새로 만들지 않는다. 사용자가 수치 변경을 지시해도, 원문 근거 없는 수치는
-  쓰지 말고 표현/문구만 다듬는다(코드 검증 V가 원문 대조로 사후 표면화한다).
-- 문구를 쉽게 다듬는 것은 허용하되 수치·사실 왜곡은 금지.
-"""
+[출력 계약 — JSON만]
+{"summary": "<사용자에게 보여줄 한 줄 요약>", "ops": [ <op>, ... ]}
 
-EDIT_USER = """## 원문 (유일한 사실 소스 — 수치 판단 기준)
-{paper_text}
+op은 style 또는 text 두 종류:
+  {"eid": "<대상 data-eid>", "op": "style", "style": {"<css-속성>": "<값>"}}
+  {"eid": "<대상 data-eid>", "op": "text",  "text": "<새 텍스트>"}
 
-## 현재 덱 HTML (이 문서를 보존하며 최소 수정)
-{html}
+규칙:
+- eid는 아래 '요소 목록'에 있는 것만 쓴다. 목록에 없는 eid는 절대 만들지 않는다.
+- style 속성명은 kebab-case CSS. 허용: color, background, font-size, font-weight, font-family,
+  text-align, text-shadow, letter-spacing, line-height, opacity, border-radius,
+  margin(-*), padding(-*), text-decoration, text-transform.
+  ✗ 레이아웃 구조(position, display, width, height, transform, float)는 쓰지 않는다(별도 도구 담당).
+- 지시에 맞는 요소만 골라 **최소로** 손댄다. 관련 없는 요소는 건드리지 않는다.
+- 바꿀 게 없거나 지시가 모호하면 ops를 빈 배열([])로 두고 summary로 이유를 설명한다.
+- "더 어둡게/밝게/크게" 같은 상대 지시는 목록의 '현재 스타일'을 기준으로 판단한다.
+
+[충실성 — 해자]
+원문에 없는 수치·사실을 새로 만들지 않는다. text는 기존 표현을 다듬되 수치·사실 왜곡 금지.
+
+코드펜스(```)·설명문 없이 **JSON만** 출력한다."""
+
+
+def _inventory_block(inventory: list[dict]) -> str:
+    lines = []
+    for it in inventory or []:
+        eid = it.get("eid", "")
+        kind = it.get("kind", "")
+        label = (it.get("label") or "").replace("\n", " ")[:60]
+        st = it.get("styles") or {}
+        style_hint = " ".join(
+            f"{k}={v}" for k, v in st.items()
+            if k in ("color", "fontSize", "fontWeight", "background", "textShadow", "textAlign") and v
+        )
+        lines.append(f'- eid="{eid}" [{kind}] "{label}"' + (f"  ({style_hint})" if style_hint else ""))
+    return "\n".join(lines) if lines else "(요소 없음)"
+
+
+_USER_TMPL = """## 편집 대상 요소 목록 (이 eid만 사용)
+{inventory}
 {target_block}
----
 ## 사용자 지시
 {instruction}
-
----
-위 지시대로 현재 덱을 최소 변경으로 수정한 **HTML 전문**만 출력하라(코드펜스·설명 없이)."""
-
-_TARGET_TMPL = """
----
-## 편집 대상 요소 (이 요소에만 지시 적용 — data-eid로 식별)
-- data-eid="{eid}" — 이 속성을 **원형 그대로 유지**한다(제거·변경 금지).
-- 현재 텍스트: {quoted}
-다른 요소·카드·색·레이아웃은 그대로 둔다."""
-
-_NO_PAPER = "(원문 없음 — 수치를 새로 만들지 말고 표현만 다듬을 것)"
+{paper_block}
+위 지시를 반영하는 편집 스펙(JSON)만 출력하라. 관련 요소만 최소로."""
 
 
 def build_user_prompt(
-    html: str, instruction: str, paper_text: str | None, *,
-    html_cap: int, target: dict | None = None,
+    inventory: list[dict], instruction: str, paper_text: str | None, *,
+    target: dict | None = None, paper_cap: int = 8000,
 ) -> str:
     target_block = ""
     if target and target.get("eid"):
-        target_block = _TARGET_TMPL.format(
-            eid=target["eid"],
-            quoted=(target.get("quotedText") or "")[:500],
-        )
-    return EDIT_USER.format(
-        paper_text=(paper_text or _NO_PAPER)[:html_cap],
-        html=html[:html_cap],
-        instruction=instruction.strip(),
+        target_block = f'\n## 사용자가 지정한 대상\n- eid="{target["eid"]}" (이 요소 위주로)\n'
+    paper_block = ""
+    if paper_text:
+        paper_block = f"\n## (참고) 원문 — 수치 판단 근거\n{paper_text[:paper_cap]}\n"
+    return _USER_TMPL.format(
+        inventory=_inventory_block(inventory),
         target_block=target_block,
+        instruction=instruction.strip(),
+        paper_block=paper_block,
     )
+
+
+def mock_ops(instruction: str, html: str) -> str:
+    """DEV_MOCK_LLM용 — html의 첫 data-eid에 그림자 style op(적용 카운트/배관 검증, 무비용)."""
+    import re
+    m = re.search(r'data-eid="([^"]+)"', html or "")
+    if not m:
+        return json.dumps({"summary": "대상 요소가 없어요", "ops": []}, ensure_ascii=False)
+    return json.dumps({
+        "summary": f"[mock] {instruction.strip()[:40]}",
+        "ops": [{"eid": m.group(1), "op": "style",
+                 "style": {"text-shadow": "0 1px 2px rgba(0,0,0,.3)"}}],
+    }, ensure_ascii=False)

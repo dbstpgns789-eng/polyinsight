@@ -22,6 +22,7 @@ from ..core import crypto, db, plans, ratelimit, signing
 from ..core import images as images_util
 from ..core.auth import get_current_user, require_owned_job
 from ..core.config import settings
+from ..core.llm_client import get_usage, start_usage_capture
 
 router = APIRouter(prefix="/api", tags=["deck"])
 
@@ -137,6 +138,7 @@ async def get_deck(job_id: str, user: dict = Depends(get_current_user)):
 
 class DeckPatch(BaseModel):
     html: str = Field(min_length=1, max_length=2_000_000)
+    auto: bool = False   # 자동저장(3초 유휴)이면 True — 판을 남기지 않는다
 
 
 @router.patch("/deck/{job_id}")
@@ -150,14 +152,46 @@ async def patch_deck(job_id: str, body: DeckPatch, user: dict = Depends(get_curr
         raise HTTPException(
             400, detail={"code": "ERR-INP-003", "message": "유효한 덱 HTML이 아닙니다(카드 라벨 없음)."}
         )
-    result = await persist_edited_deck(job_id, body.html)
+    result = await persist_edited_deck(
+        job_id, body.html, revision_source=None if body.auto else "manual"
+    )
     await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
                        payload={"kind": "direct", "card_count": result["cardCount"]})
     return result
 
 
+@router.get("/deck/{job_id}/revisions")
+async def list_revisions(job_id: str, user: dict = Depends(get_current_user)):
+    """되돌아갈 판 목록(최신순). HTML 전문은 싣지 않는다 — 덱당 수십 KB."""
+    await require_owned_job(job_id, user)
+    rows = await db.list_deck_revisions(job_id)
+    return {
+        "revisions": [
+            {"id": r["id"], "source": r["source"],
+             "cardCount": r["card_count"], "createdAt": r["created_at"]}
+            for r in rows
+        ]
+    }
+
+
+@router.post("/deck/{job_id}/revisions/{rev_id}/restore")
+async def restore_revision(job_id: str, rev_id: int, user: dict = Depends(get_current_user)):
+    """그 판으로 덱을 되돌린다. 복원도 저장이라 복원 자체가 판으로 남는다(되돌리기의 되돌리기)."""
+    await require_owned_job(job_id, user)
+    rev = await db.get_deck_revision(job_id, rev_id)   # job_id 동반 조회 = IDOR 차단
+    if rev is None:
+        raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "그 판을 찾을 수 없습니다."})
+
+    result = await persist_edited_deck(job_id, rev["html"], revision_source="restore")
+    result["html"] = rev["html"]
+    await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
+                       payload={"kind": "restore", "rev_id": rev_id})
+    return result
+
+
 class DeckNLPatch(BaseModel):
     instruction: str = Field(min_length=1, max_length=2000)
+    inventory: list[dict] | None = None   # 요소 목록(eid·kind·label·styles) — LLM 타겟 근거
 
 
 @router.post("/deck/{job_id}/nlpatch")
@@ -173,22 +207,29 @@ async def nlpatch_deck(job_id: str, body: DeckNLPatch, user: dict = Depends(get_
     if deck is None or not deck.get("html"):
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
 
-    new_html = await apply_nl_patch(deck["html"], body.instruction, deck.get("paper_text"))
-    if "data-screen-label" not in new_html:
-        raise HTTPException(
-            422,
-            detail={"code": "ERR-EDIT-001",
-                    "message": "수정 결과가 덱 구조를 벗어나 적용하지 않았습니다. 원본은 그대로입니다."},
-        )
-    # 검증(계약) 통과 후에만 차감 — 422/LLM예외면 차감 전이라 no-op 과금 없음(§13-②).
+    start_usage_capture()   # AI 편집 실 토큰 포착(편집 원가 추적)
+    new_html, applied, summary = await apply_nl_patch(
+        deck["html"], body.instruction, deck.get("paper_text"), inventory=body.inventory)
+    _usage = get_usage() or {}
+    _tokens = {"input_tokens": _usage.get("input_tokens", 0),
+               "output_tokens": _usage.get("output_tokens", 0),
+               "llm_calls": _usage.get("calls", 0)}
+    if applied == 0:   # 적용된 게 없다 → 무변경·무과금(스펙 §11-1). "성공=과금"의 함정 차단.
+        await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
+                           payload={"kind": "nl", "applied": 0, **_tokens})
+        return {"html": deck["html"], "cardCount": deck.get("card_count"),
+                "summary": summary, "applied": 0}
     if plans.author_charges_credits(user):
         if not await db.consume_credits(user["id"], plans.AIEDIT_COST):
             raise plans.credit_low_error(user)
 
-    result = await persist_edited_deck(job_id, new_html)
+    result = await persist_edited_deck(job_id, new_html, revision_source="ai_edit")
     result["html"] = new_html
+    result["summary"] = summary
+    result["applied"] = applied
     await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
-                       payload={"kind": "nl", "card_count": result["cardCount"]})
+                       payload={"kind": "nl", "applied": applied,
+                                "card_count": result["cardCount"], **_tokens})
     return result
 
 
@@ -202,6 +243,7 @@ class DeckNLPropose(BaseModel):
     instruction: str = Field(min_length=1, max_length=2000)
     html: str = Field(min_length=1, max_length=2_000_000)
     target: DeckNLTarget | None = None
+    inventory: list[dict] | None = None   # 요소 목록(eid·kind·label·styles) — LLM 타겟 근거
 
 
 @router.post("/deck/{job_id}/nlpatch/propose")
@@ -214,24 +256,29 @@ async def nlpatch_propose(job_id: str, body: DeckNLPropose, user: dict = Depends
     if deck is None or not deck.get("html"):
         raise HTTPException(404, detail={"code": "ERR-JOB-001", "message": "덱이 없습니다."})
 
-    new_html = await apply_nl_patch(
+    start_usage_capture()   # AI 편집 실 토큰 포착(편집 원가 추적)
+    new_html, applied, summary = await apply_nl_patch(
         body.html, body.instruction, deck.get("paper_text"),
+        inventory=body.inventory,
         target=body.target.model_dump() if body.target else None,
     )
-    if "data-screen-label" not in new_html:
-        raise HTTPException(
-            422,
-            detail={"code": "ERR-EDIT-001",
-                    "message": "수정 결과가 덱 구조를 벗어나 제안하지 않았습니다. 원본은 그대로입니다."},
-        )
-    # 제안(propose)도 실 LLM 호출 → 계약 통과 후 차감(§13-②, 422면 무과금).
+    _usage = get_usage() or {}
+    _tokens = {"input_tokens": _usage.get("input_tokens", 0),
+               "output_tokens": _usage.get("output_tokens", 0),
+               "llm_calls": _usage.get("calls", 0)}
+    if applied == 0:   # 적용된 게 없다 → 무변경·무과금(스펙 §11-1)
+        await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
+                           payload={"kind": "nl-propose", "applied": 0, **_tokens})
+        return {"html": body.html, "verify": compute_verify(body.html, deck.get("paper_text")),
+                "summary": summary, "applied": 0}
     if plans.author_charges_credits(user):
         if not await db.consume_credits(user["id"], plans.AIEDIT_COST):
             raise plans.credit_low_error(user)
 
     verify = compute_verify(new_html, deck.get("paper_text"))
-    await db.log_event("deck_edit", user_id=user["id"], job_id=job_id, payload={"kind": "nl-propose"})
-    return {"html": new_html, "verify": verify}
+    await db.log_event("deck_edit", user_id=user["id"], job_id=job_id,
+                       payload={"kind": "nl-propose", "applied": applied, **_tokens})
+    return {"html": new_html, "verify": verify, "summary": summary, "applied": applied}
 
 
 @router.post("/deck/{job_id}/assets", status_code=201)

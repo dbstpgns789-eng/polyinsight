@@ -8,17 +8,17 @@ import { useCallback, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
-import { uploadDeck } from '@/lib/api'
+import { uploadDeck, friendlyError } from '@/lib/api'
 import { planGateKind } from '@/lib/plan'
 
 // 칩 = 영감 팔레트(선택 강제 아님). 이름은 한국어 감각어만 — 비전공자가 읽고 느낌이 와야 함.
 // 클릭 시 풀 서술이 입력창에 들어가 "말로 지시" 문법을 가르친다.
 const STYLE_CHIPS = [
-  '미드나잇 네온 — 어두운 배경 + 형광 강조선',
-  '따뜻한 종이 잡지 — 종이빛 바탕 + 형광펜 강조',
-  '학교 칠판 — 분필 손글씨 느낌',
-  '지브리풍 — 부드러운 수채 파스텔',
-  '깔끔한 공공기관 — 절제된 네이비·그레이',
+  '미드나잇 네온: 어두운 배경 + 형광 강조선',
+  '따뜻한 종이 잡지: 종이빛 바탕 + 형광펜 강조',
+  '학교 칠판: 분필 손글씨 느낌',
+  '지브리풍: 부드러운 수채 파스텔',
+  '깔끔한 공공기관: 절제된 네이비·그레이',
 ]
 
 // 예시 발화 = 소프트 스키마: 축(색감/독자/강조점)을 하나씩 가르친다. 코드 파싱 없음(헌법 §1).
@@ -87,7 +87,7 @@ function DeckNewInner() {
         router.push('/upgrade?from=author')
         return
       }
-      setError(e instanceof Error ? e.message : '업로드 실패')
+      setError(friendlyError(e, '업로드에 실패했어요. 파일을 확인하고 다시 시도해 주세요.'))
       setSubmitting(false)
     }
   }, [file, cardCount, style, router])
@@ -123,7 +123,7 @@ function DeckNewInner() {
               <p className="text-[13px] text-ink-3 mt-0.5">PDF · {formatSize(file.size)}</p>
               <p className="inline-flex items-center gap-1.5 mt-2 text-forest-green-deep text-[12.5px] font-bold">
                 <CheckIcon size={13} stroke={2.8} />
-                논문 인수 완료
+                논문 업로드 완료
               </p>
             </div>
             <button type="button" onClick={() => inputRef.current?.click()}
@@ -156,8 +156,8 @@ function DeckNewInner() {
         {/* 미발표 원고를 올릴지 망설이는 순간이 여기다 — 처리방침을 읽지 않는 사람에게도 보여야 한다 */}
         <p className="text-[12.5px] text-ink-3 mt-2 text-center leading-relaxed">
           올린 논문은 카드뉴스를 만드는 데만 쓰이고 <strong className="font-semibold text-ink-2">AI 학습에는 사용되지 않습니다.</strong>{' '}
-          언제든 직접 삭제할 수 있습니다.{' '}
-          <a href="/privacy" className="underline underline-offset-2 hover:text-ink-2">처리방침</a>
+          언제든 직접 삭제할 수 있으며, 자세한 내용은{' '}
+          <a href="/privacy" className="underline underline-offset-2 hover:text-ink-2">개인정보 처리방침</a>에서 확인할 수 있습니다.
         </p>
 
         {/* 아트디렉터에게 한마디 */}
@@ -166,7 +166,7 @@ function DeckNewInner() {
             <h2 className="text-[18px] font-extrabold text-ink tracking-[-0.01em]">아트디렉터에게 한마디</h2>
             <span className="text-[13px] text-ink-3 font-semibold">선택</span>
           </div>
-          <p className="text-[13.5px] leading-relaxed text-ink-3 mb-5">비우면 AI가 논문에 맞게 정합니다 · 내용은 논문이 정합니다 — 수치는 검증돼요</p>
+          <p className="text-[13.5px] leading-relaxed text-ink-3 mb-5">비워도 괜찮아요. AI가 논문에 맞춰 알아서 정합니다.</p>
 
           <p className="text-[13px] font-bold text-ink-2 mb-2.5">💡 이렇게 말해보세요</p>
           <div className="flex flex-col gap-2 mb-5">
@@ -183,14 +183,14 @@ function DeckNewInner() {
             {STYLE_CHIPS.map((c) => (
               <button key={c} type="button" onClick={() => setStyle(c)}
                 className={`text-[13.5px] px-4 py-2 rounded-full border whitespace-nowrap transition-colors ${style === c ? 'bg-forest-green text-canvas border-forest-green font-bold' : 'bg-canvas border-border text-ink-2 font-semibold hover:border-forest-green/50'}`}>
-                {c.split(' — ')[0]}
+                {c.split(':')[0]}
               </button>
             ))}
           </div>
 
           <textarea
             value={style} onChange={(e) => setStyle(e.target.value)}
-            placeholder="색감, 난이도, 강조점 — 뭐든 말로 지시하세요… (비워도 됩니다)"
+            placeholder="색감·난이도·강조점, 뭐든 말로 지시하세요… (비워도 됩니다)"
             rows={2}
             className="block w-full min-h-[72px] text-[14.5px] leading-relaxed rounded-[14px] border border-border p-4 resize-y text-ink outline-none transition-shadow focus:border-forest-green focus:ring-4 focus:ring-forest-green-wash"
             style={{ background: 'var(--surface)' }}
@@ -235,7 +235,7 @@ function DeckNewInner() {
         {/* 신뢰 문구의 제자리 = 결심하는 순간 옆 */}
         <p className="text-center text-[12.5px] text-ink-3 mt-3 inline-flex items-center gap-1.5 w-full justify-center">
           <span className="text-forest-green-deep inline-flex"><CheckIcon size={12} stroke={3} /></span>
-          모든 수치는 원문과 자동 대조됩니다 · 보통 2~3분
+          모든 수치는 원문과 자동 대조됩니다 · 논문에 따라 2~5분
         </p>
 
       </div>

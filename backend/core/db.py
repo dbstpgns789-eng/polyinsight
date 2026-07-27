@@ -167,6 +167,22 @@ async def migrate() -> None:
                 caption_json TEXT
             );
 
+            -- 덱 판 보관(2026-07-26): authored_deck는 UPSERT 덮어쓰기라 이전 판이 소실된다.
+            -- 되돌리기가 iframe undo 스택·프론트 useState뿐이라 새로고침하면 복구 경로가 0이었다.
+            -- ★자동저장(3초 유휴)은 여기에 적재하지 않는다 — 판이 수백 개면 목록이 못 읽는 것이 된다.
+            --   의미 있는 경계만: 저작 완료·수동 저장·AI 편집·비전 수정·복원.
+            CREATE TABLE IF NOT EXISTS deck_revision (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id TEXT NOT NULL REFERENCES jobs(job_id),
+                html TEXT NOT NULL,
+                verify_json TEXT,
+                card_count INT,
+                source TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_deck_revision_job
+                ON deck_revision(job_id, id DESC);
+
             -- 저작 지문(2026-07-11): 모델이 <!-- PI_MANIFEST --> 로 선언한 편집 결정.
             -- 다음 저작 때 최근 3건을 소프트 변주 선호로 주입 → 계정 단위 동질화 차단.
             -- (모델은 자기가 지난주에 뭘 만들었는지 모른다. 그 정보는 파이프라인만 갖고 있다.)
@@ -510,6 +526,56 @@ async def get_authored_deck(job_id: str) -> dict | None:
             "SELECT html, verify_json, card_count, paper_text, updated_at, caption_json "
             "FROM authored_deck WHERE job_id = ?",
             (job_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            return dict(row) if row else None
+
+
+async def save_deck_revision(
+    job_id: str,
+    html: str,
+    verify_json: str,
+    card_count: int,
+    source: str,
+) -> int:
+    """복구 지점을 하나 남기고 그 id를 준다. source = author|manual|ai_edit|vision_fix|restore.
+
+    save_authored_deck과 같은 위생을 지난다. 안 그러면 오염된 판(산문·코드펜스)이 보관되고
+    복원하는 순간 그 오염이 되살아난다. 보관본은 저장본과 바이트가 같아야 한다.
+    """
+    from ..agents.deck.authoring import _strip_code_fence  # 지연 임포트(core→agents 순환 방지)
+    html = _strip_code_fence(html)
+    now = _utc_now_iso()
+    async with _connect() as conn:
+        cursor = await conn.execute(
+            "INSERT INTO deck_revision (job_id, html, verify_json, card_count, source, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (job_id, html, verify_json, card_count, source, now),
+        )
+        await conn.commit()
+        return cursor.lastrowid
+
+
+async def list_deck_revisions(job_id: str) -> list[dict]:
+    """최신순 목록. HTML 전문은 싣지 않는다(덱당 수십 KB — 목록 응답이 메가로 큰다)."""
+    async with _connect() as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT id, card_count, source, created_at FROM deck_revision "
+            "WHERE job_id = ? ORDER BY id DESC",
+            (job_id,),
+        ) as cursor:
+            return [dict(row) for row in await cursor.fetchall()]
+
+
+async def get_deck_revision(job_id: str, rev_id: int) -> dict | None:
+    """단건. job_id를 함께 걸어 남의 판을 못 꺼내게 한다(IDOR 차단)."""
+    async with _connect() as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT id, html, verify_json, card_count, source, created_at "
+            "FROM deck_revision WHERE job_id = ? AND id = ?",
+            (job_id, rev_id),
         ) as cursor:
             row = await cursor.fetchone()
             return dict(row) if row else None

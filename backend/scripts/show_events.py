@@ -29,15 +29,16 @@ def _fmt_row(e: dict) -> str:
     head = f"{ts}  {et:<17} user={uid}"
     if job:
         head += f"  job={str(job)[:8]}"
-    if et == "upload":
+    # 이벤트 이름은 구(upload)·신(deck_upload) 둘 다 매칭 — 레거시 데이터와 현재 데이터를 모두 포맷.
+    if et in ("upload", "deck_upload"):
         head += f"  {p.get('filename')} ({p.get('card_count')}장)"
-    elif et == "pipeline_complete":
+    elif et in ("pipeline_complete", "deck_pipeline_complete"):
         head += (
             f"  {p.get('status')}  {p.get('duration_s')}s"
             f"  in={p.get('input_tokens')} out={p.get('output_tokens')} calls={p.get('llm_calls')}"
             + ("  [degraded]" if p.get("degraded") else "")
         )
-    elif et == "export":
+    elif et in ("export", "deck_export"):
         head += f"  imgs={p.get('image_count')}"
     return head
 
@@ -54,7 +55,7 @@ async def main(limit: int) -> None:
     in_tok = out_tok = calls = 0
     for e in events:
         counts[e["event_type"]] = counts.get(e["event_type"], 0) + 1
-        if e["event_type"] == "pipeline_complete":
+        if e["event_type"] in ("pipeline_complete", "deck_pipeline_complete"):
             p = e.get("payload") or {}
             in_tok += int(p.get("input_tokens") or 0)
             out_tok += int(p.get("output_tokens") or 0)

@@ -94,6 +94,10 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
   { html, mode, onSelected, onDeselected, onDirty, onHistory, onPage, onLayers, onHighlighted, onScaleChange, className, initialPage }, ref,
 ) {
   const frameRef = useRef<HTMLIFrameElement>(null)
+  // ★srcDoc은 마운트 시 html로 고정한다. 이후 html prop 변경(자동저장이 deck.html을 갱신)에
+  // iframe이 재로드되면 EDITOR_READY가 다시 돌며 진입 카드로 점프한다(편집 중 3초마다 점핑 버그).
+  // 편집기는 마운트 후 자기 DOM이 진짜 소스 — 의도적 재로드(AI편집·되돌리기)는 부모가 key로 새 마운트.
+  const initialHtmlRef = useRef(html)
   const wrapRef = useRef<HTMLDivElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   const [fitScale, setFitScale] = useState(1)
@@ -240,7 +244,7 @@ const DeckEditor = forwardRef<DeckEditorHandle, Props>(function DeckEditor(
           <iframe
             ref={frameRef}
             title="deck-editor"
-            srcDoc={buildSrcDoc(html)}
+            srcDoc={buildSrcDoc(initialHtmlRef.current)}
             sandbox="allow-scripts"
             style={{
               width: CARD_W,

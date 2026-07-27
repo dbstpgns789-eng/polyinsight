@@ -147,7 +147,7 @@ async def apply_vision_fix(
         )
     except Exception as exc:
         logger.warning("vision fix 실패(%s) — 원본 유지", exc)
-        return html, [f"비전 수정 실패 — 원본을 유지합니다 ({type(exc).__name__})."]
+        return html, [f"비전 수정 실패. 원본을 유지합니다 ({type(exc).__name__})."]
 
     # ★국소 패치 — 고친 카드만 받아 교체한다(전체 HTML 재출력이 최대 원가 드라이버였다:
     #   출력 15~18k 토큰 × $25/M = 라운드당 $0.45. 실제 덱 5개로 무손실 교체 검증 완료).
@@ -163,7 +163,7 @@ async def apply_vision_fix(
     if fixed_cards != original_cards:                 # 카드 수는 절대 변하면 안 된다
         logger.warning("vision fix: 카드 수 변동 %d→%d — 무시", original_cards, fixed_cards)
         return html, [
-            f"비전 수정이 카드 수를 바꿔({original_cards}→{fixed_cards}) 무시했습니다 — 원본을 유지합니다."
+            f"비전 수정이 카드 수를 바꿔({original_cards}→{fixed_cards}) 무시했습니다. 원본을 유지합니다."
         ]
 
     # ★수치 불변 가드 — 비전 수정은 레이아웃·표현을 고치는 단계이지 사실을 바꾸는 단계가 아니다.
@@ -173,7 +173,7 @@ async def apply_vision_fix(
     if lost:
         logger.warning("vision fix: 수치 소실 %s — 무시", sorted(lost)[:5])
         return html, [
-            f"비전 수정이 수치를 변경/삭제해({', '.join(sorted(lost)[:3])}) 무시했습니다 — 원본을 유지합니다."
+            f"비전 수정이 수치를 변경/삭제해({', '.join(sorted(lost)[:3])}) 무시했습니다. 원본을 유지합니다."
         ]
 
     logger.info("vision fix 적용: 카드 %d장 교체 (%d→%d chars)", n_patched, len(html), len(fixed))

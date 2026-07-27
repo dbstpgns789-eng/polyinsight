@@ -731,18 +731,19 @@ async def test_pro_upload_insufficient_credits_402_no_deduct(client, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_pro_nlpatch_422_does_not_charge(client, monkeypatch):
-    """§13-② LLM 성공했지만 결과 구조 깨져 422 → 크레딧 불변(차감 전 거부)."""
-    uid = await _mk_user("edit422@test")
+async def test_pro_nlpatch_no_change_does_not_charge(client, monkeypatch):
+    """적용 0건이면 무과금(스펙 §11-1) — LLM 돌아도 바뀐 게 없으면 크레딧 불변."""
+    uid = await _mk_user("edit0@test")
     await _db.add_credits(uid, plans.AIEDIT_COST)
     job_id = await _mk_deck(uid)
     _as_user(dict(await _db.get_user_by_id(uid)))
-    async def _bad(*a, **k):
-        return "<div>구조 깨짐(라벨 없음)</div>"
-    monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _bad)
+    async def _noop(*a, **k):
+        return ("<div data-screen-label='1'>변화없음</div>", 0, "적용할 게 없었어요")
+    monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _noop)
     r = await client.post(f"/api/deck/{job_id}/nlpatch", json={"instruction": "x"})
-    assert r.status_code == 422
-    assert await _db.get_credits(uid) == plans.AIEDIT_COST   # no-op 과금 없음
+    assert r.status_code == 200
+    assert r.json()["applied"] == 0
+    assert await _db.get_credits(uid) == plans.AIEDIT_COST   # 무과금
 
 
 @pytest.mark.asyncio
@@ -752,8 +753,8 @@ async def test_pro_nlpatch_success_charges_aiedit(client, monkeypatch):
     job_id = await _mk_deck(uid)
     _as_user(dict(await _db.get_user_by_id(uid)))
     async def _good(*a, **k):
-        return "<div data-screen-label='1'>고침</div>"
-    async def _fake_persist(job_id, html):
+        return ("<div data-screen-label='1'>고침</div>", 1, "고쳤어요")
+    async def _fake_persist(job_id, html, revision_source=None):
         return {"cardCount": 1, "pngVersion": 1}
     monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _good)
     monkeypatch.setattr("backend.routers.deck.persist_edited_deck", _fake_persist)
@@ -763,18 +764,19 @@ async def test_pro_nlpatch_success_charges_aiedit(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_pro_propose_422_does_not_charge(client, monkeypatch):
-    """propose(라이브 경로)도 422 구조거부 시 무과금."""
-    uid = await _mk_user("prop422@test")
+async def test_pro_propose_no_change_does_not_charge(client, monkeypatch):
+    """propose(라이브 경로)도 적용 0건이면 무과금(스펙 §11-1)."""
+    uid = await _mk_user("prop0@test")
     await _db.add_credits(uid, plans.AIEDIT_COST)
     job_id = await _mk_deck(uid)
     _as_user(dict(await _db.get_user_by_id(uid)))
-    async def _bad(*a, **k):
-        return "<div>깨짐</div>"
-    monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _bad)
+    async def _noop(*a, **k):
+        return ("<div data-screen-label='1'>y</div>", 0, "무변경")
+    monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _noop)
     r = await client.post(f"/api/deck/{job_id}/nlpatch/propose",
                           json={"instruction": "x", "html": "<div data-screen-label='1'>y</div>"})
-    assert r.status_code == 422
+    assert r.status_code == 200
+    assert r.json()["applied"] == 0
     assert await _db.get_credits(uid) == plans.AIEDIT_COST
 
 

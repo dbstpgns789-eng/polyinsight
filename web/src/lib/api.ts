@@ -19,6 +19,20 @@ api.interceptors.response.use(
   }
 )
 
+// axios 래퍼 에러 → 사용자 문구. 백엔드가 준 친절 메시지(detail.message)면 그대로 쓰고,
+// raw "Request failed with status code N"·"Network Error"면 상태코드별 일반 문구로 매핑한다.
+// (개발자 언어를 사용자에게 그대로 노출하던 문제 방지 — 특히 402·413·5xx.)
+export function friendlyError(e: unknown, fallback: string): string {
+  const err = e as { status?: number; message?: string }
+  const msg = err?.message ?? ''
+  if (msg && !/^Request failed with status code/i.test(msg) && !/^Network Error/i.test(msg)) return msg
+  const s = err?.status
+  if (s === 402) return '크레딧이 부족해요. 충전 후 다시 시도해 주세요.'
+  if (s === 413 || s === 400) return '파일이 너무 크거나 형식이 올바르지 않아요.'
+  if (s && s >= 500) return '서버에 일시적인 문제가 있어요. 잠시 후 다시 시도해 주세요.'
+  return fallback
+}
+
 // uploadPdf(구 POST /api/upload → run_pipeline)는 L0(2026-07-09)에서 삭제.
 // 저작 진입은 uploadDeck(/api/deck/upload) 하나뿐.
 
@@ -68,8 +82,22 @@ export const getDeckAssetUrl = (jobId: string, assetId: string) =>
   `/api/deck/${jobId}/assets/${assetId}`
 
 // 편집(직접조작) 저장 → 재검증 + PNG 재렌더. Playwright 대기 위해 타임아웃 확대.
-export const patchDeck = (jobId: string, html: string) =>
-  api.patch(`/deck/${jobId}`, { html }, { timeout: 120_000 })
+// auto=true(자동저장)면 서버가 판(revision)을 남기지 않는다 — 3초 유휴마다 쌓으면 목록이 못 읽는 것이 된다.
+export const patchDeck = (jobId: string, html: string, auto = false) =>
+  api.patch(`/deck/${jobId}`, { html, auto }, { timeout: 120_000 })
+
+export interface DeckRevision {
+  id: number
+  source: 'author' | 'manual' | 'ai_edit' | 'restore'
+  cardCount: number
+  createdAt: string
+}
+
+export const listDeckRevisions = (jobId: string) =>
+  api.get<{ revisions: DeckRevision[] }>(`/deck/${jobId}/revisions`)
+
+export const restoreDeckRevision = (jobId: string, revId: number) =>
+  api.post(`/deck/${jobId}/revisions/${revId}/restore`, {}, { timeout: 120_000 })
 
 // 자연어 편집 (유료 LLM). 응답에 새 html·verify 포함.
 export const nlPatchDeck = (jobId: string, instruction: string) =>
