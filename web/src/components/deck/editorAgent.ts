@@ -507,6 +507,13 @@ const AGENT_BODY = `
   }
   function freezeCard(card) {
     if (!card || card.getAttribute('data-pi-frozen') === '1') return;
+    // ★ 렌더되지 않은 카드는 측정할 수 없다. display:none이면 getBoundingClientRect가 전부 0이라
+    // width:0/height:0을 박고 data-pi-frozen까지 붙어 되돌릴 기회도 사라진다 — 그 카드로 돌아오면
+    // 폭 0에서 한글이 한 글자씩 흘러 텍스트가 세로로 보인다(2026-07-26 제보).
+    // 이 경로는 사용자 조작 없이 열린다: applyPaging이 폰트 로딩 중이면 card를 클로저로 잡아
+    // fonts.ready 후에 freeze하는데, 그 사이 SET_PAGE(진입 카드 복원)가 그 카드를 숨긴다.
+    // 스킵해도 손실이 없다 — 그 카드가 다시 활성화되면 applyPaging이 freeze를 재시도한다.
+    if (!card.getClientRects().length) return;
     if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
     var nodes = card.querySelectorAll('*'), els = [];
     for (var i = 0; i < nodes.length; i++) {
