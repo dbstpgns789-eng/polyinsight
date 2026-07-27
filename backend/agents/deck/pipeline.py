@@ -63,11 +63,17 @@ def compute_verify(html: str, paper_text: str | None) -> dict:
     return payload
 
 
-async def persist_edited_deck(job_id: str, html: str) -> dict:
+async def persist_edited_deck(
+    job_id: str, html: str, revision_source: str | None = None
+) -> dict:
     """편집된 덱 HTML 영속화 — 재검증(원문 있으면) → 저장 → PNG 재렌더.
 
     PATCH(직접조작)·nlpatch(자연어) 공용. 반환: {verify, cardCount, warnings}.
     원문(paper_text)이 없는 기존 덱은 재검증을 건너뛰고 경고로 표면화(막지 않음, 헌법 3조).
+
+    revision_source: 되돌아갈 판을 남길 때만 지정한다(manual·ai_edit·restore 등).
+      기본 None = 자동저장 — 판을 만들지 않는다. 3초 유휴마다 쌓으면 목록이
+      수백 개가 되어 사람이 고를 수 없게 된다. 자동저장 중 사고는 iframe undo가 받는다.
     """
     existing = await db.get_authored_deck(job_id)
     paper_text = existing.get("paper_text") if existing else None
@@ -80,6 +86,8 @@ async def persist_edited_deck(job_id: str, html: str) -> dict:
         warnings.append("이 덱은 원문이 없어 재검증 불가 — 재생성 시 충실성 검증이 복원됩니다.")
 
     await db.save_authored_deck(job_id, html, verify_json, card_count, paper_text=None)
+    if revision_source:
+        await db.save_deck_revision(job_id, html, verify_json, card_count, revision_source)
 
     images, render_warns = await render_deck(html, job_id=job_id)
     warnings.extend(render_warns)
@@ -307,6 +315,8 @@ async def _execute(
 
     # 저장 (검증 리포트는 렌더 실패와 무관하게 확보). 원문은 편집본 재검증(Phase 3)용으로 보관.
     await db.save_authored_deck(job_id, html, verify_json, card_count, paper_text=s1_out.raw_text)
+    # 모델이 처음 뱉은 판을 남긴다 — 이게 없으면 첫 편집 저장에 원본이 영영 사라진다.
+    await db.save_deck_revision(job_id, html, verify_json, card_count, "author")
 
     # ── 렌더: 카드별 PNG ───────────────────────────────────────────────────
     await db.update_job(job_id, status=JobStatus.RUNNING, stage="RENDER", progress=85)

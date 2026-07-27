@@ -754,7 +754,7 @@ async def test_pro_nlpatch_success_charges_aiedit(client, monkeypatch):
     _as_user(dict(await _db.get_user_by_id(uid)))
     async def _good(*a, **k):
         return ("<div data-screen-label='1'>고침</div>", 1, "고쳤어요")
-    async def _fake_persist(job_id, html):
+    async def _fake_persist(job_id, html, revision_source=None):
         return {"cardCount": 1, "pngVersion": 1}
     monkeypatch.setattr("backend.routers.deck.apply_nl_patch", _good)
     monkeypatch.setattr("backend.routers.deck.persist_edited_deck", _fake_persist)
