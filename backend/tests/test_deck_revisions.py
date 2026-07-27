@@ -176,8 +176,9 @@ async def test_ai_edit_creates_revision(client, monkeypatch):
     """AI 편집은 되돌릴 가능성이 가장 높은 경계다 — 반드시 판을 남긴다."""
     from backend.routers import deck as _router
 
+    # 편집스펙 코어(2026-07-26) 이후 apply_nl_patch는 (html, applied, summary)를 준다.
     async def _fake_patch(html, instruction, paper_text=None, **kw):
-        return EDITED
+        return EDITED, 1, "고쳤어요"
     monkeypatch.setattr(_router, "apply_nl_patch", _fake_patch)
     monkeypatch.setattr(_router.plans, "require_can_ai_designer", lambda u: None)
     monkeypatch.setattr(_router.plans, "author_charges_credits", lambda u: False)
