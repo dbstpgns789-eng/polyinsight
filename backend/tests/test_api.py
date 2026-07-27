@@ -387,22 +387,26 @@ _DECK_HTML = (
 
 
 @pytest.mark.asyncio
-async def test_nlpatch_mock_applies_and_rerenders(client, monkeypatch):
-    """DEV_MOCK_LLM nlpatch — 마커 주입(계약 보존) → 재검증/재렌더 → html·verify 반환."""
+async def test_nlpatch_mock_applies_ops(client, monkeypatch):
+    """DEV_MOCK_LLM nlpatch — mock ops(첫 eid에 그림자 style)를 apply_ops가 적용 → applied·summary 반환."""
     monkeypatch.setattr(settings, "DEV_MOCK_LLM", True)
     monkeypatch.setattr(
         "backend.agents.deck.pipeline.render_deck",
         AsyncMock(return_value=([b"\x89PNG-1"], [])),
     )
+    html = ('<!DOCTYPE html><html><body>'
+            '<div data-screen-label="01" style="width:1080px;height:1350px">'
+            '<div data-eid="e1">제목</div></div></body></html>')
     await _db.create_job("jnl", "paper.pdf", user_id=1)
-    await _db.save_authored_deck("jnl", _DECK_HTML, json.dumps({"verified": 1, "unverified": 0}),
+    await _db.save_authored_deck("jnl", html, json.dumps({"verified": 1, "unverified": 0}),
                                  1, paper_text="The model scored 28.4 BLEU.")
     resp = await client.post("/api/deck/jnl/nlpatch", json={"instruction": "표지를 차분하게"})
     assert resp.status_code == 200
     body = resp.json()
-    assert "data-screen-label" in body["html"]          # 계약 보존
-    assert "nlpatch-mock" in body["html"]                # mock 경로 실행 증명
-    assert "verify" in body and "cardCount" in body
+    assert body["applied"] == 1                          # 적용됨(무과금 게이트 통과)
+    assert "text-shadow" in body["html"]                 # mock op이 실제로 적용
+    assert "data-screen-label" in body["html"]           # 구조 보존
+    assert "summary" in body and "cardCount" in body
 
 
 @pytest.mark.asyncio
@@ -541,46 +545,48 @@ async def test_get_deck_asset_public_no_auth(client):
 
 
 @pytest.mark.asyncio
-async def test_nlpatch_rejects_broken_contract(client, monkeypatch):
-    """모델이 계약을 깨면(카드 라벨 소실) 422로 거부하고 원본 보존."""
-    monkeypatch.setattr(
-        "backend.routers.deck.apply_nl_patch",
-        AsyncMock(return_value="<html><body>카드 라벨 없는 깨진 출력</body></html>"),
-    )
+async def test_nlpatch_no_change_no_charge(client, monkeypatch):
+    """적용된 게 없으면(applied==0) 무변경·무과금 — 200으로 원본 반환(스펙 §11-1).
+
+    eid 없는 덱 → mock ops가 대상을 못 찾음 → applied=0. '성공=과금'의 함정 차단."""
+    monkeypatch.setattr(settings, "DEV_MOCK_LLM", True)
+    html = ('<!DOCTYPE html><html><body>'
+            '<div data-screen-label="01" style="width:1080px;height:1350px">제목</div></body></html>')
     await _db.create_job("jbad", "p.pdf", user_id=1)
-    await _db.save_authored_deck("jbad", _DECK_HTML, json.dumps({"verified": 1}), 1,
-                                 paper_text="x")
-    resp = await client.post("/api/deck/jbad/nlpatch", json={"instruction": "전부 지워"})
-    assert resp.status_code == 422
-    # 원본은 그대로(거부 후 보존)
+    await _db.save_authored_deck("jbad", html, json.dumps({"verified": 1}), 1, paper_text="x")
+    resp = await client.post("/api/deck/jbad/nlpatch", json={"instruction": "전부 바꿔"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["applied"] == 0
     deck = await _db.get_authored_deck("jbad")
-    assert deck["html"] == _DECK_HTML
+    assert deck["html"] == html                          # 원본 그대로(무변경·미저장)
 
 
 @pytest.mark.asyncio
-async def test_nlpatch_propose_returns_html_verify_without_persist(client, monkeypatch):
-    """propose는 수정본 html+verify를 반환하되 DB 저장·PNG 렌더를 하지 않는다."""
+async def test_nlpatch_propose_applies_without_persist(client, monkeypatch):
+    """propose는 ops 적용된 html+verify+summary 반환하되 DB 저장·PNG 렌더를 하지 않는다."""
     monkeypatch.setattr(settings, "DEV_MOCK_LLM", True)
     render_mock = AsyncMock(return_value=([b"\x89PNG"], []))
     monkeypatch.setattr("backend.agents.deck.pipeline.render_deck", render_mock)
     await _db.create_job("jprop", "p.pdf", user_id=1)
     await _db.save_authored_deck("jprop", _DECK_HTML, json.dumps({"verified": 1, "unverified": 0}),
                                  1, paper_text="The model scored 28.4 BLEU.")
-    live_html = _DECK_HTML.replace("BLEU 28.4", 'BLEU 28.4 <span data-eid="e1">최고</span>')
+    live_html = ('<!DOCTYPE html><html><body>'
+                 '<div data-screen-label="01" style="width:1080px;height:1350px">'
+                 '<div data-eid="e1">최고 28.4 BLEU</div></div></body></html>')
     resp = await client.post(
         "/api/deck/jprop/nlpatch/propose",
-        json={"instruction": "한 줄로", "html": live_html,
+        json={"instruction": "그림자 넣어", "html": live_html,
               "target": {"eid": "e1", "cardIndex": 0, "quotedText": "최고"}},
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert "html" in body and "verify" in body
-    assert "data-screen-label" in body["html"]
-    assert "nlpatch-mock" in body["html"]
-    assert "verified" in body["verify"]
-    render_mock.assert_not_called()
+    assert body["applied"] == 1
+    assert "text-shadow" in body["html"]                 # ops 적용됨
+    assert "verify" in body and "summary" in body
+    render_mock.assert_not_called()                      # propose는 미렌더
     deck = await _db.get_authored_deck("jprop")
-    assert deck["html"] == _DECK_HTML
+    assert deck["html"] == _DECK_HTML                    # DB 미변경(미저장)
 
 
 @pytest.mark.asyncio
@@ -591,16 +597,17 @@ async def test_nlpatch_propose_404_when_no_deck(client):
 
 
 @pytest.mark.asyncio
-async def test_nlpatch_propose_422_on_broken_contract(client, monkeypatch):
-    """수정 결과가 카드 구조를 벗어나면 422(원본 보존, 저장 안 함)."""
-    monkeypatch.setattr(
-        "backend.routers.deck.apply_nl_patch",
-        AsyncMock(return_value="<html><body>카드 라벨 없는 깨진 출력</body></html>"),
-    )
+async def test_nlpatch_propose_no_change_no_charge(client, monkeypatch):
+    """propose에서 적용 대상이 없으면 applied==0, 200(무과금·미저장, 스펙 §11-1)."""
+    monkeypatch.setattr(settings, "DEV_MOCK_LLM", True)
     await _db.create_job("jpbad", "p.pdf", user_id=1)
     await _db.save_authored_deck("jpbad", _DECK_HTML, json.dumps({"verified": 1}), 1, paper_text="x")
+    no_eid = ('<!DOCTYPE html><html><body>'
+              '<div data-screen-label="01" style="width:1080px;height:1350px">x</div></body></html>')
     resp = await client.post("/api/deck/jpbad/nlpatch/propose",
-                             json={"instruction": "전부 지워", "html": _DECK_HTML})
-    assert resp.status_code == 422
+                             json={"instruction": "전부 바꿔", "html": no_eid})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["applied"] == 0
     deck = await _db.get_authored_deck("jpbad")
-    assert deck["html"] == _DECK_HTML
+    assert deck["html"] == _DECK_HTML                    # DB 미변경
