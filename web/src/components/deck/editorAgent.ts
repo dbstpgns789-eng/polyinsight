@@ -48,6 +48,8 @@ const AGENT_BODY = `
     if (el.querySelector('div,section,svg,img,ul,ol,table,figure,canvas,header,footer,article')) return false;
     return (el.textContent || '').trim().length > 0;
   }
+  // inline이어도 그 자체가 선택 대상인 것들(replaced) — 부모로 올리면 안 된다.
+  var INLINE_SKIP = { IMG: 1, SVG: 1, VIDEO: 1, CANVAS: 1, INPUT: 1, BUTTON: 1, IFRAME: 1, OBJECT: 1 };
   function isPiArtifact(el) {
     return el.hasAttribute && (el.hasAttribute('data-pi-artifact') || el.hasAttribute('data-pi-overlay') || el.hasAttribute('data-pi-handle') || el.hasAttribute('data-pi-guide'));
   }
@@ -62,6 +64,17 @@ const AGENT_BODY = `
     if (el.ownerSVGElement) {
       var tn = (el.tagName || '').toLowerCase();
       if (tn === 'tspan' || tn === 'textpath') el = el.parentNode;
+    }
+    // ★ 부분 색상용 <span>("구슬"만 초록) 같은 인라인 조각은 편집 단위가 아니다 — 그것만 잡히면
+    // 제목을 옮기려고 글자를 눌렀는데 두 글자만 선택된다(2026-07-27 제보). 피그마는 부분 색상이
+    // 스타일 속성이라 별도 노드가 안 생기고 늘 텍스트 박스 전체가 잡힌다. 여기서도 텍스트 박스로 올린다.
+    // img·svg 등 replaced 요소는 inline이어도 그 자체가 대상이므로 제외한다.
+    if (!el.ownerSVGElement) {
+      while (el && el.parentElement && !INLINE_SKIP[el.tagName]
+             && !(el.hasAttribute && el.hasAttribute('data-screen-label'))
+             && getComputedStyle(el).display === 'inline') {
+        el = el.parentElement;
+      }
     }
     if (isPiArtifact(el)) return null;
     if (el.hasAttribute && el.hasAttribute('data-screen-label')) return null; // 카드 프레임 자체는 선택 안 함
@@ -118,11 +131,20 @@ const AGENT_BODY = `
     var es = document.querySelectorAll('[contenteditable]');
     for (var i = 0; i < es.length; i++) { es[i].removeAttribute('contenteditable'); es[i].style.outline = ''; }
   }
-  // 정확히 1개 텍스트 리프 선택일 때만 인라인 편집 허용(1→다중 전환 시 편집 해제)
+  // ★ 선택과 편집은 다른 상태다(피그마 모델, 2026-07-27). 한 번 클릭 = 선택까지만 —
+  // 텍스트 박스 어디를 잡아도 통째로 잡혀 드래그로 움직인다. 내용 수정은 더블클릭으로 들어간다.
+  // (예전엔 선택만 해도 contenteditable이 붙어 선택 상태와 편집 상태가 구분되지 않았다.)
   function refreshEditable() {
     clearEditable();
-    var p = primary();
-    if (selection.length === 1 && isTextLeaf(p)) { p.setAttribute('contenteditable', 'true'); p.style.outline = 'none'; }
+  }
+  // 더블클릭으로 텍스트 편집 진입. 브라우저 기본 동작(단어 선택·캐럿)은 그대로 살린다.
+  function enterTextEdit(el) {
+    if (!el || !isTextLeaf(el)) return;
+    clearEditable();
+    el.setAttribute('contenteditable', 'true');
+    el.style.outline = 'none';
+    try { el.focus(); } catch (e) {}
+    beginTextEdit(el);
   }
   function pruneSelection() {
     var kept = [];
@@ -142,7 +164,31 @@ const AGENT_BODY = `
     return d;
   }
   function ensureOverlays(n) { while (overlayPool.length < n) overlayPool.push(makeOverlayEl(false)); }
-  function boxOf(el) { var r = el.getBoundingClientRect(); return { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width, h: r.height }; }
+  // ★ 선택 표시의 기준 = 요소 박스 ∪ 실제 글자 범위.
+  // line-height가 1보다 작으면(큰 제목을 타이트하게 붙이는 정상적 조판) 글리프가 라인박스 밖으로
+  // 나간다. 실측: font-size 104px·line-height 0.98·Gowun Batang → 박스 204px인데 글자는 253px
+  // (위 25·아래 24 초과). 초과량은 폰트 메트릭에 좌우된다 — 같은 조건에서 시스템 serif는 2px뿐.
+  // 박스만 그리면 테두리가 보이는 글자와 어긋난다(2026-07-27 제보: 첫 줄이 박스 위로 나가고
+  // 아래는 빈 상자). 피그마는 텍스트 프레임이 늘 글자를 감싸 이 어긋남이 없다 — 합집합이 그 동치다.
+  function glyphRect(el) {
+    if (!el || !el.firstChild) return null;
+    try {
+      var rng = document.createRange();
+      rng.selectNodeContents(el);
+      var r = rng.getBoundingClientRect();
+      return (r.width > 0 && r.height > 0) ? r : null;
+    } catch (e) { return null; }
+  }
+  function boxOf(el) {
+    var r = el.getBoundingClientRect();
+    var x1 = r.left, y1 = r.top, x2 = r.right, y2 = r.bottom;
+    var g = glyphRect(el);
+    if (g) {
+      x1 = Math.min(x1, g.left); y1 = Math.min(y1, g.top);
+      x2 = Math.max(x2, g.right); y2 = Math.max(y2, g.bottom);
+    }
+    return { x: x1 + window.scrollX, y: y1 + window.scrollY, w: x2 - x1, h: y2 - y1 };
+  }
   function unionBox(els) {
     var minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
     for (var i = 0; i < els.length; i++) { var b = boxOf(els[i]); minx = Math.min(minx, b.x); miny = Math.min(miny, b.y); maxx = Math.max(maxx, b.x + b.w); maxy = Math.max(maxy, b.y + b.h); }
@@ -1209,6 +1255,14 @@ const AGENT_BODY = `
   });
 
   document.addEventListener('mousedown', onMouseDown, true);
+  // 더블클릭 = 텍스트 편집 진입(피그마 모델). 한 번 클릭은 선택까지만이라 여기서만 편집이 열린다.
+  document.addEventListener('dblclick', function (e) {
+    if (mode !== 'edit') return;
+    var el = pick(e.target);
+    if (!el || !isTextLeaf(el)) return;
+    if (!inSelection(el)) select(el);
+    enterTextEdit(el);
+  }, true);
   document.addEventListener('input', onInput, true);
   // 텍스트 편집 포착: beforeinput에서 변경 전 innerHTML 캡처(재편집도 자동 재무장), 포커스아웃에 커밋.
   document.addEventListener('beforeinput', function (e) {
