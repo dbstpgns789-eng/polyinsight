@@ -43,8 +43,8 @@ export default function ForgotPasswordPage() {
   return (
     <div className="verify-wrap">
       <div className="verify-card">
-        <Link href="/" className="verify-logo" aria-label="PolyInsight 홈">
-          Poly<span>Insight</span>
+        <Link href="/" className="verify-logo" aria-label="PaperSweep 홈">
+          Paper<span>Sweep</span>
         </Link>
 
         {sent ? (

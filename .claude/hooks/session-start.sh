@@ -1,5 +1,5 @@
 #!/bin/bash
-# PolyInsight SessionStart Hook
+# PaperSweep SessionStart Hook
 # 웹세션 시작 시 실행 — 로컬 CLI 작업 내용을 이 세션에 동기화 + 의존성 설치
 set -uo pipefail
 

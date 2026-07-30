@@ -1,4 +1,4 @@
-# NORTH_STAR.md — PolyInsight 북극성
+# NORTH_STAR.md — PaperSweep 북극성
 
 > 이 문서는 모든 결정의 최상위 기준이다.
 > 기능 추가, 삭제, 우선순위 다툼이 생기면 여기로 돌아온다.
@@ -10,7 +10,7 @@
 > **야생 논문을 씹어먹는 압도적 품질의 카드뉴스 SaaS.**
 
 연구자는 논문을 쓰는 데는 탁월하지만 알리는 데는 시간이 없다.
-PolyInsight는 그 간격을 없앤다 — 원문 fidelity를 훼손하지 않고.
+PaperSweep는 그 간격을 없앤다 — 원문 fidelity를 훼손하지 않고.
 
 ---
 

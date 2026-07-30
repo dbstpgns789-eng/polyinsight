@@ -129,7 +129,7 @@ async def trigger_export(job_id: str, user: dict = Depends(get_current_user)):
         zfile.writestr("card_data.json", card_data.model_dump_json(indent=2))
 
     export_id = str(uuid.uuid4())
-    await db.save_export(export_id, job_id, buf.getvalue(), f"polyinsight_{job_id[:8]}.zip")
+    await db.save_export(export_id, job_id, buf.getvalue(), f"papersweep_{job_id[:8]}.zip")
     await db.log_event(
         "export",
         user_id=user["id"],

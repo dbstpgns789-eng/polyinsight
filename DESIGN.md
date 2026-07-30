@@ -1,5 +1,5 @@
 ---
-name: PolyInsight
+name: PaperSweep
 description: 학술 논문 PDF를 원문 기반 카드뉴스로 변환하는 연구자 도구
 colors:
   # 브랜드 에메랄드 (= 검증색, 통합) — 2026-07-01 forest-green에서 진화 (hue 163→163, 보석빛)
@@ -113,13 +113,13 @@ components:
     padding: "20px"
 ---
 
-# Design System: PolyInsight
+# Design System: PaperSweep
 
 ## 1. Overview
 
 **Creative North Star: "The Academic Desk"**
 
-PolyInsight는 연구자의 작업대다. 논문이 펼쳐져 있고, 형광펜이 그어져 있으며, 출처가 정확히 표기되어 있다. 이 시스템이 내리는 모든 시각적 결정은 하나의 질문으로 수렴한다: 이것이 연구자의 집중을 돕는가?
+PaperSweep는 연구자의 작업대다. 논문이 펼쳐져 있고, 형광펜이 그어져 있으며, 출처가 정확히 표기되어 있다. 이 시스템이 내리는 모든 시각적 결정은 하나의 질문으로 수렴한다: 이것이 연구자의 집중을 돕는가?
 
 > **2026-07-01 색 진화**: 브랜드색을 딥 에메랄드 그린(hue 152·L38%)에서 **보석빛 에메랄드**(hue 163·L63%)로 승격했다. 색족은 유지하되 값만 옮긴 진화다(교체 아님). 이유: (1) 퍼플은 Mirra 추종이자 "AI=퍼플" 반사반응이라 차별화가 없다. (2) 낮은 채도의 forest는 SaaS의 활기가 죽어 기관 느낌이 난다. (3) **초록은 우리 해자(원문 검증) 그 자체다** — green = 검증 = 브랜드를 한 색으로 통합한다. 참조: `design_reference/claude-design/final-brand-tone.html`.
 

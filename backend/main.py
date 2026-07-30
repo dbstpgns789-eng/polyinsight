@@ -73,7 +73,7 @@ async def _ttl_cleaner():
         return
 
 
-app = FastAPI(title="PolyInsight", version="2.0.0", lifespan=lifespan)
+app = FastAPI(title="PaperSweep", version="2.0.0", lifespan=lifespan)
 
 
 @app.exception_handler(PlanGateError)

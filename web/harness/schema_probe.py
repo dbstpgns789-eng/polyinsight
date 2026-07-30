@@ -85,7 +85,7 @@ PROBE = r"""
 TARGETS = [
     ("클로드디자인", r"C:\Users\User\AppData\Local\Temp\셀룰로스 마이크로비드 카드뉴스 (standalone).html",
      'div[style*="width:1080px"]'),
-    ("우리(PolyInsight)", r"C:\Users\User\Desktop\test1_deck_90aa2b86.html", ".card"),
+    ("우리(PaperSweep)", r"C:\Users\User\Desktop\test1_deck_90aa2b86.html", ".card"),
 ]
 
 with sync_playwright() as p:

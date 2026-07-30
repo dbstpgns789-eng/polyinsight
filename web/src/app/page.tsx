@@ -56,8 +56,8 @@ export default function Home() {
       {/* Navigation */}
       <header className={`nav${navScrolled ? ' is-scrolled' : ''}`} role="banner">
         <div className="container nav__inner">
-          <a href="/" className="nav__logo" aria-label="PolyInsight 홈">
-            Poly<span>Insight</span>
+          <a href="/" className="nav__logo" aria-label="PaperSweep 홈">
+            Paper<span>Sweep</span>
           </a>
 
           <nav className="nav__links" aria-label="주요 메뉴">
@@ -373,13 +373,13 @@ export default function Home() {
 
       <footer className="footer" role="contentinfo">
         <div className="container footer__inner">
-          <p className="footer__logo">PolyInsight</p>
+          <p className="footer__logo">PaperSweep</p>
           <div className="footer__links">
             <Link href="/privacy">개인정보 처리방침</Link>
             <Link href="/terms">이용약관</Link>
             <a href="mailto:dbstpgns789@gmail.com">문의하기</a>
           </div>
-          <p className="footer__copy">&copy; 2026 PolyInsight. All rights reserved.</p>
+          <p className="footer__copy">&copy; 2026 PaperSweep. All rights reserved.</p>
         </div>
       </footer>
 

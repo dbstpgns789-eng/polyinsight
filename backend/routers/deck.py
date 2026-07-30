@@ -524,7 +524,7 @@ async def export_deck(job_id: str, user: dict = Depends(get_current_user)):
             zf.writestr("verify.json", deck["verify_json"])
 
     export_id = str(uuid.uuid4())
-    await db.save_export(export_id, job_id, buf.getvalue(), f"polyinsight_deck_{job_id[:8]}.zip")
+    await db.save_export(export_id, job_id, buf.getvalue(), f"papersweep_deck_{job_id[:8]}.zip")
     await db.log_event("deck_export", user_id=user["id"], job_id=job_id,
                        payload={"export_id": export_id, "image_count": len(images)})
     return {"exportId": export_id, "status": "DONE"}

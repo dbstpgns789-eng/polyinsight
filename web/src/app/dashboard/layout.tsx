@@ -42,7 +42,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <header className="app-header">
         <div className="app-header__inner">
           <Link href="/" className="app-header__logo">
-            Poly<span>Insight</span>
+            Paper<span>Sweep</span>
           </Link>
 
           <nav className="app-header__nav" aria-label="앱 내비게이션">

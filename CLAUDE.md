@@ -1,5 +1,5 @@
 ﻿# CLAUDE.md — CEO (전사 절대원칙)
-> PolyInsight | 루트에서 Claude를 열면 전사 컨텍스트.
+> PaperSweep | 루트에서 Claude를 열면 전사 컨텍스트.
 > 모든 부서(CPO·CTO·COO·CMO)가 공유하는 절대 원칙.
 
 ## 부서 구조
@@ -20,7 +20,7 @@
 
 ## 1. What This Project Is
 
-PolyInsight converts academic paper PDFs into
+PaperSweep converts academic paper PDFs into
 **KITECH-style card news (5 × 1080×1080 PNG)**.
 
 Core principle — **fidelity over style**:

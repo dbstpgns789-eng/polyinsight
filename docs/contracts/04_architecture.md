@@ -1,11 +1,11 @@
 # Architecture Design
-> PolyInsight v2.1 | 2026-05-18
+> PaperSweep v2.1 | 2026-05-18
 
 ---
 
 ## 1. 시스템 개요
 
-PolyInsight는 단일 서버에서 실행되는 웹 애플리케이션이다.
+PaperSweep는 단일 서버에서 실행되는 웹 애플리케이션이다.
 사용자가 PDF를 업로드하면 FastAPI 백엔드가 AI 파이프라인(S1~S8)을 비동기로 실행하고,
 결과를 SQLite에 저장한다. 프론트엔드(React SPA)는 폴링으로 진행 상태를 확인하고,
 카드 에디터에서 수정 후 PNG 내보내기를 트리거한다.

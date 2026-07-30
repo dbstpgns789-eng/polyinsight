@@ -1,6 +1,6 @@
-# 운영 매뉴얼 — PolyInsight (Azure VM 배포·운영)
+# 운영 매뉴얼 — PaperSweep (Azure VM 배포·운영)
 
-> PolyInsight | v1.0 · 2026-07-13 · 소유: COO(운영·서버·DB·회원·비용)
+> PaperSweep | v1.0 · 2026-07-13 · 소유: COO(운영·서버·DB·회원·비용)
 > 독자: **DevOps에 약한 1인 운영자**(근로장학생). 박사님(의뢰자) 파일럿 전달 대비.
 > 출처: 6축 운영 진단 워크플로(13 에이전트) — 실제 스택(`docker-compose.yml`·`backend/Dockerfile`·`backup_db.py`·`config.py`·`main.py`) file:line 근거. 상위: `docs/contracts/24_system_architecture.md`(아키텍처), `docs/superpowers/plans/2026-07-09-candidates-risk-register-and-roadmap.md`(위험대장).
 > **관리 규칙**: 인프라·설정 바꿀 때마다 이 문서 갱신. 아래 §11 열린 결정은 정하는 대로 이 문서에 박는다.
@@ -763,7 +763,7 @@ docker compose logs -f -t backend      # 백엔드만 (파이프라인/LLM/렌�
 - [ ] 무료 모니터(예: UptimeRobot) 가입.
 - [ ] **HTTP(S) 모니터** 추가 → URL = 공개 URL `https://polyinsight.japaneast.cloudapp.azure.com`(로그인 페이지), 5분 간격.
   - 헬스 엔드포인트가 없으니 로그인/랜딩 페이지의 **HTTP 200**을 살아있음 신호로 씁니다(§0-1).
-  - 가능하면 "키워드 모니터"로 페이지 고정 문구(예: "PolyInsight")까지 검사 → 앞문은 살아도 앱이 에러 페이지를 주는 경우까지 잡힘.
+  - 가능하면 "키워드 모니터"로 페이지 고정 문구(예: "PaperSweep")까지 검사 → 앞문은 살아도 앱이 에러 페이지를 주는 경우까지 잡힘.
   - TLS 만료 감시도 켜두면(UptimeRobot의 SSL 모니터) Let's Encrypt 자동 갱신이 실패한 경우를 조기에 잡습니다.
 - [ ] 알림 수신처(이메일/휴대폰) 등록. **다운 + 복구** 둘 다 알림 켜기.
 

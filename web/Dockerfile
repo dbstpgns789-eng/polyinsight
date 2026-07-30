@@ -1,4 +1,4 @@
-# PolyInsight 프론트엔드 (Next.js 16, standalone)
+# PaperSweep 프론트엔드 (Next.js 16, standalone)
 # ── build stage ──
 FROM node:20-bookworm-slim AS build
 WORKDIR /app

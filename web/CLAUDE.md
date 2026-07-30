@@ -1,5 +1,5 @@
 ﻿# CLAUDE.md — CTO Web
-> PolyInsight Web | Next.js 15 + TypeScript + Tailwind (포트 3000)
+> PaperSweep Web | Next.js 15 + TypeScript + Tailwind (포트 3000)
 > 선행 읽기: 루트 `../CLAUDE.md` → 이 파일
 
 ---

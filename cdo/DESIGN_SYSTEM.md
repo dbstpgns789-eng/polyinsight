@@ -1,4 +1,4 @@
-﻿# DESIGN_SYSTEM.md — PolyInsight 디자인 시스템
+﻿# DESIGN_SYSTEM.md — PaperSweep 디자인 시스템
 
 > 브랜드의 시각적 정체성. 모든 컴포넌트는 이 토큰을 참조한다.
 > 코드 원본: `../web/src/app/globals.css`
@@ -125,5 +125,5 @@ NEVER  @theme에 hex 직접 작성
 
 ## 브랜드 마크
 
-- 로고: 텍스트 기반 (`PolyInsight`), 좌상단 고정
+- 로고: 텍스트 기반 (`PaperSweep`), 좌상단 고정
 - 카드 내 워터마크: **없음** (불필요한 기능으로 제거 결정, 2026-06-26)
