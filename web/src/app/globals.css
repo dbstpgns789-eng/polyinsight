@@ -1500,6 +1500,41 @@ h1, h2, h3, h4, h5 {
   border-radius: var(--radius-md);
 }
 
+/* ─── 크레딧 배지 (Mirra 벤치마크: 잔액 상시 노출, 유료 미터 불안 해소) ───── */
+.credit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  height: 32px;
+  padding: 0 var(--s3);
+  border-radius: var(--radius-md);
+  font-size: var(--t-sm);
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-subtle);
+  border: 1px solid oklch(88% 0.06 163);
+  font-variant-numeric: tabular-nums;      /* 숫자 폭 고정 */
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 140ms, border-color 140ms, transform 90ms;
+}
+.credit-badge:hover { background: oklch(90% 0.05 163); border-color: var(--accent); }
+.credit-badge:active { transform: translateY(1px); }   /* .btn과 동일 택타일 */
+.credit-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.credit-badge__num { font-weight: 700; }
+/* 무료 체험 = 중립 톤(크레딧 아님) */
+.credit-badge--free { color: var(--text-2); background: var(--bg-subtle); border-color: var(--border); }
+.credit-badge--free:hover { color: var(--text-1); border-color: var(--text-2); background: var(--bg-subtle); }
+/* lab/무제한 = 조용한 표시(클릭 없음) */
+.credit-badge--lab { color: var(--text-2); background: transparent; border-color: var(--border-subtle); cursor: default; }
+.credit-badge--lab:hover { background: transparent; border-color: var(--border-subtle); }
+/* 잔액 부족(생성 불가) = 경고 톤으로 충전 유도 */
+.credit-badge--low { color: oklch(48% 0.13 66); background: oklch(96% 0.04 72); border-color: oklch(85% 0.08 72); }
+.credit-badge--low:hover { border-color: oklch(70% 0.12 66); background: oklch(94% 0.05 72); }
+/* 로딩 스켈레톤(스피너 금지, 레이아웃 크기 유지) */
+.credit-badge--skeleton { width: 92px; background: var(--bg-subtle); border-color: var(--border-subtle); animation: credit-badge-pulse 1.3s ease-in-out infinite; }
+@keyframes credit-badge-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.9; } }
+
 /* ─── Avatar 드롭다운 ──────────────────────────────── */
 .app-avatar { position: relative; }
 .app-avatar__btn {

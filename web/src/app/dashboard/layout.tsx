@@ -4,20 +4,15 @@ import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useRef, useEffect } from 'react';
+import { useMe } from '@/lib/useMe';
+import CreditBadge from '@/components/CreditBadge';
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [email, setEmail] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // 세션 쿠키로 실제 유저 이메일 조회 — 401이면 AuthGuard가 /login으로 보내므로 빈 값 유지
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (d?.email) setEmail(d.email); })
-      .catch(() => {});
-  }, []);
+  const me = useMe();                 // /auth/me 단일 소스(이메일·크레딧 공유, 중복 fetch 제거)
+  const email = me?.email ?? '';
 
   const initial = email ? email[0].toUpperCase() : 'U';
 
@@ -50,6 +45,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </nav>
 
           <div className="app-header__actions">
+            <CreditBadge />
             <Link href="/deck/new" className="btn btn-primary app-header__cta">
               <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
                 <path d="M6.5 1.5v10M1.5 6.5h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
