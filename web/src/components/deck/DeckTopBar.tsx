@@ -4,6 +4,7 @@
 import Link from 'next/link'
 import type { MouseEvent } from 'react'
 import DeckAccountMenu from './DeckAccountMenu'
+import CreditBadge from '@/components/CreditBadge'
 
 interface Props {
   filename: string
@@ -134,6 +135,9 @@ export default function DeckTopBar({
         className="text-[12.5px] font-semibold px-4 py-1.5 rounded-lg bg-forest-green text-canvas shrink-0 hover:bg-forest-green-deep transition-colors">
         내보내기
       </button>
+
+      {/* 크레딧 잔액 — 편집 중 AI편집이 크레딧을 쓰므로 이 화면에도 상시 노출. 밀집 바라 compact(라벨 생략). */}
+      <CreditBadge compact />
 
       {/* ⑥ 계정 */}
       <DeckAccountMenu />

@@ -3,6 +3,7 @@
 // 크레딧 잔액 상시 표시 배지 (Mirra 벤치마크 #1: "유저가 크레딧을 전혀 모른다" 해소).
 // 티어별로 다르게: pro=잔액+충전링크 / free=무료 체험 잔여 / lab·service=무제한.
 // pro인데 생성 못 하는 잔액이면(canAuthor=false) 경고 톤으로 충전을 당긴다.
+// compact: 밀집한 편집기 탑바용 — 라벨('크레딧'·'체험')을 빼 폭을 줄인다.
 import Link from 'next/link'
 import { useMe } from '@/lib/useMe'
 
@@ -14,7 +15,7 @@ function Diamond() {
   )
 }
 
-export default function CreditBadge() {
+export default function CreditBadge({ compact = false }: { compact?: boolean }) {
   const me = useMe()
 
   // 로딩 — 레이아웃 크기 맞춘 스켈레톤(스피너 금지)
@@ -34,7 +35,7 @@ export default function CreditBadge() {
     const left = Math.max(0, me.freeDeckLimit - me.freeDecksUsed)
     return (
       <Link href="/upgrade" className="credit-badge credit-badge--free" title="무료 체험 중. 업그레이드하면 크레딧으로 계속 만들 수 있어요">
-        무료 체험 · {left}/{me.freeDeckLimit}
+        {compact ? `무료 ${left}/${me.freeDeckLimit}` : `무료 체험 · ${left}/${me.freeDeckLimit}`}
       </Link>
     )
   }
@@ -49,7 +50,7 @@ export default function CreditBadge() {
     >
       <Diamond />
       <span className="credit-badge__num">{me.credits.toLocaleString()}</span>
-      크레딧
+      {!compact && '크레딧'}
     </Link>
   )
 }
