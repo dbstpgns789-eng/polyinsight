@@ -38,8 +38,13 @@ def test_system_has_layer_markers():
     s = P.AUTHORING_SYSTEM
     assert "PI_MANIFEST" in s                    # L3 선언 계약
     assert "이모지" in s                          # L1 신규 가드
-    assert "새 아크를 발명" in s                   # 아키타입 탈출구(감옥 금지 — 헌법 §1)
-    assert "rejected_arc" in s                   # 버린 아크 근거 — 1번 아크 디폴트 픽 방지
+    # 서사 구조는 모델이 짠다 — 아크 메뉴·rejected_arc 요구는 2026-07-30에 걷어냈다(헌법 §1:
+    # 코드가 형태를 미리 규정하지 않는다). 목록을 주고 고르게 하던 것이 감옥이었다.
+    assert "서사 구조는 전적으로 당신의 판단" in s
+    assert "목록에서 고르는 게 아니다" in s
+    # 걷어낸 것이 되돌아오지 않게 — 개수 규정은 분량을 코드가 정하는 것이라 금지
+    for caged in ("새 아크를 발명", "rejected_arc", "3개 이상 나열", "논문 표를 그대로 옮기지 마라"):
+        assert caged not in s, f"걷어낸 조항이 되살아났다: {caged}"
 
 
 def test_selfcheck_lives_at_the_very_end_of_user_prompt():
