@@ -383,7 +383,8 @@ const AGENT_BODY = `
   function undo() { commitTextEdit(); var c = undoStack.pop(); if (!c) return; c.undo(); redoStack.push(c); afterHistoryStep(); }
   function redo() { commitTextEdit(); var c = redoStack.pop(); if (!c) return; c.run(); undoStack.push(c); afterHistoryStep(); }
 
-  var LAYOUT_PROPS = ['position', 'left', 'top', 'width', 'height', 'transform', 'margin', 'boxSizing'];
+  // zIndex 포함: freeze가 겹침 순서 보존용으로 박으므로 undo·revertFlow가 함께 원복해야 한다.
+  var LAYOUT_PROPS = ['position', 'left', 'top', 'width', 'height', 'transform', 'margin', 'boxSizing', 'zIndex'];
   function snapInline(el) { var o = {}; for (var i = 0; i < LAYOUT_PROPS.length; i++) o[LAYOUT_PROPS[i]] = el.style[LAYOUT_PROPS[i]] || ''; return o; }
   function applyInline(el, snap) { for (var i = 0; i < LAYOUT_PROPS.length; i++) el.style[LAYOUT_PROPS[i]] = snap[LAYOUT_PROPS[i]]; }
   function layoutCmd(el, before, after) { return { run: function () { applyInline(el, after); }, undo: function () { applyInline(el, before); } }; }
@@ -587,6 +588,27 @@ const AGENT_BODY = `
     }
     return false;
   }
+  // ★ 승격 전 겹침 순서를 z-index로 못박는다(2026-07-30).
+  // CSS는 positioned 요소를 static보다 항상 위에 그린다(z-index가 없어도). 그런데 promoteAll이
+  // 전 요소를 absolute로 올리면 그 우선권이 사라지고 문서 순서가 지배해 **앞뒤가 뒤집힌다** —
+  // 원래 앞이던 게 뒤로 숨는다(하네스 freeze_zorder.py로 재현: front → back 역전).
+  // 승격 전 순서 = [static들(문서순)] 다음 [positioned들(문서순)]. 그 순서대로 1씩 부여한다.
+  // 이미 z-index를 가진 요소는 저작자가 의도한 값이라 건드리지 않는다.
+  // ★형제 단위로 재귀한다. 승격 대상(els)만 보면 '이미 absolute였던 요소'가 빠져 순서가 안 맞고,
+  // 반대로 전 요소를 한 줄로 세우면 부모에 준 z-index가 쌓임 문맥을 만들어 자식이 그 안에 갇힌다.
+  // 같은 부모 안 형제끼리만 순서를 고정하면 계층 관계는 그대로 유지된다.
+  function pinStackOrder(root) {
+    var kids = root.children, statics = [], positioned = [];
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (isPiArtifact(el)) continue;
+      var cs = getComputedStyle(el);
+      if (cs.zIndex === 'auto') (cs.position === 'static' ? statics : positioned).push(el);
+      pinStackOrder(el);
+    }
+    var ordered = statics.concat(positioned);          // static이 아래, positioned가 위
+    for (var j = 0; j < ordered.length; j++) ordered[j].style.zIndex = String(j + 1);
+  }
   function freezeCard(card) {
     if (!card || card.getAttribute('data-pi-frozen') === '1') return;
     // ★ 렌더되지 않은 카드는 측정할 수 없다. display:none이면 getBoundingClientRect가 전부 0이라
@@ -611,6 +633,7 @@ const AGENT_BODY = `
       els.push(el);
     }
     pinCollapsingContainers(els, card);  // ★ 붕괴할 컨테이너 박스 고정 → 자식 겹침 방지(마감 크레딧 카드)
+    pinStackOrder(card);                 // ★ 승격 전 겹침 순서를 z-index로 고정 → 앞뒤 역전 차단
     promoteAll(els, card);  // 문서순 → 부모 먼저 → 자식 offsetParent 정확
     card.setAttribute('data-pi-frozen', '1');
   }
@@ -1028,9 +1051,22 @@ const AGENT_BODY = `
     pageStyle.setAttribute('data-pi-artifact', '1');
     // 편집 모드: body 캔버스(프리뷰 배경·패딩·gap)를 정규화 — 현재 카드가 iframe에 꽉 차게.
     // pageStyle은 data-pi-artifact라 serialize에서 제거됨 → 저장/발행 HTML의 body 원본은 보존.
+    // ★ 편집 중 시각 왜곡 두 가지를 여기서 편다(2026-07-30 제보). 둘 다 편집 모드에서만 생기고
+    // 뷰어 PNG는 멀쩡하다 — 렌더는 freeze를 안 거치기 때문. pageStyle은 serialize에서 빠지므로
+    // 저장 HTML·발행 PNG는 원본 그대로다.
+    //
+    // ① 잘림: 저작 모델이 스텝 박스·패널 컨테이너에 overflow:hidden을 준다(실측 덱당 6~9개).
+    //    렌더에는 옳지만 편집 중 요소를 그 박스 밖으로 끌면 잘려 사라진 것처럼 보인다.
+    //    카드 자손만 푼다 — 카드 프레임 자신은 hidden을 유지해야 1080x1350 밖으로 안 넘친다.
+    // ② 겹침 역전: CSS는 positioned 요소를 static보다 항상 위에 그린다. 그런데 freeze가 전부
+    //    absolute로 승격하면 그 우선권이 사라지고 문서 순서가 지배해 앞뒤가 뒤집힌다.
+    //    isolation으로 카드를 독립 쌓임 문맥으로 만들어 바깥 영향을 끊고, 승격 시 z-index를
+    //    원래 순서대로 박아 보존한다(freezeCard 참조).
     pageStyle.textContent = '.pi-hidden{display:none !important;}' +
       'html,body{margin:0 !important;padding:0 !important;background:transparent !important;}' +
-      'body{display:block !important;}';
+      'body{display:block !important;}' +
+      '[data-screen-label] *{overflow:visible !important;}' +
+      '[data-screen-label]{isolation:isolate;}';
     (document.head || document.documentElement).appendChild(pageStyle);
   }
   function applyPaging() {
