@@ -9,7 +9,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
 import { uploadDeck, friendlyError } from '@/lib/api'
-import { planGateKind } from '@/lib/plan'
+import { planGateKind, CREDIT_COST } from '@/lib/plan'
+import CreditCost from '@/components/CreditCost'
 
 // 칩 = 영감 팔레트(선택 강제 아님). 이름은 한국어 감각어만 — 비전공자가 읽고 느낌이 와야 함.
 // 클릭 시 풀 서술이 입력창에 들어가 "말로 지시" 문법을 가르친다.
@@ -83,8 +84,9 @@ function DeckNewInner() {
     } catch (e) {
       // 무료체험 소진(402 ERR-PLAN-AUTHOR) → 업그레이드로. 그 외 에러는 화면에 그대로 표시.
       const kind = planGateKind(e)
-      if (kind === 'author') {
-        router.push('/upgrade?from=author')
+      if (kind === 'author' || kind === 'credit') {
+        // 무료 소진(author) 또는 유료 잔액 부족(credit) → 요금/충전 화면으로
+        router.push(kind === 'credit' ? '/upgrade?from=credit' : '/upgrade?from=author')
         return
       }
       setError(friendlyError(e, '업로드에 실패했어요. 파일을 확인하고 다시 시도해 주세요.'))
@@ -230,7 +232,7 @@ function DeckNewInner() {
               <span className="deck-spinner" aria-hidden="true" />
               카드뉴스 만드는 중…
             </>
-          ) : '카드뉴스 생성'}
+          ) : <>카드뉴스 생성 <CreditCost n={CREDIT_COST.deck} /></>}
         </button>
         {/* 신뢰 문구의 제자리 = 결심하는 순간 옆 */}
         <p className="text-center text-[12.5px] text-ink-3 mt-3 inline-flex items-center gap-1.5 w-full justify-center">

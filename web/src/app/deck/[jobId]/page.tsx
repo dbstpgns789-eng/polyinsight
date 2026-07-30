@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import AuthGuard from '@/components/auth/AuthGuard'
 import { getStatus, getDeck, patchDeck, nlProposeDeck, friendlyError, listDeckRevisions, restoreDeckRevision, type DeckRevision } from '@/lib/api'
+import { planGateKind } from '@/lib/plan'
 import DeckEditor, { type DeckEditorHandle, type SelectedInfo, type HistoryState, type PageState, type LayerItem } from '@/components/deck/DeckEditor'
 import DeckElementPanel from '@/components/deck/DeckElementPanel'
 import DeckLayersPanel from '@/components/deck/DeckLayersPanel'
@@ -273,7 +274,13 @@ function DeckPageInner() {
       const afterText = target?.eid ? extractEidText(r.data.html, target.eid) : null
       setPending({ html: r.data.html, verify: r.data.verify, afterText, target, beforeText })
     } catch (e) {
-      setEditWarnings([friendlyError(e, 'AI가 응답하지 않았어요. 다시 시도해 주세요.')])
+      // 잔액 부족(pro)·무료 소진이면 충전을 안내한다. 편집 중이라 화면 전환 없이 인라인 메시지로.
+      const kind = planGateKind(e)
+      setEditWarnings([
+        kind === 'credit' || kind === 'author'
+          ? '크레딧이 부족해요. 충전하면 계속 편집할 수 있어요.'
+          : friendlyError(e, 'AI가 응답하지 않았어요. 다시 시도해 주세요.'),
+      ])
     } finally { setProposing(false) }
   }, [jobId, selected, pending])
 

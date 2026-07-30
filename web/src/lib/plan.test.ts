@@ -19,6 +19,15 @@ describe('플랜 게이트 에러 식별', () => {
     expect(planGateKind(err)).toBe('author')
   })
 
+  it('402 ERR-CREDIT-LOW는 credit 게이트로 식별된다 (유료 잔액 부족 → 충전)', () => {
+    const err = Object.assign(new Error('크레딧이 부족해요'), {
+      status: 402,
+      code: 'ERR-CREDIT-LOW',
+    })
+    expect(isPlanGateError(err)).toBe(true)
+    expect(planGateKind(err)).toBe('credit')
+  })
+
   it('★429 브루트포스는 플랜 게이트가 아니다 — 페이월 띄우면 안 됨', () => {
     const err = Object.assign(new Error('너무 많은 시도입니다'), {
       status: 429,

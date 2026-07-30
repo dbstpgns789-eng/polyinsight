@@ -6,6 +6,8 @@
 
 import { useRef, useState } from 'react'
 import type { SelectedInfo } from './DeckEditor'
+import CreditCost from '@/components/CreditCost'
+import { CREDIT_COST } from '@/lib/plan'
 
 const TEXT_PRESETS = [
   { label: '한 줄로 짧게', instruction: '이 텍스트를 의미를 유지하며 한 줄로 짧게 줄여줘.' },
@@ -79,6 +81,7 @@ export default function DeckAIAssistant({
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <span className="text-[13px] font-bold text-ink">✦ AI 도우미</span>
+        <CreditCost n={CREDIT_COST.aiEdit} className="text-[10px] font-semibold text-ink-3 border border-deck-line rounded-full px-1.5 py-0.5 leading-none tabular-nums" />
         {canRevert && (
           <button
             onClick={onRevert}

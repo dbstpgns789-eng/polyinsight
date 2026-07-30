@@ -5,7 +5,10 @@
  * 잘못된 유저에게 결제를 요구하게 된다.
  */
 
-export type PlanGateKind = 'author' | 'export'
+export type PlanGateKind = 'author' | 'export' | 'credit'
+
+// 작업별 크레딧 단가 — backend/core/plans.py의 DECK_COST·AIEDIT_COST와 동기 유지(표시용).
+export const CREDIT_COST = { deck: 10, aiEdit: 2 } as const
 
 export type PlanState = {
   plan: string
@@ -20,6 +23,7 @@ export function planGateKind(err: unknown): PlanGateKind | null {
   if (!e || e.status !== 402) return null
   if (e.code === 'ERR-PLAN-EXPORT') return 'export'
   if (e.code === 'ERR-PLAN-AUTHOR') return 'author'
+  if (e.code === 'ERR-CREDIT-LOW') return 'credit'   // 유료 잔액 부족 → 충전 유도
   return null
 }
 

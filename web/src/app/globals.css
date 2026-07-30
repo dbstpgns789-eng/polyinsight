@@ -1522,6 +1522,8 @@ h1, h2, h3, h4, h5 {
 .credit-badge:active { transform: translateY(1px); }   /* .btn과 동일 택타일 */
 .credit-badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .credit-badge__num { font-weight: 700; }
+/* 버튼 안 인라인 단가(부차 정보라 살짝 흐리게) */
+.credit-cost { font-size: 0.82em; font-weight: 600; opacity: 0.72; font-variant-numeric: tabular-nums; }
 /* 무료 체험 = 중립 톤(크레딧 아님) */
 .credit-badge--free { color: var(--text-2); background: var(--bg-subtle); border-color: var(--border); }
 .credit-badge--free:hover { color: var(--text-1); border-color: var(--text-2); background: var(--bg-subtle); }
