@@ -287,3 +287,20 @@ async def test_inserted_image_survives_to_rendered_png():
         assert 'data-asset-id="redA"' in deck["html"]   # 메타 직렬화 생존
     finally:
         await db.delete_job(jid)
+
+
+def test_card_max_covers_frontend_slider():
+    """백엔드 상한이 프론트 슬라이더보다 작으면 유저가 고른 장수가 **조용히** 깎인다.
+
+    2026-07-31 실측: 슬라이더만 10으로 풀고 AUTHOR_MAX_CARDS를 7로 둬서,
+    8~10장을 고른 유저가 아무 경고 없이 7장을 받고 있었다
+    (routers/deck.py의 `min(card_count, settings.AUTHOR_MAX_CARDS)` 클램프는 침묵한다).
+    두 값이 어긋나는 순간 여기서 걸린다.
+    """
+    page = pathlib.Path(__file__).parents[2] / "web/src/app/deck/new/page.tsx"
+    m = re.search(r"const CARD_MAX\s*=\s*(\d+)", page.read_text(encoding="utf-8"))
+    assert m, "프론트에서 CARD_MAX를 찾지 못했습니다(상수명이 바뀌었나?)"
+    assert settings.AUTHOR_MAX_CARDS >= int(m.group(1)), (
+        f"백엔드 상한 {settings.AUTHOR_MAX_CARDS} < 프론트 슬라이더 최대 {m.group(1)} "
+        "→ 유저 선택이 조용히 깎인다"
+    )

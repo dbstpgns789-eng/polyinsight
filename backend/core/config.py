@@ -30,7 +30,11 @@ class Settings(BaseSettings):
     # 2000은 실전에서 천장에 닿아 LLMTruncationError 발생(2026-07-12). sonnet-5는 추론 토큰이
     # output에 포함돼 짧은 JSON이어도 총량이 크다. 천장을 올려도 과금은 실사용분만.
     JUDGE_MAX_TOKENS: int = 8000
-    AUTHOR_MAX_CARDS: int = 7            # 카드 max 장수(티어로 확장 예정)
+    # 카드 max 장수. ★web/src/app/deck/new/page.tsx의 CARD_MAX와 **같아야 한다**.
+    # 이 값이 더 작으면 routers/deck.py의 클램프가 유저가 고른 장수를 **조용히 깎는다**
+    # (2026-07-31 실측: 프론트 슬라이더만 10으로 풀고 여길 7로 둬서, 8~10장을 고른 유저가
+    #  아무 경고 없이 7장을 받고 있었다).
+    AUTHOR_MAX_CARDS: int = 10
     # ⛔ few-shot 레퍼런스(남의 덱 HTML) — **은퇴(2026-07-13)**. 시각 앵커는 논문 자신이다.
     #
     # 유죄: refs의 색 이름·헥스가 산출물에 그대로 복사됨(#36E0CE '전기 시안' → #3DD6D0 '전기 시안').
