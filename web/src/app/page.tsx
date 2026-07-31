@@ -63,6 +63,7 @@ export default function Home() {
           <nav className="nav__links" aria-label="주요 메뉴">
             <a href="#how-it-works">작동 방식</a>
             <a href="#features">주요 기능</a>
+            <a href="/gallery">갤러리</a>
           </nav>
 
           <div className="nav__actions">
@@ -93,6 +94,7 @@ export default function Home() {
           <nav aria-label="모바일 메뉴">
             <a href="#how-it-works" onClick={() => setMobileNavOpen(false)}>작동 방식</a>
             <a href="#features" onClick={() => setMobileNavOpen(false)}>주요 기능</a>
+            <a href="/gallery" onClick={() => setMobileNavOpen(false)}>갤러리</a>
             <a href="/login" className="mobile-login">로그인</a>
           </nav>
           <a
