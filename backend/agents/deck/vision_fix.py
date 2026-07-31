@@ -167,10 +167,16 @@ async def apply_vision_fix(
     #   출력 15~18k 토큰 × $25/M = 라운드당 $0.45. 실제 덱 5개로 무손실 교체 검증 완료).
     fixed, n_patched, patch_warns = apply_card_patch(html, raw)
     if n_patched == 0:
+        # ★raw를 남긴다(2026-07-31). 서버 실측: 최근 완료 덱 3건 연속으로 "출력에 카드가 없어
+        #   무시" 경고가 떴는데, 모델이 무엇을 뱉었는지 기록이 없어 원인을 확정할 수 없었다.
+        #   "고칠 게 없어서 산문으로 답한 것"과 "결함을 보고도 포맷을 어긴 것"은 결과가 같지만
+        #   처방이 정반대다. 헌법 NEVER: raw 로깅 없이 실호출 금지.
         if patch_warns:
-            logger.warning("vision fix: 패치 적용 0장 — %s", patch_warns[0])
+            logger.warning("vision fix: 패치 적용 0장 (%s) | raw %d자, 앞 400자=%r",
+                           patch_warns[0], len(raw), raw[:400])
             return html, patch_warns
-        logger.info("vision fix: 고칠 것 없음(수렴)")
+        # NO_CHANGES 수렴도 raw 길이를 남긴다 — 짧으면 '검사를 안 한 수렴'을 의심할 근거가 된다.
+        logger.info("vision fix: 고칠 것 없음(수렴) | raw %d자", len(raw))
         return html, []
 
     fixed_cards = len(_CARD_RE.findall(fixed))

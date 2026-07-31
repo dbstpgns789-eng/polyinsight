@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import logging.handlers
+import os
 import sys
 from contextlib import asynccontextmanager
 
@@ -27,7 +29,12 @@ def _setup_file_logging() -> None:
     )
     root = logging.getLogger()
     root.setLevel(logging.INFO)
-    fh = logging.FileHandler("run.log", encoding="utf-8")
+    # 영속 볼륨(/data)이 있으면 그쪽에 쓴다. 컨테이너 작업디렉토리에 쓰면 **재배포마다 증발**해
+    # 사후 진단이 불가능하다(2026-07-31: 비전 루프 3연속 폐기의 원인을 로그가 없어 확정 못 함).
+    log_path = "/data/run.log" if os.path.isdir("/data") else "run.log"
+    fh = logging.handlers.RotatingFileHandler(
+        log_path, maxBytes=20_000_000, backupCount=3, encoding="utf-8",
+    )
     fh.setFormatter(fmt)
     root.addHandler(fh)
 
