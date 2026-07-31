@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-05-19T00:00:00Z",
-  "title": "Design System: PolyInsight",
+  "title": "Design System: PaperSweep",
   "extensions": {
     "colorMeta": {
       "forest-green":        { "role": "primary",   "displayName": "딥 포레스트 그린",  "canonical": "oklch(38% 0.14 152)",  "tonalRamp": ["oklch(15% 0.06 152)", "oklch(22% 0.10 152)", "oklch(32% 0.14 152)", "oklch(38% 0.14 152)", "oklch(52% 0.12 152)", "oklch(72% 0.08 152)", "oklch(85% 0.05 152)", "oklch(94% 0.035 152)"] },
@@ -107,7 +107,7 @@
   ],
   "narrative": {
     "northStar": "The Academic Desk",
-    "overview": "PolyInsight는 연구자의 작업대다. 논문이 펼쳐져 있고, 형광펜이 그어져 있으며, 출처가 정확히 표기되어 있다. 이 시스템이 내리는 모든 시각적 결정은 하나의 질문으로 수렴한다: 이것이 연구자의 집중을 돕는가?\n\n색상은 차분하고 틴팅이 일관적이다. 딥 포레스트 그린은 전형적인 SaaS 블루/퍼플을 의도적으로 반사하며, 학술지와 연구 환경의 색조를 연상시킨다. 모든 중성색은 hue 152로 미세하게 틴팅되어 전체 인터페이스에 일관된 온도감을 준다.\n\n위험도 시스템(CRITICAL / HIGH / MEDIUM / OK)은 제품 철학 '수치가 신뢰다'의 시각적 구현이다. 빨강, 주황, 노랑, 초록의 신호등 체계는 장식이 아니라 책임의 표시다.",
+    "overview": "PaperSweep는 연구자의 작업대다. 논문이 펼쳐져 있고, 형광펜이 그어져 있으며, 출처가 정확히 표기되어 있다. 이 시스템이 내리는 모든 시각적 결정은 하나의 질문으로 수렴한다: 이것이 연구자의 집중을 돕는가?\n\n색상은 차분하고 틴팅이 일관적이다. 딥 포레스트 그린은 전형적인 SaaS 블루/퍼플을 의도적으로 반사하며, 학술지와 연구 환경의 색조를 연상시킨다. 모든 중성색은 hue 152로 미세하게 틴팅되어 전체 인터페이스에 일관된 온도감을 준다.\n\n위험도 시스템(CRITICAL / HIGH / MEDIUM / OK)은 제품 철학 '수치가 신뢰다'의 시각적 구현이다. 빨강, 주황, 노랑, 초록의 신호등 체계는 장식이 아니라 책임의 표시다.",
     "keyCharacteristics": [
       "모든 색상은 OKLCH, hue 152로 일관 틴팅",
       "그림자는 상태에만 반응 — 기본 상태 평평",

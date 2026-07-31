@@ -3,7 +3,7 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "PolyInsight: 논문 PDF 하나로 카드뉴스 완성",
+  title: "PaperSweep: 논문 PDF 하나로 카드뉴스 완성",
   description:
     "학술 논문을 업로드하면 AI가 원문에서 핵심 내용을 직접 추출해 카드뉴스를 만듭니다. 수치와 근거는 논문 그대로, 편집 가능한 형태로 제공됩니다.",
 };

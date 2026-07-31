@@ -96,12 +96,12 @@ Mirra 플레이북 + fidelity 해자:
 예시:
 좋은 논문도 알려지지 않으면 읽히지 않습니다.
 
-PolyInsight — PDF 업로드하면 수치 검증된 카드뉴스 5장.
+PaperSweep — PDF 업로드하면 수치 검증된 카드뉴스 5장.
 수치는 원문 그대로. 오류 없음.
 
 → [링크]
 
-#연구자 #학술카드뉴스 #PolyInsight
+#연구자 #학술카드뉴스 #PaperSweep
 ```
 
 ### Instagram

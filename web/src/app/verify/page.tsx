@@ -27,8 +27,8 @@ export default function VerifyPage() {
   return (
     <div className="verify-wrap">
       <div className="verify-card">
-        <Link href="/" className="verify-logo" aria-label="PolyInsight 홈">
-          Poly<span>Insight</span>
+        <Link href="/" className="verify-logo" aria-label="PaperSweep 홈">
+          Paper<span>Sweep</span>
         </Link>
 
         {state === 'loading' && <p className="verify-msg">이메일 인증 중…</p>}
@@ -36,7 +36,7 @@ export default function VerifyPage() {
         {state === 'ok' && (
           <>
             <h1 className="verify-title">이메일 인증이 완료됐습니다</h1>
-            <p className="verify-msg">이제 PolyInsight를 편하게 이용하세요.</p>
+            <p className="verify-msg">이제 PaperSweep를 편하게 이용하세요.</p>
             <Link href="/dashboard" className="btn btn-primary btn-lg">대시보드로 가기</Link>
           </>
         )}

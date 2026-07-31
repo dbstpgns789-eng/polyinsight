@@ -121,7 +121,7 @@ export default function Topbar({ filename, saveState, onSaveNow, onExport, onRen
             href="/dashboard"
             className="inline-flex items-center shrink-0 no-underline"
             style={{ gap: 10, color: 'var(--ink)' }}
-            aria-label="PolyInsight 홈"
+            aria-label="PaperSweep 홈"
           >
             <span
               className="flex items-center justify-center text-white"
@@ -135,7 +135,7 @@ export default function Topbar({ filename, saveState, onSaveNow, onExport, onRen
               <IconDoc />
             </span>
             <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1, color: 'var(--ink)' }}>
-              PolyInsight
+              PaperSweep
             </span>
           </a>
 

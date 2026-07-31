@@ -19,7 +19,7 @@ _RESEND_URL = "https://api.resend.com/emails"
 def _verify_html(link: str) -> str:
     return (
         '<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">'
-        '<h2 style="font-weight:700">PolyInsight 이메일 인증</h2>'
+        '<h2 style="font-weight:700">PaperSweep 이메일 인증</h2>'
         '<p>아래 버튼을 눌러 이메일을 인증해 주세요. 링크는 24시간 후 만료됩니다.</p>'
         f'<p><a href="{link}" style="display:inline-block;background:#0b8a67;color:#fff;'
         'text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600">이메일 인증</a></p>'
@@ -54,13 +54,13 @@ async def _send(to: str, subject: str, html: str) -> bool:
 
 
 async def send_verification_email(to: str, link: str) -> bool:
-    return await _send(to, "PolyInsight 이메일 인증", _verify_html(link))
+    return await _send(to, "PaperSweep 이메일 인증", _verify_html(link))
 
 
 def _reset_html(link: str) -> str:
     return (
         '<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">'
-        '<h2 style="font-weight:700">PolyInsight 비밀번호 재설정</h2>'
+        '<h2 style="font-weight:700">PaperSweep 비밀번호 재설정</h2>'
         '<p>아래 버튼을 눌러 새 비밀번호를 설정해 주세요. 링크는 2시간 후 만료됩니다.</p>'
         '<p>요청하지 않으셨다면 이 메일을 무시하세요 — 비밀번호는 바뀌지 않습니다.</p>'
         f'<p><a href="{link}" style="display:inline-block;background:#0b8a67;color:#fff;'
@@ -71,4 +71,4 @@ def _reset_html(link: str) -> str:
 
 
 async def send_reset_email(to: str, link: str) -> bool:
-    return await _send(to, "PolyInsight 비밀번호 재설정", _reset_html(link))
+    return await _send(to, "PaperSweep 비밀번호 재설정", _reset_html(link))

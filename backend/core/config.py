@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     # ── 이메일 인증 (Resend, 2026-07-02) ──────────────────────
     RESEND_API_KEY: str = ""             # 비우면 발송 no-op(dormant). https://resend.com
     EMAIL_FROM: str = "onboarding@resend.dev"   # 도메인 DKIM 검증 전엔 이걸로 본인 메일함 테스트
-    EMAIL_FROM_NAME: str = "PolyInsight"
+    EMAIL_FROM_NAME: str = "PaperSweep"
     VERIFY_TOKEN_TTL_HOURS: int = 24
     # 이메일 링크의 사용자-대면 베이스 URL. 비우면 WEB_BASE_URL 폴백(로컬).
     # ⚠️ 프로덕션 필수: WEB_BASE_URL은 내부 렌더 호스트(compose=http://web:3000, 브라우저 접근불가) →

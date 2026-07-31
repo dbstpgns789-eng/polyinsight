@@ -1,5 +1,5 @@
 # 05 · Agent Design
-> PolyInsight v2.1 | 2026-05-18
+> PaperSweep v2.1 | 2026-05-18
 > 에이전트 계약(Agent Contracts) 및 S6 프롬프트 규칙
 > CLAUDE.md §3·§4·§5·§6을 코드 수준으로 구체화한 문서.
 

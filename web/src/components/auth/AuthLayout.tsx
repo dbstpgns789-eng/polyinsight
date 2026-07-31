@@ -7,7 +7,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <div className="auth-brand" aria-hidden="true">
         <div className="auth-brand__inner">
           <Link href="/" className="auth-brand__logo">
-            Poly<span>Insight</span>
+            Paper<span>Sweep</span>
           </Link>
 
           <div className="auth-brand__content">
@@ -25,8 +25,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
       <div className="auth-panel">
         <div className="auth-panel__inner">
           <div className="auth-mobile-brand">
-            <Link href="/" className="auth-brand__logo" aria-label="PolyInsight 홈으로">
-              Poly<span>Insight</span>
+            <Link href="/" className="auth-brand__logo" aria-label="PaperSweep 홈으로">
+              Paper<span>Sweep</span>
             </Link>
             <p className="auth-mobile-brand__desc">논문 PDF에서 카드뉴스를 자동 생성합니다.</p>
           </div>

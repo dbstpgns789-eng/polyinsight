@@ -15,7 +15,7 @@
      ⚠️ DB 스냅샷과 같은 시점 쌍으로 복원 — storage_key(DB)와 파일이 어긋나면 dangling.
 
 Windows 스케줄 등록(일 1회 03:00):
-  schtasks /Create /TN PolyInsightBackup /SC DAILY /ST 03:00 /TR "cmd /c cd /d <레포루트> && .venv\\Scripts\\python.exe -m backend.scripts.backup_db"
+  schtasks /Create /TN PaperSweepBackup /SC DAILY /ST 03:00 /TR "cmd /c cd /d <레포루트> && .venv\\Scripts\\python.exe -m backend.scripts.backup_db"
 
 배포 후 리눅스 크론:
   0 3 * * * cd /path/to/polyinsight && .venv/bin/python -m backend.scripts.backup_db

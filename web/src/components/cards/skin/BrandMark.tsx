@@ -1,4 +1,4 @@
-// BrandMark — POLYINSIGHT 로고 마크(정적, 편집 불가). 우상단 배치.
+// BrandMark — PAPERSWEEP 로고 마크(정적, 편집 불가). 우상단 배치.
 
 export default function BrandMark() {
   return (
@@ -10,7 +10,7 @@ export default function BrandMark() {
       color: 'var(--set-ink-muted)',
       whiteSpace: 'nowrap',
     }}>
-      POLY<span style={{ color: 'var(--set-accent)' }}>INSIGHT</span>
+      PAPER<span style={{ color: 'var(--set-accent)' }}>SWEEP</span>
     </div>
   )
 }

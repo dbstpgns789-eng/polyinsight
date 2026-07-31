@@ -1,6 +1,6 @@
 # PRD.md — Product Requirements Document
 
-> PolyInsight MVP 제품 요구사항 정의서
+> PaperSweep MVP 제품 요구사항 정의서
 > 최종 확정 기준: CPO 승인 → 이후 CTO/CDO 작업 시작
 
 ---

@@ -1,5 +1,5 @@
 # API & Data Model
-> PolyInsight v2.1 | 2026-05-18
+> PaperSweep v2.1 | 2026-05-18
 
 ---
 

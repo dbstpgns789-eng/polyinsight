@@ -1,4 +1,4 @@
-# PolyInsight 단일 호스트 배포 (Azure B2als v2 VM, Japan East)
+# PaperSweep 단일 호스트 배포 (Azure B2als v2 VM, Japan East)
 # web ↔ backend는 compose 네트워크에서 service명으로 통신(= 기존 localhost 결합 대체).
 # 앞문 = Caddy(자동 HTTPS)가 Azure 무료 호스트네임(SITE_ADDRESS)으로 web:3000을 노출.
 # 도메인 구매 0원 — Azure DNS 라벨 + Let's Encrypt 자동 인증서. NSG/ufw에 80·443 개방 필요.
