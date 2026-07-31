@@ -8,13 +8,18 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "./polyinsight.db"
     LLM_MODEL: str = "claude-haiku-4-5-20251001"
     LLM_MODEL_ARCHITECT: str = "claude-sonnet-4-6"  # 설계팀(레이아웃 판단) 전용 — 토큰 작아 비용 낮음
-    # 헌법 v3.0 단일 저작(Deck Authoring) — 강력한 모델의 현실적 상한 = Opus 4.8.
-    # (Fable 5는 thinking always-on으로 토큰 과다 → 비용/속도 부담. Opus 4.8=반값 $5/$25,
-    #  thinking 파라미터 생략 시 off라 토큰 효율↑. llm_client가 sampling 파라미터 자동 생략.)
-    # 더 저렴하게: "claude-sonnet-4-6"($3/$15). 더 강하게: "claude-fable-5". .env override 가능.
-    LLM_MODEL_AUTHOR: str = "claude-opus-4-8"
+    # 헌법 v3.0 단일 저작(Deck Authoring). 모델 = Opus 5.
+    # 2026-07-31 전환(구: Opus 4.8): 구 주석은 "thinking 생략 시 off라 토큰 효율↑"를 4.8 선택
+    # 근거로 삼았다. 그 대가가 실측됐다. 논문 이해·서사·레이아웃 발명을 사고 0으로 시키고
+    # 있었고, 같은 논문을 사고 켜고 저작한 세션 산출물에 밀렸다. Opus 5는 4.8과 동일 단가
+    # ($5/$25)에 thinking이 기본 on(생략해도 adaptive)이라, 비용 프리미엄 없이 사고를 되찾는다.
+    # (Fable 5는 $10/$50로 2배. 사고만 원하면 지불할 이유 없음.)
+    # 더 저렴하게: "claude-sonnet-4-6"($3/$15). .env override 가능.
+    LLM_MODEL_AUTHOR: str = "claude-opus-5"
     AUTHOR_TIMEOUT_S: int = 600          # 대용량 HTML 1회 저작 — 기본 120s로 부족
-    AUTHOR_MAX_TOKENS: int = 32000       # 정교한 아트디렉션 덱도 안 잘리게(streaming으로 호출 → 10분 제한 무관)
+    # ★thinking on이면 max_tokens는 사고+응답 **합산** 상한이다. 32000은 4.8(사고 0) 기준이라
+    #  사고가 먹으면 HTML이 중간에 잘린다(LLMTruncationError). llm_client ceiling과 동일하게 상향.
+    AUTHOR_MAX_TOKENS: int = 64000
     # 자연어 편집(nl_patch)은 백지 저작이 아니라 기존 덱 국소 수정 — Opus 불필요. Sonnet으로 속도·비용↓
     # (Opus 편집 실측 ~2.5분/호출 → 편집 UX 붕괴). .env override 가능.
     LLM_MODEL_EDIT: str = "claude-sonnet-4-6"
