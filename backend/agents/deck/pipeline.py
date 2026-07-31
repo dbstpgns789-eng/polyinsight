@@ -298,7 +298,12 @@ async def _execute(
             for rnd in range(1, settings.AUTHOR_VISION_ROUNDS + 1):
                 await db.update_job(job_id, status=JobStatus.RUNNING, stage="POLISH",
                                     progress=55 + rnd * 5)
-                draft_pngs, _ = await render_deck(html)   # job_id 없이 = 저장하지 않는 임시 렌더
+                # ★scale=1 = 카드 원본 픽셀(1080×1350) 그대로. 판정용 렌더에 레티나는 필요 없다
+                #   (죽은 공간·겹침·비율·대비는 원본 해상도에서 전부 보인다). 기본값 2를 그대로 쓰면
+                #   2160×2700이 되어 이미지 토큰이 카드당 상한(~4.8k)에 붙는다. 원본이면 ~1.9k.
+                #   7장 × 2라운드 기준 덱당 약 $0.2 차이. 레티나 2배는 사용자에게 줄 최종 PNG용이지
+                #   모델이 결함을 찾는 용도가 아니다(2026-07-31, 남의 기본값이 새어든 자리).
+                draft_pngs, _ = await render_deck(html, scale=1)   # job_id 없이 = 저장 안 하는 임시 렌더
                 fixed, fix_warns = await apply_vision_fix(html, draft_pngs, round_no=rnd)
                 warnings.extend(fix_warns)
                 if fixed == html:                         # 고칠 게 없다 → 수렴, 조기 종료
