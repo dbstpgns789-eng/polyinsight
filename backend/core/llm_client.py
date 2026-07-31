@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # sampling 파라미터(temperature/top_p/top_k)를 거부하는 모델 — 전송 시 400.
 _NO_SAMPLING_PREFIXES = (
     "claude-fable-5", "claude-mythos-5",
-    "claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-5",
+    "claude-opus-4-8", "claude-opus-4-7", "claude-opus-5", "claude-sonnet-5",
 )
 
 
