@@ -19,6 +19,11 @@ interface Props {
 
 const IG_LIMIT = 2200  // 인스타 캡션 글자 상한 (초과분은 인스타가 자름)
 
+// 인스타 발행 임시 차단(2026-07-31). 이유: ①"인스타에 올리기" 진입 시 getDeckCaption(LLM)이 즉시
+// 호출돼 클릭만으로 비용 발생 ②자동발행(Meta)은 앱 심사 미승인. 준비되면 true로 되살린다.
+// 버튼만 숨겨 진입 자체를 막으므로 캡션 호출 0 · 자동발행 차단(코드는 그대로 둔다 = 되살리기 쉽게).
+const IG_PUBLISH_ENABLED = false
+
 export default function DeckExportModal({ jobId, filename, cardCount, unverified, onClose }: Props) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -222,12 +227,17 @@ export default function DeckExportModal({ jobId, filename, cardCount, unverified
             {error && <p className="mt-3 text-[11.5px] text-risk-medium">{error}</p>}
 
             <div className="mt-5 grid gap-2">
-              <button onClick={enterInstagram}
-                className="h-11 rounded-lg bg-forest-green text-canvas text-[13.5px] font-bold">
-                📸 인스타에 올리기
-              </button>
+              {IG_PUBLISH_ENABLED && (
+                <button onClick={enterInstagram}
+                  className="h-11 rounded-lg bg-forest-green text-canvas text-[13.5px] font-bold">
+                  인스타에 올리기
+                </button>
+              )}
+              {/* 인스타 차단 시 ZIP이 유일한 주 액션 → 초록 primary로 승격 */}
               <button onClick={handleExport} disabled={busy}
-                className="h-10 rounded-lg border border-border text-ink-2 text-[13px] font-semibold disabled:opacity-40">
+                className={IG_PUBLISH_ENABLED
+                  ? 'h-10 rounded-lg border border-border text-ink-2 text-[13px] font-semibold disabled:opacity-40'
+                  : 'h-11 rounded-lg bg-forest-green text-canvas text-[13.5px] font-bold disabled:opacity-40'}>
                 {busy ? '내보내는 중…' : 'ZIP으로 내보내기'}
               </button>
               <button onClick={onClose} disabled={busy}
