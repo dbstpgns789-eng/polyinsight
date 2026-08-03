@@ -25,7 +25,6 @@ const DECKS: Deck[] = [
 ]
 
 const cardSrc = (slug: string, i: number) => `/gallery/${slug}/${String(i + 1).padStart(2, '0')}.png`
-const TOTAL_CARDS = DECKS.reduce((s, d) => s + d.n, 0)
 
 // ── 덱 라이트박스: 카드 1장씩 좌우 스와이프 ─────────────────────────────
 function DeckLightbox({ deck, onClose }: { deck: Deck; onClose: () => void }) {
@@ -157,9 +156,6 @@ export default function GalleryPage() {
             <h1 className="mt-2 text-[clamp(1.8rem,4.4vw,2.7rem)] font-extrabold tracking-tight text-ink" style={{ textWrap: 'balance' }}>
               논문이 카드뉴스가 되기까지
             </h1>
-            <p className="mt-4 text-[13px] text-ink-3 tabular-nums">
-              카드뉴스 {DECKS.length}편 · 카드 {TOTAL_CARDS}장
-            </p>
           </div>
         </section>
 
