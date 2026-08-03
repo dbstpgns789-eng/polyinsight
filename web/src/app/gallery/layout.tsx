@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '갤러리 - PolyInsight',
+  title: '갤러리 - PaperSweep',
   description: '논문 PDF에서 만들어진 카드뉴스 모음.',
 }
 

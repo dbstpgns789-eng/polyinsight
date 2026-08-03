@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-export const metadata: Metadata = { title: '데이터 삭제 요청 — PolyInsight' };
+export const metadata: Metadata = { title: '데이터 삭제 요청 · PaperSweep' };
 
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 720, margin: '0 auto', padding: '64px 24px 96px', lineHeight: 1.75 },
@@ -15,7 +15,7 @@ const S: Record<string, React.CSSProperties> = {
 export default function DataDeletionPage() {
   return (
     <article style={S.wrap}>
-      <Link href="/" className="auth-link">← PolyInsight 홈</Link>
+      <Link href="/" className="auth-link">← PaperSweep 홈</Link>
       <h1 style={{ ...S.h1, marginTop: 24 }}>데이터 삭제 요청</h1>
       <p style={S.date}>시행일: 2026년 7월 3일</p>
 
