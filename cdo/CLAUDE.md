@@ -1,5 +1,5 @@
 ﻿# CLAUDE.md — CDO (디자인 & 프론트엔드)
-> PolyInsight 디자인 시스템 + 프론트엔드 구현
+> PaperSweep 디자인 시스템 + 프론트엔드 구현
 > 선행 읽기: 루트 `../CLAUDE.md` → 이 파일
 
 ---

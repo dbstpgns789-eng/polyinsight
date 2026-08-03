@@ -1,4 +1,4 @@
-# PolyInsight 백엔드 (FastAPI + Playwright/Chromium)
+# PaperSweep 백엔드 (FastAPI + Playwright/Chromium)
 # Playwright 공식 python 이미지 = Chromium + 시스템 의존성 포함, arm64(Oracle Ampere) 지원.
 FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
 

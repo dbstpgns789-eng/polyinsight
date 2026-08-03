@@ -10,6 +10,9 @@
 기대 동작(Figma·Canva 관례): 이미 편집 중인 텍스트를 다시 끌면 텍스트 범위 선택이고,
       요소는 움직이지 않는다. 옮기고 싶으면 편집을 벗어난 뒤(딴 데 클릭) 끈다.
 
+★2026-07-27 갱신: 편집 진입이 '한 번 클릭'에서 '더블클릭'으로 바뀌었다(피그마 모델).
+  한 번 클릭은 선택까지만이라 그 상태의 드래그는 요소 이동이다 — figma_text_model.py가 그쪽을 지킨다.
+
 이 하네스는 두 가지를 함께 지킨다.
   1) 편집 중 드래그 → 텍스트가 선택되고 요소는 제자리
   2) 편집 아닐 때 드래그 → 요소가 이동(기존 기능 무회귀)
@@ -94,9 +97,9 @@ async def main() -> int:
         y = box["y"] + box["height"] / 2
         x0 = box["x"] + 30
 
-        # ① 한 번 클릭 → 선택 + 편집 진입
-        await pg.mouse.click(x0, y)
-        await pg.wait_for_timeout(120)
+        # ① 더블클릭 → 편집 진입 (2026-07-27 피그마 모델: 한 번 클릭은 선택까지만이다)
+        await pg.mouse.dblclick(x0, y)
+        await pg.wait_for_timeout(150)
         after_click = await pg.evaluate(STATE)
 
         # ② 편집 중인 텍스트를 다시 끈다 → 범위 선택이어야 하고 요소는 제자리

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
-export const metadata: Metadata = { title: '이용약관 — PolyInsight' };
+export const metadata: Metadata = { title: '이용약관 — PaperSweep' };
 
 const S: Record<string, React.CSSProperties> = {
   wrap: { maxWidth: 720, margin: '0 auto', padding: '64px 24px 96px', lineHeight: 1.75 },
@@ -14,13 +14,13 @@ const S: Record<string, React.CSSProperties> = {
 export default function TermsPage() {
   return (
     <article style={S.wrap}>
-      <Link href="/" className="auth-link">← PolyInsight 홈</Link>
+      <Link href="/" className="auth-link">← PaperSweep 홈</Link>
       <h1 style={{ ...S.h1, marginTop: 24 }}>이용약관</h1>
       <p style={S.date}>시행일: 2026년 7월 3일</p>
 
       <h2 style={S.h2}>제1조 (목적)</h2>
       <p style={S.p}>
-        이 약관은 PolyInsight(이하 &ldquo;서비스&rdquo;)가 제공하는 학술 논문 기반 카드뉴스 생성
+        이 약관은 PaperSweep(이하 &ldquo;서비스&rdquo;)가 제공하는 학술 논문 기반 카드뉴스 생성
         서비스의 이용 조건과 운영자·이용자의 권리와 의무를 정합니다.
       </p>
 

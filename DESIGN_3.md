@@ -1,5 +1,5 @@
 ---
-name: PolyInsight
+name: PaperSweep
 description: 학술 논문 PDF를 원문 기반 카드뉴스로 변환하는 연구자 도구
 colors:
   # Brand Accent (Max 10% usage)
@@ -31,7 +31,7 @@ colors:
   status-ok:           "oklch(34% 0.12 152)"
 ---
 
-# PolyInsight Design System & Component Rules
+# PaperSweep Design System & Component Rules
 
 ## 1. Layout Architecture (Viewport-Fit)
 - **전체 화면 제약 (`Screen Constraint`):** 대시보드는 브라우저 줌 100% 상태에서 세로 스크롤바가 발생하지 않는 `h-screen overflow-hidden`을 기본 뼈대로 삼는다.

@@ -8,13 +8,18 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "./polyinsight.db"
     LLM_MODEL: str = "claude-haiku-4-5-20251001"
     LLM_MODEL_ARCHITECT: str = "claude-sonnet-4-6"  # 설계팀(레이아웃 판단) 전용 — 토큰 작아 비용 낮음
-    # 헌법 v3.0 단일 저작(Deck Authoring) — 강력한 모델의 현실적 상한 = Opus 4.8.
-    # (Fable 5는 thinking always-on으로 토큰 과다 → 비용/속도 부담. Opus 4.8=반값 $5/$25,
-    #  thinking 파라미터 생략 시 off라 토큰 효율↑. llm_client가 sampling 파라미터 자동 생략.)
-    # 더 저렴하게: "claude-sonnet-4-6"($3/$15). 더 강하게: "claude-fable-5". .env override 가능.
-    LLM_MODEL_AUTHOR: str = "claude-opus-4-8"
+    # 헌법 v3.0 단일 저작(Deck Authoring). 모델 = Opus 5.
+    # 2026-07-31 전환(구: Opus 4.8): 구 주석은 "thinking 생략 시 off라 토큰 효율↑"를 4.8 선택
+    # 근거로 삼았다. 그 대가가 실측됐다. 논문 이해·서사·레이아웃 발명을 사고 0으로 시키고
+    # 있었고, 같은 논문을 사고 켜고 저작한 세션 산출물에 밀렸다. Opus 5는 4.8과 동일 단가
+    # ($5/$25)에 thinking이 기본 on(생략해도 adaptive)이라, 비용 프리미엄 없이 사고를 되찾는다.
+    # (Fable 5는 $10/$50로 2배. 사고만 원하면 지불할 이유 없음.)
+    # 더 저렴하게: "claude-sonnet-4-6"($3/$15). .env override 가능.
+    LLM_MODEL_AUTHOR: str = "claude-opus-5"
     AUTHOR_TIMEOUT_S: int = 600          # 대용량 HTML 1회 저작 — 기본 120s로 부족
-    AUTHOR_MAX_TOKENS: int = 32000       # 정교한 아트디렉션 덱도 안 잘리게(streaming으로 호출 → 10분 제한 무관)
+    # ★thinking on이면 max_tokens는 사고+응답 **합산** 상한이다. 32000은 4.8(사고 0) 기준이라
+    #  사고가 먹으면 HTML이 중간에 잘린다(LLMTruncationError). llm_client ceiling과 동일하게 상향.
+    AUTHOR_MAX_TOKENS: int = 64000
     # 자연어 편집(nl_patch)은 백지 저작이 아니라 기존 덱 국소 수정 — Opus 불필요. Sonnet으로 속도·비용↓
     # (Opus 편집 실측 ~2.5분/호출 → 편집 UX 붕괴). .env override 가능.
     LLM_MODEL_EDIT: str = "claude-sonnet-4-6"
@@ -25,7 +30,11 @@ class Settings(BaseSettings):
     # 2000은 실전에서 천장에 닿아 LLMTruncationError 발생(2026-07-12). sonnet-5는 추론 토큰이
     # output에 포함돼 짧은 JSON이어도 총량이 크다. 천장을 올려도 과금은 실사용분만.
     JUDGE_MAX_TOKENS: int = 8000
-    AUTHOR_MAX_CARDS: int = 7            # 카드 max 장수(티어로 확장 예정)
+    # 카드 max 장수. ★web/src/app/deck/new/page.tsx의 CARD_MAX와 **같아야 한다**.
+    # 이 값이 더 작으면 routers/deck.py의 클램프가 유저가 고른 장수를 **조용히 깎는다**
+    # (2026-07-31 실측: 프론트 슬라이더만 10으로 풀고 여길 7로 둬서, 8~10장을 고른 유저가
+    #  아무 경고 없이 7장을 받고 있었다).
+    AUTHOR_MAX_CARDS: int = 10
     # ⛔ few-shot 레퍼런스(남의 덱 HTML) — **은퇴(2026-07-13)**. 시각 앵커는 논문 자신이다.
     #
     # 유죄: refs의 색 이름·헥스가 산출물에 그대로 복사됨(#36E0CE '전기 시안' → #3DD6D0 '전기 시안').
@@ -117,7 +126,7 @@ class Settings(BaseSettings):
     # ── 이메일 인증 (Resend, 2026-07-02) ──────────────────────
     RESEND_API_KEY: str = ""             # 비우면 발송 no-op(dormant). https://resend.com
     EMAIL_FROM: str = "onboarding@resend.dev"   # 도메인 DKIM 검증 전엔 이걸로 본인 메일함 테스트
-    EMAIL_FROM_NAME: str = "PolyInsight"
+    EMAIL_FROM_NAME: str = "PaperSweep"
     VERIFY_TOKEN_TTL_HOURS: int = 24
     # 이메일 링크의 사용자-대면 베이스 URL. 비우면 WEB_BASE_URL 폴백(로컬).
     # ⚠️ 프로덕션 필수: WEB_BASE_URL은 내부 렌더 호스트(compose=http://web:3000, 브라우저 접근불가) →

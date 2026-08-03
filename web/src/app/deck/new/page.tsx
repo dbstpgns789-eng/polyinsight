@@ -29,7 +29,11 @@ const EXAMPLE_UTTERANCES = [
   'Table 3 결과를 표지 메인으로 강조해줘',
 ]
 
-const CARD_TICKS = [3, 4, 5, 6, 7]
+// 상한 10 = 인스타그램 캐러셀 최대 장수(발행 관점의 실질 천장). 백엔드는 12까지 받는다.
+// 7이던 옛 상한은 Haiku 시절 출력 토큰 8,192 천장 탓이었다 — 지금은 Opus에 32,000이라 근거가 사라졌다.
+const CARD_TICKS = [3, 4, 5, 6, 7, 8, 9, 10]
+const CARD_MIN = 3
+const CARD_MAX = 10
 
 function formatSize(bytes: number): string {
   return bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`
@@ -94,7 +98,7 @@ function DeckNewInner() {
     }
   }, [file, cardCount, style, router])
 
-  const fillPct = `${((cardCount - 3) / 4) * 100}%`
+  const fillPct = `${((cardCount - CARD_MIN) / (CARD_MAX - CARD_MIN)) * 100}%`
 
   return (
     <div className="min-h-screen bg-canvas-subtle flex justify-center px-6 pt-13 pb-19" style={{ wordBreak: 'keep-all' }}>
@@ -206,7 +210,7 @@ function DeckNewInner() {
             <span className="text-[15px] font-extrabold text-forest-green-deep">{cardCount}장</span>
           </div>
           <input
-            type="range" min={3} max={7} step={1} value={cardCount}
+            type="range" min={CARD_MIN} max={CARD_MAX} step={1} value={cardCount}
             onChange={(e) => setCardCount(Number(e.target.value))}
             className="deck-range w-full"
             style={{ background: `linear-gradient(to right, var(--accent) ${fillPct}, var(--border) ${fillPct})` }}

@@ -1,5 +1,5 @@
 # Problem Definition
-> PolyInsight v2.0 | 2025-05-05
+> PaperSweep v2.0 | 2025-05-05
 
 ---
 

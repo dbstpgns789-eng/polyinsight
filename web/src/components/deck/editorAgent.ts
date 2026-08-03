@@ -48,6 +48,8 @@ const AGENT_BODY = `
     if (el.querySelector('div,section,svg,img,ul,ol,table,figure,canvas,header,footer,article')) return false;
     return (el.textContent || '').trim().length > 0;
   }
+  // inline이어도 그 자체가 선택 대상인 것들(replaced) — 부모로 올리면 안 된다.
+  var INLINE_SKIP = { IMG: 1, SVG: 1, VIDEO: 1, CANVAS: 1, INPUT: 1, BUTTON: 1, IFRAME: 1, OBJECT: 1 };
   function isPiArtifact(el) {
     return el.hasAttribute && (el.hasAttribute('data-pi-artifact') || el.hasAttribute('data-pi-overlay') || el.hasAttribute('data-pi-handle') || el.hasAttribute('data-pi-guide'));
   }
@@ -62,6 +64,17 @@ const AGENT_BODY = `
     if (el.ownerSVGElement) {
       var tn = (el.tagName || '').toLowerCase();
       if (tn === 'tspan' || tn === 'textpath') el = el.parentNode;
+    }
+    // ★ 부분 색상용 <span>("구슬"만 초록) 같은 인라인 조각은 편집 단위가 아니다 — 그것만 잡히면
+    // 제목을 옮기려고 글자를 눌렀는데 두 글자만 선택된다(2026-07-27 제보). 피그마는 부분 색상이
+    // 스타일 속성이라 별도 노드가 안 생기고 늘 텍스트 박스 전체가 잡힌다. 여기서도 텍스트 박스로 올린다.
+    // img·svg 등 replaced 요소는 inline이어도 그 자체가 대상이므로 제외한다.
+    if (!el.ownerSVGElement) {
+      while (el && el.parentElement && !INLINE_SKIP[el.tagName]
+             && !(el.hasAttribute && el.hasAttribute('data-screen-label'))
+             && getComputedStyle(el).display === 'inline') {
+        el = el.parentElement;
+      }
     }
     if (isPiArtifact(el)) return null;
     if (el.hasAttribute && el.hasAttribute('data-screen-label')) return null; // 카드 프레임 자체는 선택 안 함
@@ -118,11 +131,20 @@ const AGENT_BODY = `
     var es = document.querySelectorAll('[contenteditable]');
     for (var i = 0; i < es.length; i++) { es[i].removeAttribute('contenteditable'); es[i].style.outline = ''; }
   }
-  // 정확히 1개 텍스트 리프 선택일 때만 인라인 편집 허용(1→다중 전환 시 편집 해제)
+  // ★ 선택과 편집은 다른 상태다(피그마 모델, 2026-07-27). 한 번 클릭 = 선택까지만 —
+  // 텍스트 박스 어디를 잡아도 통째로 잡혀 드래그로 움직인다. 내용 수정은 더블클릭으로 들어간다.
+  // (예전엔 선택만 해도 contenteditable이 붙어 선택 상태와 편집 상태가 구분되지 않았다.)
   function refreshEditable() {
     clearEditable();
-    var p = primary();
-    if (selection.length === 1 && isTextLeaf(p)) { p.setAttribute('contenteditable', 'true'); p.style.outline = 'none'; }
+  }
+  // 더블클릭으로 텍스트 편집 진입. 브라우저 기본 동작(단어 선택·캐럿)은 그대로 살린다.
+  function enterTextEdit(el) {
+    if (!el || !isTextLeaf(el)) return;
+    clearEditable();
+    el.setAttribute('contenteditable', 'true');
+    el.style.outline = 'none';
+    try { el.focus(); } catch (e) {}
+    beginTextEdit(el);
   }
   function pruneSelection() {
     var kept = [];
@@ -142,7 +164,31 @@ const AGENT_BODY = `
     return d;
   }
   function ensureOverlays(n) { while (overlayPool.length < n) overlayPool.push(makeOverlayEl(false)); }
-  function boxOf(el) { var r = el.getBoundingClientRect(); return { x: r.left + window.scrollX, y: r.top + window.scrollY, w: r.width, h: r.height }; }
+  // ★ 선택 표시의 기준 = 요소 박스 ∪ 실제 글자 범위.
+  // line-height가 1보다 작으면(큰 제목을 타이트하게 붙이는 정상적 조판) 글리프가 라인박스 밖으로
+  // 나간다. 실측: font-size 104px·line-height 0.98·Gowun Batang → 박스 204px인데 글자는 253px
+  // (위 25·아래 24 초과). 초과량은 폰트 메트릭에 좌우된다 — 같은 조건에서 시스템 serif는 2px뿐.
+  // 박스만 그리면 테두리가 보이는 글자와 어긋난다(2026-07-27 제보: 첫 줄이 박스 위로 나가고
+  // 아래는 빈 상자). 피그마는 텍스트 프레임이 늘 글자를 감싸 이 어긋남이 없다 — 합집합이 그 동치다.
+  function glyphRect(el) {
+    if (!el || !el.firstChild) return null;
+    try {
+      var rng = document.createRange();
+      rng.selectNodeContents(el);
+      var r = rng.getBoundingClientRect();
+      return (r.width > 0 && r.height > 0) ? r : null;
+    } catch (e) { return null; }
+  }
+  function boxOf(el) {
+    var r = el.getBoundingClientRect();
+    var x1 = r.left, y1 = r.top, x2 = r.right, y2 = r.bottom;
+    var g = glyphRect(el);
+    if (g) {
+      x1 = Math.min(x1, g.left); y1 = Math.min(y1, g.top);
+      x2 = Math.max(x2, g.right); y2 = Math.max(y2, g.bottom);
+    }
+    return { x: x1 + window.scrollX, y: y1 + window.scrollY, w: x2 - x1, h: y2 - y1 };
+  }
   function unionBox(els) {
     var minx = 1e9, miny = 1e9, maxx = -1e9, maxy = -1e9;
     for (var i = 0; i < els.length; i++) { var b = boxOf(els[i]); minx = Math.min(minx, b.x); miny = Math.min(miny, b.y); maxx = Math.max(maxx, b.x + b.w); maxy = Math.max(maxy, b.y + b.h); }
@@ -383,7 +429,8 @@ const AGENT_BODY = `
   function undo() { commitTextEdit(); var c = undoStack.pop(); if (!c) return; c.undo(); redoStack.push(c); afterHistoryStep(); }
   function redo() { commitTextEdit(); var c = redoStack.pop(); if (!c) return; c.run(); undoStack.push(c); afterHistoryStep(); }
 
-  var LAYOUT_PROPS = ['position', 'left', 'top', 'width', 'height', 'transform', 'margin', 'boxSizing'];
+  // zIndex 포함: freeze가 겹침 순서 보존용으로 박으므로 undo·revertFlow가 함께 원복해야 한다.
+  var LAYOUT_PROPS = ['position', 'left', 'top', 'width', 'height', 'transform', 'margin', 'boxSizing', 'zIndex'];
   function snapInline(el) { var o = {}; for (var i = 0; i < LAYOUT_PROPS.length; i++) o[LAYOUT_PROPS[i]] = el.style[LAYOUT_PROPS[i]] || ''; return o; }
   function applyInline(el, snap) { for (var i = 0; i < LAYOUT_PROPS.length; i++) el.style[LAYOUT_PROPS[i]] = snap[LAYOUT_PROPS[i]]; }
   function layoutCmd(el, before, after) { return { run: function () { applyInline(el, after); }, undo: function () { applyInline(el, before); } }; }
@@ -587,6 +634,27 @@ const AGENT_BODY = `
     }
     return false;
   }
+  // ★ 승격 전 겹침 순서를 z-index로 못박는다(2026-07-30).
+  // CSS는 positioned 요소를 static보다 항상 위에 그린다(z-index가 없어도). 그런데 promoteAll이
+  // 전 요소를 absolute로 올리면 그 우선권이 사라지고 문서 순서가 지배해 **앞뒤가 뒤집힌다** —
+  // 원래 앞이던 게 뒤로 숨는다(하네스 freeze_zorder.py로 재현: front → back 역전).
+  // 승격 전 순서 = [static들(문서순)] 다음 [positioned들(문서순)]. 그 순서대로 1씩 부여한다.
+  // 이미 z-index를 가진 요소는 저작자가 의도한 값이라 건드리지 않는다.
+  // ★형제 단위로 재귀한다. 승격 대상(els)만 보면 '이미 absolute였던 요소'가 빠져 순서가 안 맞고,
+  // 반대로 전 요소를 한 줄로 세우면 부모에 준 z-index가 쌓임 문맥을 만들어 자식이 그 안에 갇힌다.
+  // 같은 부모 안 형제끼리만 순서를 고정하면 계층 관계는 그대로 유지된다.
+  function pinStackOrder(root) {
+    var kids = root.children, statics = [], positioned = [];
+    for (var i = 0; i < kids.length; i++) {
+      var el = kids[i];
+      if (isPiArtifact(el)) continue;
+      var cs = getComputedStyle(el);
+      if (cs.zIndex === 'auto') (cs.position === 'static' ? statics : positioned).push(el);
+      pinStackOrder(el);
+    }
+    var ordered = statics.concat(positioned);          // static이 아래, positioned가 위
+    for (var j = 0; j < ordered.length; j++) ordered[j].style.zIndex = String(j + 1);
+  }
   function freezeCard(card) {
     if (!card || card.getAttribute('data-pi-frozen') === '1') return;
     // ★ 렌더되지 않은 카드는 측정할 수 없다. display:none이면 getBoundingClientRect가 전부 0이라
@@ -611,6 +679,7 @@ const AGENT_BODY = `
       els.push(el);
     }
     pinCollapsingContainers(els, card);  // ★ 붕괴할 컨테이너 박스 고정 → 자식 겹침 방지(마감 크레딧 카드)
+    pinStackOrder(card);                 // ★ 승격 전 겹침 순서를 z-index로 고정 → 앞뒤 역전 차단
     promoteAll(els, card);  // 문서순 → 부모 먼저 → 자식 offsetParent 정확
     card.setAttribute('data-pi-frozen', '1');
   }
@@ -1028,9 +1097,22 @@ const AGENT_BODY = `
     pageStyle.setAttribute('data-pi-artifact', '1');
     // 편집 모드: body 캔버스(프리뷰 배경·패딩·gap)를 정규화 — 현재 카드가 iframe에 꽉 차게.
     // pageStyle은 data-pi-artifact라 serialize에서 제거됨 → 저장/발행 HTML의 body 원본은 보존.
+    // ★ 편집 중 시각 왜곡 두 가지를 여기서 편다(2026-07-30 제보). 둘 다 편집 모드에서만 생기고
+    // 뷰어 PNG는 멀쩡하다 — 렌더는 freeze를 안 거치기 때문. pageStyle은 serialize에서 빠지므로
+    // 저장 HTML·발행 PNG는 원본 그대로다.
+    //
+    // ① 잘림: 저작 모델이 스텝 박스·패널 컨테이너에 overflow:hidden을 준다(실측 덱당 6~9개).
+    //    렌더에는 옳지만 편집 중 요소를 그 박스 밖으로 끌면 잘려 사라진 것처럼 보인다.
+    //    카드 자손만 푼다 — 카드 프레임 자신은 hidden을 유지해야 1080x1350 밖으로 안 넘친다.
+    // ② 겹침 역전: CSS는 positioned 요소를 static보다 항상 위에 그린다. 그런데 freeze가 전부
+    //    absolute로 승격하면 그 우선권이 사라지고 문서 순서가 지배해 앞뒤가 뒤집힌다.
+    //    isolation으로 카드를 독립 쌓임 문맥으로 만들어 바깥 영향을 끊고, 승격 시 z-index를
+    //    원래 순서대로 박아 보존한다(freezeCard 참조).
     pageStyle.textContent = '.pi-hidden{display:none !important;}' +
       'html,body{margin:0 !important;padding:0 !important;background:transparent !important;}' +
-      'body{display:block !important;}';
+      'body{display:block !important;}' +
+      '[data-screen-label] *{overflow:visible !important;}' +
+      '[data-screen-label]{isolation:isolate;}';
     (document.head || document.documentElement).appendChild(pageStyle);
   }
   function applyPaging() {
@@ -1173,6 +1255,14 @@ const AGENT_BODY = `
   });
 
   document.addEventListener('mousedown', onMouseDown, true);
+  // 더블클릭 = 텍스트 편집 진입(피그마 모델). 한 번 클릭은 선택까지만이라 여기서만 편집이 열린다.
+  document.addEventListener('dblclick', function (e) {
+    if (mode !== 'edit') return;
+    var el = pick(e.target);
+    if (!el || !isTextLeaf(el)) return;
+    if (!inSelection(el)) select(el);
+    enterTextEdit(el);
+  }, true);
   document.addEventListener('input', onInput, true);
   // 텍스트 편집 포착: beforeinput에서 변경 전 innerHTML 캡처(재편집도 자동 재무장), 포커스아웃에 커밋.
   document.addEventListener('beforeinput', function (e) {

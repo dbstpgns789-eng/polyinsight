@@ -1,8 +1,12 @@
 'use client'
 
 // v3 덱 Export 모달 (스펙 §4.6) — Portal, 소프트 경고(하드블록 금지, web/CLAUDE.md §7).
-// legacy components/export/ExportModal(uiStore·Card.fields.risk_level 결합) 대체.
 // 무료체험 export-gate(402 ERR-PLAN-EXPORT) → 순수잠금 페이월. 워터마크·타이머·닫기숨김 없음.
+//
+// 2026-07-22 리디자인(P0-3, Mirra 벤치마크): 진입 = 정직한 2선택 카드(동등 위계, 색 오버셀 금지,
+//   서브텍스트로 "뭘 받는지" 명시). 인스타 = "인스타 게시 준비"(자동 아님 명시) + AI 캡션 전면.
+//   ★export/다운로드는 무료(크레딧 차감 X) — Mirra도 다운 무료. 게이트는 plan(무료체험만 페이월).
+//   게이팅은 반응형 유지(클릭→402→페이월, WTP 최고조에서 잡음). 캡션 생성은 무료(아하).
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { exportDeck, getDeckCaption, getExportDownloadUrl, getInstagramStatus, publishInstagram, instagramConnectUrl } from '@/lib/api'
@@ -29,7 +33,7 @@ export default function DeckExportModal({ jobId, filename, cardCount, unverified
   const [error, setError] = useState<string | null>(null)
   const [paywalled, setPaywalled] = useState(false)
 
-  // Phase 0 인스타 올리기
+  // Phase 0 인스타 게시 준비
   const [mode, setMode] = useState<'export' | 'instagram'>('export')
   const [caption, setCaption] = useState('')          // 편집 가능한 최종 텍스트(캡션+해시태그)
   const [capLoading, setCapLoading] = useState(false)
@@ -133,7 +137,7 @@ export default function DeckExportModal({ jobId, filename, cardCount, unverified
             <div className="flex items-center gap-2">
               <button onClick={() => setMode('export')} aria-label="뒤로"
                 className="w-7 h-7 -ml-1 grid place-items-center rounded-lg text-ink-3 hover:bg-bg-subtle text-[16px]">←</button>
-              <h2 className="text-[16px] font-bold text-ink">인스타에 올리기</h2>
+              <h2 className="text-[16px] font-bold text-ink">인스타 게시 준비</h2>
             </div>
 
             {/* 연동 시 앱에서 바로 자동 발행 / 미연동 시 연동 유도. 아래 수동 3단계는 폴백으로 유지 */}
@@ -173,36 +177,39 @@ export default function DeckExportModal({ jobId, filename, cardCount, unverified
                 캡션 만드는 중…
               </div>
             ) : (
-              <>
+              <div className="mt-4 rounded-xl border border-border overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 bg-forest-green-wash border-b border-border">
+                  <span className="text-[11px] font-bold text-forest-green-deep">✦ AI가 쓴 캡션</span>
+                  <button onClick={copyCaption} disabled={!caption}
+                    className="text-[11.5px] font-bold text-forest-green bg-surface border border-border rounded-lg px-2.5 py-1 disabled:opacity-40">
+                    {copied ? '복사됨 ✓' : '복사'}
+                  </button>
+                </div>
                 <textarea
                   value={caption}
                   onChange={(e) => setCaption(e.target.value)}
                   placeholder="캡션을 직접 작성하거나 다듬으세요."
-                  rows={6}
-                  className="mt-4 w-full rounded-xl border border-border p-3 text-[13px] leading-relaxed text-ink resize-none focus:outline-none focus:border-forest-green"
+                  rows={5}
+                  className="w-full px-3 py-3 text-[12.5px] leading-relaxed text-ink resize-none focus:outline-none min-h-[112px]"
                 />
-                <div className="mt-1 flex items-center justify-between">
-                  <span className={`text-[11px] ${caption.length > IG_LIMIT ? 'text-risk-medium font-semibold' : 'text-ink-3'}`}>
+                <div className="px-3 py-1.5 border-t border-border text-right">
+                  <span className={`text-[10.5px] ${caption.length > IG_LIMIT ? 'text-risk-medium font-semibold' : 'text-ink-3'}`}>
                     {caption.length} / {IG_LIMIT}{caption.length > IG_LIMIT ? ' · 초과분은 인스타가 잘라요' : ''}
                   </span>
-                  <button onClick={copyCaption} disabled={!caption}
-                    className="text-[12px] font-semibold text-forest-green disabled:opacity-40">
-                    {copied ? '복사됨 ✓' : '캡션 복사'}
-                  </button>
                 </div>
-              </>
+              </div>
             )}
 
             {capErr && <p className="mt-3 text-[11.5px] text-risk-medium leading-snug">{capErr}</p>}
             {error && <p className="mt-3 text-[11.5px] text-risk-medium">{error}</p>}
 
-            <div className="mt-5 grid gap-2">
+            <div className="mt-4 grid gap-2">
               <button onClick={handleExport} disabled={busy}
-                className="h-10 rounded-lg border border-border text-ink-2 text-[13px] font-semibold disabled:opacity-40">
-                {busy ? '이미지 준비 중…' : '이미지 다운로드'}
+                className="h-[42px] rounded-[10px] bg-forest-green text-canvas text-[13.5px] font-bold disabled:opacity-40">
+                {busy ? '이미지 준비 중…' : '이미지 받기'}
               </button>
               <button onClick={openInstagram}
-                className="h-10 rounded-lg bg-forest-green text-canvas text-[13px] font-semibold">
+                className="h-[42px] rounded-[10px] border border-border text-ink-2 text-[13.5px] font-semibold hover:bg-bg-subtle transition-colors">
                 인스타 열기 →
               </button>
             </div>
@@ -210,39 +217,51 @@ export default function DeckExportModal({ jobId, filename, cardCount, unverified
         ) : (
           <>
             <h2 className="text-[16px] font-bold text-ink">내보내기</h2>
-            <p className="text-[12px] text-ink-3 mt-1 truncate">{filename}</p>
+            <p className="text-[12px] text-ink-3 mt-0.5 truncate">{filename}</p>
 
             <div className="mt-4 rounded-xl border border-border p-3 flex items-center justify-between">
-              <span className="text-[12.5px] text-ink-2">카드 {cardCount}장 · PNG ZIP</span>
+              <span className="text-[12.5px] text-ink-2 font-medium">카드 {cardCount}장 · PNG</span>
               <span className="text-[11px] text-ink-3">1080×1350</span>
             </div>
 
             {unverified >= 1 && (
               <div className="mt-3 rounded-xl border border-risk-medium-border bg-risk-medium-faint p-3">
-                <p className="text-[11.5px] text-risk-medium font-semibold">⚠ 확인이 필요한 수치가 {unverified}개 있어요.</p>
+                <p className="text-[11.5px] text-risk-medium font-semibold">⚠ 확인이 필요한 수치가 {unverified}개 있어요</p>
                 <p className="text-[11px] text-ink-3 mt-1 leading-snug">그래도 내보낼 수 있어요 — 최종 판단은 직접 하세요.</p>
               </div>
             )}
 
             {error && <p className="mt-3 text-[11.5px] text-risk-medium">{error}</p>}
 
-            <div className="mt-5 grid gap-2">
+            {/* 정직한 2선택 (동등 위계). 색 오버셀 금지, 서브텍스트로 '뭘 받는지' 명시.
+                ★인스타 버튼은 IG_PUBLISH_ENABLED 게이트 뒤에 둔다. 발행은 임시 차단 중이고
+                (캡션 LLM 비용 + 미승인 자동발행), 차단되면 ZIP이 유일한 액션으로 남는다. */}
+            <div className="mt-4 flex flex-col gap-2.5">
               {IG_PUBLISH_ENABLED && (
                 <button onClick={enterInstagram}
-                  className="h-11 rounded-lg bg-forest-green text-canvas text-[13.5px] font-bold">
-                  인스타에 올리기
+                  className="flex items-center gap-3 w-full text-left border border-border rounded-xl px-4 py-3 bg-surface hover:bg-bg-subtle transition-colors">
+                  <span className="w-[38px] h-[38px] shrink-0 rounded-[10px] grid place-items-center text-[19px] bg-bg-subtle">📸</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[14px] font-bold text-ink">인스타에 올리기</span>
+                    <span className="block text-[11.5px] text-ink-3 mt-[3px] leading-snug">AI가 캡션까지 써드려요 · 이미지 받아 직접 게시</span>
+                  </span>
+                  <span className="text-ink-3 text-[15px] shrink-0" aria-hidden="true">→</span>
                 </button>
               )}
-              {/* 인스타 차단 시 ZIP이 유일한 주 액션 → 초록 primary로 승격 */}
+
               <button onClick={handleExport} disabled={busy}
-                className={IG_PUBLISH_ENABLED
-                  ? 'h-10 rounded-lg border border-border text-ink-2 text-[13px] font-semibold disabled:opacity-40'
-                  : 'h-11 rounded-lg bg-forest-green text-canvas text-[13.5px] font-bold disabled:opacity-40'}>
-                {busy ? '내보내는 중…' : 'ZIP으로 내보내기'}
+                className="flex items-center gap-3 w-full text-left border border-border rounded-xl px-4 py-3 bg-surface hover:bg-bg-subtle transition-colors disabled:opacity-40">
+                <span className="w-[38px] h-[38px] shrink-0 rounded-[10px] grid place-items-center text-[19px] bg-bg-subtle">📦</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[14px] font-bold text-ink">{busy ? '내보내는 중…' : 'ZIP 파일로 받기'}</span>
+                  <span className="block text-[11.5px] text-ink-3 mt-[3px] leading-snug">PNG 카드 {cardCount}장 전체 · 어디든 올릴 수 있어요</span>
+                </span>
+                <span className="text-ink-3 text-[15px] shrink-0" aria-hidden="true">→</span>
               </button>
-              <button onClick={onClose} disabled={busy}
-                className="h-9 text-ink-3 text-[12.5px] font-medium disabled:opacity-40">취소</button>
             </div>
+
+            <button onClick={onClose} disabled={busy}
+              className="mt-3.5 w-full text-center text-ink-3 text-[12.5px] font-medium disabled:opacity-40 py-1.5">취소</button>
           </>
         )}
       </div>

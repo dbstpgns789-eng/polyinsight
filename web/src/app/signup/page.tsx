@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import AuthLayout from '@/components/auth/AuthLayout';
 import AuthForm from '@/components/auth/AuthForm';
 
-export const metadata = { title: '회원가입 — PolyInsight' };
+export const metadata = { title: '회원가입 — PaperSweep' };
 
 export default function SignupPage() {
   return (

@@ -84,7 +84,8 @@ def test_prompts_format_without_keyerror():
     P0: 검증배지·용어번역 규칙(SYSTEM)과 publisher 필드(USER) 주입 확인."""
     from backend.agents.deck import authoring_prompts as P
     sys = P.AUTHORING_SYSTEM.format(persona="p")
-    assert "왜 브릿지" in sys and "반드시 번역" in sys
+    # "왜 브릿지 필수"(한 장 통째로 강제)는 2026-07-30에 원칙만 남기고 강제를 걷어냈다.
+    assert "'왜'가 먼저다" in sys and "반드시 번역" in sys
     usr = P.AUTHORING_USER.format(
         few_shot_refs="", section_map_text="본문", title="t", authors="a",
         year=2024, card_count=7, art_direction="", publisher="한국생산기술연구원",
@@ -286,3 +287,20 @@ async def test_inserted_image_survives_to_rendered_png():
         assert 'data-asset-id="redA"' in deck["html"]   # 메타 직렬화 생존
     finally:
         await db.delete_job(jid)
+
+
+def test_card_max_covers_frontend_slider():
+    """백엔드 상한이 프론트 슬라이더보다 작으면 유저가 고른 장수가 **조용히** 깎인다.
+
+    2026-07-31 실측: 슬라이더만 10으로 풀고 AUTHOR_MAX_CARDS를 7로 둬서,
+    8~10장을 고른 유저가 아무 경고 없이 7장을 받고 있었다
+    (routers/deck.py의 `min(card_count, settings.AUTHOR_MAX_CARDS)` 클램프는 침묵한다).
+    두 값이 어긋나는 순간 여기서 걸린다.
+    """
+    page = pathlib.Path(__file__).parents[2] / "web/src/app/deck/new/page.tsx"
+    m = re.search(r"const CARD_MAX\s*=\s*(\d+)", page.read_text(encoding="utf-8"))
+    assert m, "프론트에서 CARD_MAX를 찾지 못했습니다(상수명이 바뀌었나?)"
+    assert settings.AUTHOR_MAX_CARDS >= int(m.group(1)), (
+        f"백엔드 상한 {settings.AUTHOR_MAX_CARDS} < 프론트 슬라이더 최대 {m.group(1)} "
+        "→ 유저 선택이 조용히 깎인다"
+    )

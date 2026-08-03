@@ -1,5 +1,5 @@
 ﻿# CLAUDE.md — CTO Backend
-> PolyInsight 백엔드 | FastAPI + S1-S8 파이프라인 (Python, 포트 8000)
+> PaperSweep 백엔드 | FastAPI + S1-S8 파이프라인 (Python, 포트 8000)
 > 선행 읽기: 루트 `../CLAUDE.md` → 이 파일
 
 ---

@@ -53,6 +53,23 @@ async def test_sonnet_ceiling_allows_above_8192(patched_create):
     assert patched_create.call_args.kwargs["max_tokens"] == 20000
 
 
+@pytest.mark.asyncio
+async def test_author_model_sends_no_temperature(patched_create):
+    """저작 모델은 sampling 파라미터를 거부한다. 전송되면 400.
+
+    2026-07-31: Opus 4.8→5 격상 때 발견. `authoring.py`는 `temperature=0.5`를 넘기고,
+    llm_client가 `_NO_SAMPLING_PREFIXES`로 걸러 전송을 막는다. 모델만 바꾸고 목록 갱신을
+    잊으면 **저작 경로 전체가 조용히 400**이 된다(테스트 없으면 실호출에서야 발견).
+    """
+    await llm_mod.llm_client.call(
+        "sys", "user", model=settings.LLM_MODEL_AUTHOR, temperature=0.5,
+    )
+    assert "temperature" not in patched_create.call_args.kwargs, (
+        f"{settings.LLM_MODEL_AUTHOR}: sampling 거부 모델인데 temperature가 전송됨 "
+        "→ _NO_SAMPLING_PREFIXES에 추가하라"
+    )
+
+
 # ── 비전 입력 (폴리시 루프 비평자용) ──────────────────────────────────────────
 _PNG = b"\x89PNG\r\n\x1a\n\x00\x00fakepngbytes"
 

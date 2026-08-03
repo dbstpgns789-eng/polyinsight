@@ -95,7 +95,7 @@ function buildBody(card: Card): string {
         </div>
         <div style="display:flex;align-items:center;gap:18px;">
           <div style="width:36px;height:5px;background:${BRAND};border-radius:3px;"></div>
-          <span style="font-size:22px;color:${TEXT3};font-weight:600;">PolyInsight</span>
+          <span style="font-size:22px;color:${TEXT3};font-weight:600;">PaperSweep</span>
         </div>
       </div>`
   }
