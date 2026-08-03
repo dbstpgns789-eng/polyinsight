@@ -178,37 +178,37 @@ export default function Home() {
           <div className="container">
             <div className="showcase__head">
               <h2 id="showcase-title" className="section__title reveal">논문마다, 다른 얼굴로 나옵니다</h2>
-              <p className="showcase__lead reveal reveal-delay-1">고정 템플릿이 아닙니다. AI가 각 논문의 내용에 맞는 형태를 직접 저작합니다. 아래는 서로 다른 세 논문에서 나온 실제 결과물입니다.</p>
+              <p className="showcase__lead reveal reveal-delay-1">고정 템플릿이 아닙니다. AI가 각 논문의 내용에 맞는 형태를 직접 저작합니다. 아래는 분야가 전혀 다른 세 논문에서 나온 실제 결과물입니다.</p>
             </div>
             <div className="showcase__grid">
               <figure className="showcase-item reveal reveal-delay-1">
                 <div className="showcase-item__frame">
-                  <img src="/gallery/alphafold/01.png" alt="AlphaFold 논문을 요약한 카드뉴스 표지, 다크 배경에 단백질 구조 다이어그램" loading="lazy" />
+                  <img src="/gallery/timecrystal/01.png" alt="광자 시간결정 논문을 요약한 카드뉴스 표지, 다크 배경에 보라·골드 메타물질 판" loading="lazy" />
                 </div>
                 <figcaption className="showcase-item__cap">
-                  <b>단백질이 어떻게 접힐지, AI가 맞혔다</b>
-                  <span>AlphaFold · Nature 2021</span>
-                  <span className="showcase-item__tag">구조 다이어그램</span>
+                  <b>시간에 줄무늬를 새겼다</b>
+                  <span>Photonic Time Crystal · Nature 2026</span>
+                  <span className="showcase-item__tag">물리 · 광학</span>
                 </figcaption>
               </figure>
               <figure className="showcase-item reveal reveal-delay-2">
                 <div className="showcase-item__frame">
-                  <img src="/gallery/rag/01.png" alt="RAG 논문을 요약한 카드뉴스 표지, 네이비 배경에 펼쳐진 오픈북 일러스트" loading="lazy" />
+                  <img src="/gallery/crispr/01.png" alt="CRISPR 논문을 요약한 카드뉴스 표지, 다크 배경에 DNA 이중나선 절단 일러스트" loading="lazy" />
                 </div>
                 <figcaption className="showcase-item__cap">
-                  <b>외우지 말고, 찾아보게 했다</b>
-                  <span>RAG · NeurIPS 2020</span>
-                  <span className="showcase-item__tag">오픈북 은유</span>
+                  <b>RNA 한 줄로 DNA를 원하는 자리에서 자른다</b>
+                  <span>CRISPR-Cas9 · Science</span>
+                  <span className="showcase-item__tag">생명 · 유전자편집</span>
                 </figcaption>
               </figure>
               <figure className="showcase-item reveal reveal-delay-3">
                 <div className="showcase-item__frame">
-                  <img src="/gallery/gpt3/01.png" alt="GPT-3 논문을 요약한 카드뉴스 표지, 블랙 배경에 굵은 브루탈리스트 타이포그래피" loading="lazy" />
+                  <img src="/gallery/obesity/01.png" alt="비만-알츠하이머 논문을 요약한 카드뉴스 표지, 다크 배경에 골드 지질 방울" loading="lazy" />
                 </div>
                 <figcaption className="showcase-item__cap">
-                  <b>다음 단어만 맞히게 했더니, AI가 스스로 배웠다</b>
-                  <span>GPT-3 · NeurIPS 2020</span>
-                  <span className="showcase-item__tag">브루탈리스트 타이포</span>
+                  <b>뱃살이 뇌로 기름을 보내고 있었다</b>
+                  <span>Molecular Neurodegeneration · 2026</span>
+                  <span className="showcase-item__tag">신경 · 대사의학</span>
                 </figcaption>
               </figure>
             </div>

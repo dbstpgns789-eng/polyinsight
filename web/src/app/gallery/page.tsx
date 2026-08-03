@@ -12,16 +12,25 @@ interface Deck {
 }
 
 // 표지가 곧 라벨이라 그리드엔 텍스트를 얹지 않는다. 순수 갤러리.
+// 순서: 2026 화제작(분야 다양) 먼저 = 후킹 → AI 클래식 → KITECH 연구성과.
 const DECKS: Deck[] = [
-  { slug: 'paper_chitosan', n: 7, title: '산성도를 읽는 구슬, 비타민C를 아껴 내보내다' },
-  { slug: 'paper_cellulose', n: 7, title: '막을 통과하면 구슬이 된다' },
+  // 2026 화제작 · 분야별
+  { slug: 'timecrystal', n: 10, title: '시간에 줄무늬를 새겼다' },
+  { slug: 'abot', n: 10, title: '키 하나 누르면, 없던 세계가 그 자리에서 그려진다' },
+  { slug: 'crispr', n: 10, title: 'RNA 한 줄로 DNA를 원하는 자리에서 자른다' },
+  { slug: 'obesity', n: 10, title: '뱃살이 뇌로 기름을 보내고 있었다' },
+  { slug: 'comath', n: 10, title: 'AI가 내놓은 증명은 틀렸다, 그게 결정적이었다' },
   { slug: 'alphafold', n: 10, title: '단백질이 어떻게 접힐지, AI가 맞혔다' },
+  // AI 클래식
   { slug: 'gpt3', n: 7, title: "'다음 단어'만 맞히게 했더니, AI가 스스로 배우기 시작했다" },
   { slug: 'clip', n: 8, title: '이름만 알려주면, 처음 보는 것도 알아본다' },
   { slug: 'cot', n: 7, title: "AI에게 답 대신 '풀이 과정'을 쓰게 하자, 추론이 깨어났다" },
   { slug: 'mmlu', n: 7, title: 'AI에게 57과목 시험을 보게 했다' },
   { slug: 'rag', n: 7, title: '외우지 말고, 찾아보게 했다' },
   { slug: 'react', n: 7, title: '말만 하던 AI가, 스스로 움직이기 시작했다' },
+  // KITECH 연구성과 (박사님 논문)
+  { slug: 'paper_chitosan', n: 7, title: '산성도를 읽는 구슬, 비타민C를 아껴 내보내다' },
+  { slug: 'paper_cellulose', n: 7, title: '막을 통과하면 구슬이 된다' },
 ]
 
 const cardSrc = (slug: string, i: number) => `/gallery/${slug}/${String(i + 1).padStart(2, '0')}.png`
