@@ -187,32 +187,32 @@ export default function Home() {
             <div className="showcase__grid">
               <figure className="showcase-item reveal reveal-delay-1">
                 <div className="showcase-item__frame">
-                  <img src="/cards/showcase_attention.png" alt="Attention Is All You Need 논문을 요약한 카드뉴스 표지,미니멀 다크 에메랄드" loading="lazy" />
+                  <img src="/gallery/alphafold/01.png" alt="AlphaFold 논문을 요약한 카드뉴스 표지, 다크 배경에 단백질 구조 다이어그램" loading="lazy" />
                 </div>
                 <figcaption className="showcase-item__cap">
-                  <b>Attention Is All You Need</b>
-                  <span>Transformer · NIPS 2017</span>
-                  <span className="showcase-item__tag">미니멀 다크</span>
+                  <b>단백질이 어떻게 접힐지, AI가 맞혔다</b>
+                  <span>AlphaFold · Nature 2021</span>
+                  <span className="showcase-item__tag">구조 다이어그램</span>
                 </figcaption>
               </figure>
               <figure className="showcase-item reveal reveal-delay-2">
                 <div className="showcase-item__frame">
-                  <img src="/cards/showcase_bert.png" alt="BERT 논문을 요약한 카드뉴스 표지,빈칸 채우기 체험형" loading="lazy" />
+                  <img src="/gallery/rag/01.png" alt="RAG 논문을 요약한 카드뉴스 표지, 네이비 배경에 펼쳐진 오픈북 일러스트" loading="lazy" />
                 </div>
                 <figcaption className="showcase-item__cap">
-                  <b>BERT</b>
-                  <span>언어 이해 모델 · 2018</span>
-                  <span className="showcase-item__tag">빈칸 체험형</span>
+                  <b>외우지 말고, 찾아보게 했다</b>
+                  <span>RAG · NeurIPS 2020</span>
+                  <span className="showcase-item__tag">오픈북 은유</span>
                 </figcaption>
               </figure>
               <figure className="showcase-item reveal reveal-delay-3">
                 <div className="showcase-item__frame">
-                  <img src="/cards/showcase_resnet.png" alt="ResNet 논문을 요약한 카드뉴스 표지,수식 칠판형" loading="lazy" />
+                  <img src="/gallery/gpt3/01.png" alt="GPT-3 논문을 요약한 카드뉴스 표지, 블랙 배경에 굵은 브루탈리스트 타이포그래피" loading="lazy" />
                 </div>
                 <figcaption className="showcase-item__cap">
-                  <b>ResNet</b>
-                  <span>잔차 연결 · CVPR 2015</span>
-                  <span className="showcase-item__tag">수식 칠판형</span>
+                  <b>다음 단어만 맞히게 했더니, AI가 스스로 배웠다</b>
+                  <span>GPT-3 · NeurIPS 2020</span>
+                  <span className="showcase-item__tag">브루탈리스트 타이포</span>
                 </figcaption>
               </figure>
             </div>
