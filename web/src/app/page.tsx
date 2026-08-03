@@ -134,13 +134,9 @@ export default function Home() {
             <div className="hero__visual" aria-hidden="true">
               <div className="hero-stage">
                 <div className="hero-fstat"><b>3~7장</b><span>논문 1편 → 카드 1세트</span></div>
-                <div className="hero-card hero-card--a"><img src="/cards/attn_05.png" alt="" /></div>
-                <div className="hero-card hero-card--b"><img src="/cards/bert_03.png" alt="" /></div>
-                <div className="hero-card hero-card--c"><img src="/cards/attn_01.png" alt="" /></div>
-                <div className="hero-badge">
-                  <span className="hero-badge__ring">✓</span>
-                  <span className="hero-badge__txt"><b>28.4 BLEU</b><small>논문 7페이지 확인됨</small></span>
-                </div>
+                <div className="hero-card hero-card--a"><img src="/gallery/paper_cellulose/01.png" alt="" /></div>
+                <div className="hero-card hero-card--b"><img src="/gallery/clip/01.png" alt="" /></div>
+                <div className="hero-card hero-card--c"><img src="/gallery/paper_chitosan/01.png" alt="" /></div>
               </div>
             </div>
 
